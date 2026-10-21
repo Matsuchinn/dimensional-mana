@@ -1,0 +1,8 @@
+{
+  "type": "dimensional_mana:mana_forge_smelting",
+  "category": "misc",
+  "ingredient": {"item": "dimensional_mana:raw_advanced_mana_crystal"},
+  "result": {"id": "dimensional_mana:advanced_mana_crystal"},
+  "experience": 1.0,
+  "cookingtime": 320
+}

@@ -1,0 +1,14 @@
+{
+  "replace": false,
+  "entities": [
+    "minecraft:player"
+  ],
+  "slots": [
+    "magic_accessory",
+    "back",
+    "body",
+    "ring",
+    "charm",
+    "hands"
+  ]
+}

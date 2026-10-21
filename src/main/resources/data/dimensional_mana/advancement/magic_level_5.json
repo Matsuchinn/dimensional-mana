@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:magic_level_1",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:advanced_mana_crystal"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.magic_level_5.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.magic_level_5.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

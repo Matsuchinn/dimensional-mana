@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": {"model": "dimensional_mana:block/ancient_magic_stele"},
+    "facing=east": {"model": "dimensional_mana:block/ancient_magic_stele", "y": 90},
+    "facing=south": {"model": "dimensional_mana:block/ancient_magic_stele", "y": 180},
+    "facing=west": {"model": "dimensional_mana:block/ancient_magic_stele", "y": 270}
+  }
+}

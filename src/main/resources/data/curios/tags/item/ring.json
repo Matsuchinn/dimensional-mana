@@ -1,0 +1,19 @@
+{
+  "replace": false,
+  "values": [
+    "dimensional_mana:wisdom_ring",
+    "dimensional_mana:fire_element_ring",
+    "dimensional_mana:water_element_ring",
+    "dimensional_mana:ice_element_ring",
+    "dimensional_mana:lightning_element_ring",
+    "dimensional_mana:wind_element_ring",
+    "dimensional_mana:earth_element_ring",
+    "dimensional_mana:nature_element_ring",
+    "dimensional_mana:metal_element_ring",
+    "dimensional_mana:light_element_ring",
+    "dimensional_mana:poison_element_ring",
+    "dimensional_mana:sound_element_ring",
+    "dimensional_mana:arcane_element_ring",
+    "dimensional_mana:element_enhance_ring"
+  ]
+}

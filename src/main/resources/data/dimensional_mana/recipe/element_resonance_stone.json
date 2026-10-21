@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {"item": "dimensional_mana:special_mana_crystal"},
+    {"item": "minecraft:nether_star"},
+    {"item": "minecraft:ghast_tear"}
+  ],
+  "result": {"id": "dimensional_mana:element_resonance_stone", "count": 1}
+}

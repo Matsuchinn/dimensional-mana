@@ -1,0 +1,8 @@
+{
+  "type": "dimensional_mana:professional_smelting",
+  "category": "misc",
+  "ingredient": {"tag": "dimensional_mana:recyclable_fragments/supreme"},
+  "result": {"id": "dimensional_mana:supreme_mana_crystal_dust", "count": 2},
+  "experience": 0.8,
+  "cookingtime": 110
+}

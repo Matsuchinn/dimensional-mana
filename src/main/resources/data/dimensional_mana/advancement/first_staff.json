@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:root",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:medium_general_staff"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.first_staff.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.first_staff.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

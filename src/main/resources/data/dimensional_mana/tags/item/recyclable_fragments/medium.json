@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "dimensional_mana:medium_fire_fragment", "dimensional_mana:medium_water_fragment", "dimensional_mana:medium_ice_fragment", "dimensional_mana:medium_lightning_fragment", "dimensional_mana:medium_wind_fragment", "dimensional_mana:medium_earth_fragment", "dimensional_mana:medium_nature_fragment", "dimensional_mana:medium_metal_fragment", "dimensional_mana:medium_light_fragment", "dimensional_mana:medium_poison_fragment", "dimensional_mana:medium_sound_fragment",
+    "dimensional_mana:medium_destruction_school_fragment", "dimensional_mana:medium_protection_school_fragment", "dimensional_mana:medium_healing_school_fragment", "dimensional_mana:medium_blessing_school_fragment", "dimensional_mana:medium_curse_school_fragment", "dimensional_mana:medium_control_school_fragment", "dimensional_mana:medium_summon_school_fragment", "dimensional_mana:medium_movement_school_fragment", "dimensional_mana:medium_divination_school_fragment", "dimensional_mana:medium_psychic_school_fragment", "dimensional_mana:medium_time_school_fragment", "dimensional_mana:medium_space_school_fragment", "dimensional_mana:medium_chaos_school_fragment"
+  ]
+}

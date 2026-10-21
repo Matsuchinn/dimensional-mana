@@ -1,0 +1,56 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "dimensional_mana:item/resonance_core_0"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "dimensional_mana:frame": 0.0
+      },
+      "model": "dimensional_mana:item/resonance_core_0"
+    },
+    {
+      "predicate": {
+        "dimensional_mana:frame": 1.0
+      },
+      "model": "dimensional_mana:item/resonance_core_1"
+    },
+    {
+      "predicate": {
+        "dimensional_mana:frame": 2.0
+      },
+      "model": "dimensional_mana:item/resonance_core_2"
+    },
+    {
+      "predicate": {
+        "dimensional_mana:frame": 3.0
+      },
+      "model": "dimensional_mana:item/resonance_core_3"
+    },
+    {
+      "predicate": {
+        "dimensional_mana:frame": 4.0
+      },
+      "model": "dimensional_mana:item/resonance_core_4"
+    },
+    {
+      "predicate": {
+        "dimensional_mana:frame": 5.0
+      },
+      "model": "dimensional_mana:item/resonance_core_5"
+    },
+    {
+      "predicate": {
+        "dimensional_mana:frame": 6.0
+      },
+      "model": "dimensional_mana:item/resonance_core_6"
+    },
+    {
+      "predicate": {
+        "dimensional_mana:frame": 7.0
+      },
+      "model": "dimensional_mana:item/resonance_core_7"
+    }
+  ]
+}

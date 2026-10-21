@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:first_trade",
+  "display": {
+    "icon": {
+      "id": "minecraft:villager_spawn_egg"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.all_trade_tiers.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.all_trade_tiers.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

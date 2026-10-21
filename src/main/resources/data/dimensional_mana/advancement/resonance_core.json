@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:first_accessory",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:resonance_core"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.resonance_core.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.resonance_core.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

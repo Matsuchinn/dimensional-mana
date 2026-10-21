@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {"item": "minecraft:gunpowder"},
+    {"item": "minecraft:book"},
+    {"item": "dimensional_mana:medium_mana_crystal"},
+    {"item": "minecraft:lapis_lazuli"}
+  ],
+  "result": {
+    "id": "minecraft:enchanted_book",
+    "count": 1,
+    "components": {
+      "minecraft:stored_enchantments": {"levels": {"dimensional_mana:aura_breaker": 1}}
+    }
+  }
+}

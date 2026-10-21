@@ -1,0 +1,8 @@
+{
+  "type": "dimensional_mana:professional_smelting",
+  "category": "misc",
+  "ingredient": {"item": "dimensional_mana:advanced_mana_crystal"},
+  "result": {"id": "dimensional_mana:supreme_mana_crystal_dust"},
+  "experience": 2.0,
+  "cookingtime": 240
+}

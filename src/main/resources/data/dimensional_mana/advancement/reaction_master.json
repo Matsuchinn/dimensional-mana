@@ -1,0 +1,31 @@
+{
+  "parent": "dimensional_mana:first_reaction",
+  "display": {
+    "icon": {"id": "dimensional_mana:special_mana_crystal"},
+    "title": {"translate": "advancement.dimensional_mana.reaction_master.title"},
+    "description": {"translate": "advancement.dimensional_mana.reaction_master.description"},
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "vaporize": {"trigger": "minecraft:impossible"},
+    "melt": {"trigger": "minecraft:impossible"},
+    "overload": {"trigger": "minecraft:impossible"},
+    "electro_charged": {"trigger": "minecraft:impossible"},
+    "superconduct": {"trigger": "minecraft:impossible"},
+    "catalyze": {"trigger": "minecraft:impossible"},
+    "freeze": {"trigger": "minecraft:impossible"},
+    "charge": {"trigger": "minecraft:impossible"},
+    "burning": {"trigger": "minecraft:impossible"},
+    "corruption": {"trigger": "minecraft:impossible"},
+    "swirl": {"trigger": "minecraft:impossible"},
+    "mire": {"trigger": "minecraft:impossible"},
+    "spread": {"trigger": "minecraft:impossible"},
+    "smelt": {"trigger": "minecraft:impossible"},
+    "purify": {"trigger": "minecraft:impossible"},
+    "shockwave": {"trigger": "minecraft:impossible"},
+    "blind": {"trigger": "minecraft:impossible"}
+  }
+}

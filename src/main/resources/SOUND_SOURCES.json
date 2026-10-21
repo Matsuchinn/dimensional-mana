@@ -1,0 +1,1100 @@
+{
+  "description": "r36 第三方音效来源、许可及加工记录；许可仅针对列出的声音文件，不覆盖模组代码。",
+  "sources": {
+    "kenney": {
+      "title": "Impact Sounds",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "page": "https://kenney.nl/assets/impact-sounds",
+      "download": "https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sha256": "029d734af1582474edf3a694d1b0cebc97c1c152f2f39fa34d4c2bafc5de77f8"
+    },
+    "spells": {
+      "title": "Spell Sounds Starter Pack",
+      "author": "p0ss",
+      "license": "CC-BY-SA-3.0",
+      "page": "https://opengameart.org/content/spell-sounds-starter-pack",
+      "download": "https://opengameart.org/sites/default/files/spells.zip",
+      "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "sha256": "194004ab3d74875d6aed6390ef061e51fa506cae0f5f0c55508e355b30670831"
+    },
+    "ice": {
+      "title": "Ice breaking/shattering",
+      "author": "IgnasD",
+      "license": "CC0-1.0",
+      "page": "https://opengameart.org/content/ice-breakingshattering",
+      "download": "https://opengameart.org/sites/default/files/IceShatters_0.zip",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sha256": "b84ea396fac1af183dd2cb205a01edaa94b493ffb36965eafe59912e41cf9eb7"
+    },
+    "oga_wind": {
+      "title": "Short wind sound",
+      "author": "remaxim",
+      "license": "CC0-1.0",
+      "page": "https://opengameart.org/content/short-wind-sound",
+      "files": {
+        "short wind sound.wav": "https://opengameart.org/sites/default/files/short%20wind%20sound.wav"
+      },
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sha256": {
+        "short wind sound.wav": "4435f5ad1baf171f21f876f778d0a8a7447becea0c4955bb2566e0c63ab20f41"
+      }
+    },
+    "oga_various": {
+      "title": "Various Sound Effects",
+      "author": "Spring Spring",
+      "license": "CC0-1.0",
+      "page": "https://opengameart.org/content/various-sound-effects-0",
+      "files": {
+        "break_stone.wav": "https://opengameart.org/sites/default/files/break_stone.wav",
+        "small_rock_impact.wav": "https://opengameart.org/sites/default/files/small_rock_impact.wav",
+        "crush.wav": "https://opengameart.org/sites/default/files/crush.wav",
+        "spear.wav": "https://opengameart.org/sites/default/files/spear.wav"
+      },
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sha256": {
+        "break_stone.wav": "8e3ed312e12791be6d6bbcf02a1889fb3913e420b85c796e4236319e23414df2",
+        "small_rock_impact.wav": "913ac9b5f4bd2839eca00f84490a766e6907dd1e024f0745377d1b8838354c65",
+        "crush.wav": "c99cc2247641ca84dfd6f74dabded1ec4676b749187f7cd2c9998e8ec1d0c3f6",
+        "spear.wav": "1465bc7c0a9fce04a55225b8e70362c5afe16494fdbab2ec0a9b8ecc8f38cd97"
+      }
+    }
+  },
+  "outputs": [
+    {
+      "file": "assets/dimensional_mana/sounds/spell/arcane_ray.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.15,
+      "sha256": "ab019f849890c273d81d134ed5d032698b7425343c197ae3bb43d6ca0318de25",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "zap2.ogg",
+          "delay_seconds": 0,
+          "gain": 0.85,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactGlass_light_001.ogg",
+          "delay_seconds": 0.12,
+          "gain": 0.25,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/arcane_ward.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.65,
+      "sha256": "518f1317fa2eaf73c71b7ab57ab3e9dc69755cface7e98a1171b02736a8fc125",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "magicshield.ogg",
+          "delay_seconds": 0,
+          "gain": 0.8,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactBell_heavy_002.ogg",
+          "delay_seconds": 0.18,
+          "gain": 0.22,
+          "playback_rate": 1.1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/arcane_surge.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.9,
+      "sha256": "70057f877a844a67185c4c8fc24f72800c07ece90d818ede3f69644731db1f5b",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "enchant2.ogg",
+          "delay_seconds": 0,
+          "gain": 0.8,
+          "playback_rate": 1
+        },
+        {
+          "source": "spells",
+          "file": "blessing2.ogg",
+          "delay_seconds": 0.3,
+          "gain": 0.3,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/fireball.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.2,
+      "sha256": "9a8d799455b896ec2be93f0b9bf79422f9713303f0ed0bc415abcce5779a11f8",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "flamethrower.ogg",
+          "delay_seconds": 0,
+          "gain": 0.8,
+          "playback_rate": 1
+        },
+        {
+          "source": "spells",
+          "file": "explode1.ogg",
+          "delay_seconds": 0.2,
+          "gain": 0.6,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/flame_blessing.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.8,
+      "sha256": "f95d748d1b3ab8cf6d6e731388a72de2c3d6eb5a43be8ae7a1a8b0d313f48e26",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "flamethrower.ogg",
+          "delay_seconds": 0,
+          "gain": 0.7,
+          "playback_rate": 0.94
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactWood_light_002.ogg",
+          "delay_seconds": 0.1,
+          "gain": 0.15,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/water_bolt.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.2,
+      "sha256": "fa5b2b8771f75e79aa994d7572e00f67093fb9730072685535e1a9693ce2b4cd",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "water.ogg",
+          "delay_seconds": 0,
+          "gain": 0.9,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactSoft_medium_001.ogg",
+          "delay_seconds": 0.2,
+          "gain": 0.2,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/moisture.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.9,
+      "sha256": "40ea5955cac39a990973109bbf305988828046d662546459c631508fdf01edbf",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "water.ogg",
+          "delay_seconds": 0,
+          "gain": 0.65,
+          "playback_rate": 0.94
+        },
+        {
+          "source": "spells",
+          "file": "heal.ogg",
+          "delay_seconds": 0.12,
+          "gain": 0.22,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/ice_spike.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.1,
+      "sha256": "ccc87a1b57edd62e09cc218b5b33d1f67c784ef503bf7182418d6715633ea0e7",
+      "layers": [
+        {
+          "source": "ice",
+          "file": "IceShatters/LedasLuzta.ogg",
+          "delay_seconds": 0.2,
+          "gain": 0.95,
+          "playback_rate": 1
+        },
+        {
+          "source": "spells",
+          "file": "wind2.ogg",
+          "delay_seconds": 0,
+          "gain": 0.2,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/ice_shield.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.65,
+      "sha256": "26e505d21c882d4fd90547439738deec39b5d01418d0690fe7d5b48d5af6ed99",
+      "layers": [
+        {
+          "source": "ice",
+          "file": "IceShatters/LedasLuzta2.ogg",
+          "delay_seconds": 0,
+          "gain": 0.8,
+          "playback_rate": 0.9
+        },
+        {
+          "source": "ice",
+          "file": "IceShatters/LedasLuzta4.ogg",
+          "delay_seconds": 0.28,
+          "gain": 0.45,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/electric_shock.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.85,
+      "sha256": "7765f3d6dbfe446d067bfb2d5904b90fcb4a0b605592384bd586ea702fe2453d",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "zap.ogg",
+          "delay_seconds": 0,
+          "gain": 0.85,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactTin_medium_001.ogg",
+          "delay_seconds": 0.08,
+          "gain": 0.18,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/static_field.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.65,
+      "sha256": "7e9865ac281f105f7b5e033b88f18a69c84eab4aa6db035110bcfaf0427b28ca",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "zap2a.ogg",
+          "delay_seconds": 0,
+          "gain": 0.65,
+          "playback_rate": 1
+        },
+        {
+          "source": "spells",
+          "file": "zap2c.ogg",
+          "delay_seconds": 0.3,
+          "gain": 0.35,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/wind_blade.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.85,
+      "sha256": "59d0e01ccff17fcd04681df037bf0e9d62a846ec5f7cb641330a586fa2baee3f",
+      "layers": [
+        {
+          "source": "oga_wind",
+          "file": "short wind sound.wav",
+          "delay_seconds": 0,
+          "gain": 0.9,
+          "playback_rate": 1.38
+        },
+        {
+          "source": "oga_various",
+          "file": "spear.wav",
+          "delay_seconds": 0.05,
+          "gain": 0.35,
+          "playback_rate": 1.18
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/gale_dash.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.15,
+      "sha256": "d970a4fbafa85ea80a7c1d5e5aba2bb7a02545f37d42be1b0e73b09dfd5a8e03",
+      "layers": [
+        {
+          "source": "oga_wind",
+          "file": "short wind sound.wav",
+          "delay_seconds": 0,
+          "gain": 0.85,
+          "playback_rate": 1.08
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/footstep_grass_001.ogg",
+          "delay_seconds": 0.12,
+          "gain": 0.15,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/rockfall.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.1,
+      "sha256": "e2b32c8b6fd903571e4045f2d06381a291a43543147049bedfa011008961b458",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "sand.ogg",
+          "delay_seconds": 0,
+          "gain": 0.42,
+          "playback_rate": 1
+        },
+        {
+          "source": "oga_wind",
+          "file": "short wind sound.wav",
+          "delay_seconds": 0.05,
+          "gain": 0.22,
+          "playback_rate": 0.72
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/stone_armor.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.5,
+      "sha256": "e3a8180b8f25492e61d4b90a490a251fef685df3bbef640bcd351eb9fc7cdcf6",
+      "layers": [
+        {
+          "source": "kenney",
+          "file": "Audio/impactMining_003.ogg",
+          "delay_seconds": 0,
+          "gain": 0.75,
+          "playback_rate": 0.92
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactMining_001.ogg",
+          "delay_seconds": 0.18,
+          "gain": 0.6,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactMining_004.ogg",
+          "delay_seconds": 0.37,
+          "gain": 0.4,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/footstep_concrete_000.ogg",
+          "delay_seconds": 0.5,
+          "gain": 0.3,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/thorns.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.25,
+      "sha256": "7b886f74f20ad2923c21f475c2b04601661925f93bc39e881ebfe8685481b49b",
+      "layers": [
+        {
+          "source": "kenney",
+          "file": "Audio/impactWood_medium_001.ogg",
+          "delay_seconds": 0,
+          "gain": 0.8,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/footstep_grass_003.ogg",
+          "delay_seconds": 0.12,
+          "gain": 0.55,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactWood_light_000.ogg",
+          "delay_seconds": 0.25,
+          "gain": 0.6,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/footstep_grass_002.ogg",
+          "delay_seconds": 0.4,
+          "gain": 0.45,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/rejuvenation.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.9,
+      "sha256": "9668d06636053235d5dead1f656654f49557aa20fde9c04d8f5a55d1f0f92d34",
+      "layers": [
+        {
+          "source": "kenney",
+          "file": "Audio/footstep_grass_000.ogg",
+          "delay_seconds": 0,
+          "gain": 0.45,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/footstep_grass_004.ogg",
+          "delay_seconds": 0.2,
+          "gain": 0.3,
+          "playback_rate": 1
+        },
+        {
+          "source": "spells",
+          "file": "heal.ogg",
+          "delay_seconds": 0.05,
+          "gain": 0.65,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/sharp_edge.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.05,
+      "sha256": "24cba7575b2ee977ffd900724bf3d71f982c9a84df0b5125045084860646938f",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "wind2.ogg",
+          "delay_seconds": 0,
+          "gain": 0.25,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactMetal_light_001.ogg",
+          "delay_seconds": 0.2,
+          "gain": 0.9,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactMetal_light_003.ogg",
+          "delay_seconds": 0.26,
+          "gain": 0.3,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/iron_wall.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.5,
+      "sha256": "ddb3d05ed67070cf2b2f72e6285ad269f871e7d3a45064424442b230a4333701",
+      "layers": [
+        {
+          "source": "kenney",
+          "file": "Audio/impactMetal_heavy_000.ogg",
+          "delay_seconds": 0,
+          "gain": 0.85,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactPlate_heavy_001.ogg",
+          "delay_seconds": 0.16,
+          "gain": 0.55,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactMetal_medium_002.ogg",
+          "delay_seconds": 0.3,
+          "gain": 0.35,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/light_bolt.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.15,
+      "sha256": "96f5a9fb540a5d9733f0d4ef136064ed75d6ff33d7d67133cf455771fcb23a9a",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "shot2.ogg",
+          "delay_seconds": 0,
+          "gain": 0.7,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactBell_heavy_001.ogg",
+          "delay_seconds": 0.2,
+          "gain": 0.25,
+          "playback_rate": 1.08
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/purifying_light.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.9,
+      "sha256": "a1ba400c1ba6ad0f3dff766955b0a33a548d4b0f7c2949d3dddc761d0b86dbf8",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "blessing.ogg",
+          "delay_seconds": 0,
+          "gain": 0.7,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactBell_heavy_003.ogg",
+          "delay_seconds": 0.14,
+          "gain": 0.3,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/poison_bolt.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.3,
+      "sha256": "c87a573406a873c82a27a43b885fe4bbb0a06cbf8f1a9996557b42eca7ea9661",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "water.ogg",
+          "delay_seconds": 0,
+          "gain": 0.6,
+          "playback_rate": 0.9
+        },
+        {
+          "source": "spells",
+          "file": "steam.ogg",
+          "delay_seconds": 0.2,
+          "gain": 0.4,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/corrosion.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.8,
+      "sha256": "959e5c51b7c5c1786f78e88d88af481d4edf626f0a752f8ff38e2a1b3c7a7b96",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "steam.ogg",
+          "delay_seconds": 0,
+          "gain": 0.8,
+          "playback_rate": 0.94
+        },
+        {
+          "source": "spells",
+          "file": "water.ogg",
+          "delay_seconds": 0.12,
+          "gain": 0.3,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/sonic_wave.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.4,
+      "sha256": "cdc4e7413f1242e346f631f07df0297ff1a80b1161d460a7b296ea0bce3b9f3e",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "forcepulse.ogg",
+          "delay_seconds": 0,
+          "gain": 0.75,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactBell_heavy_000.ogg",
+          "delay_seconds": 0,
+          "gain": 0.35,
+          "playback_rate": 0.9
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/resonance.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.85,
+      "sha256": "0342a9dac9f3fd30555c0bbd7de4378103886e90ac638b93ee5d36eb507df84c",
+      "layers": [
+        {
+          "source": "kenney",
+          "file": "Audio/impactBell_heavy_004.ogg",
+          "delay_seconds": 0,
+          "gain": 0.7,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactBell_heavy_002.ogg",
+          "delay_seconds": 0.24,
+          "gain": 0.35,
+          "playback_rate": 1
+        },
+        {
+          "source": "spells",
+          "file": "forcepush.ogg",
+          "delay_seconds": 0.05,
+          "gain": 0.3,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/charge.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.1,
+      "sha256": "68c34c5aa360fffde403b69b12334af31fbb11588e0f997c91975635aa6706e1",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "wind.ogg",
+          "delay_seconds": 0,
+          "gain": 0.45,
+          "playback_rate": 1
+        },
+        {
+          "source": "spells",
+          "file": "enchant.ogg",
+          "delay_seconds": 0,
+          "gain": 0.35,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/shatter.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.0,
+      "sha256": "fc55b8fb9b318a0c091ab3b2705ee8249066a60ba94301adde50935fd83eef3a",
+      "layers": [
+        {
+          "source": "ice",
+          "file": "IceShatters/LedasLuzta33.ogg",
+          "delay_seconds": 0,
+          "gain": 0.85,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactGlass_heavy_000.ogg",
+          "delay_seconds": 0.03,
+          "gain": 0.35,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/impact_wind.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.8,
+      "sha256": "c9eb23cb65528919954cdbcb6fc48b480fe783efeb44a4dc907a2b3dd159619a",
+      "layers": [
+        {
+          "source": "oga_various",
+          "file": "spear.wav",
+          "delay_seconds": 0,
+          "gain": 0.75,
+          "playback_rate": 1.22
+        },
+        {
+          "source": "oga_wind",
+          "file": "short wind sound.wav",
+          "delay_seconds": 0,
+          "gain": 0.45,
+          "playback_rate": 1.65
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/impact_earth.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.35,
+      "sha256": "f8e96704c44956974b458234406bedee90bdd934d98cf508597bfe548baaafd9",
+      "layers": [
+        {
+          "source": "oga_various",
+          "file": "small_rock_impact.wav",
+          "delay_seconds": 0,
+          "gain": 0.85,
+          "playback_rate": 0.72
+        },
+        {
+          "source": "oga_various",
+          "file": "break_stone.wav",
+          "delay_seconds": 0.04,
+          "gain": 0.8,
+          "playback_rate": 0.78
+        },
+        {
+          "source": "oga_various",
+          "file": "crush.wav",
+          "delay_seconds": 0.12,
+          "gain": 0.5,
+          "playback_rate": 0.68
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/impact_ice.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 1.0,
+      "sha256": "becb15cdb569edf31bea8d28793ff226ff5fe90489a1366146ddcad84b27adcc",
+      "layers": [
+        {
+          "source": "ice",
+          "file": "IceShatters/LedasLuzta.ogg",
+          "delay_seconds": 0,
+          "gain": 0.8,
+          "playback_rate": 1.06
+        },
+        {
+          "source": "ice",
+          "file": "IceShatters/LedasLuzta33.ogg",
+          "delay_seconds": 0.08,
+          "gain": 0.45,
+          "playback_rate": 1.14
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/impact_fire.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.9,
+      "sha256": "ffbb656ba1a8826ba5006f1e892ff3026f47d56893706540ad92b0a29eda65d1",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "explode1.ogg",
+          "delay_seconds": 0,
+          "gain": 0.82,
+          "playback_rate": 1.08
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/impact_water.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.9,
+      "sha256": "52bce712a08c00146ae3c7223588d6d4b586210a961c44fd7cbff1ef84b1ae4a",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "water.ogg",
+          "delay_seconds": 0,
+          "gain": 0.78,
+          "playback_rate": 1.12
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactSoft_medium_001.ogg",
+          "delay_seconds": 0.05,
+          "gain": 0.25,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/impact_metal.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.8,
+      "sha256": "2c661c533b38768d22142da0c0c5cf0c5d8f9362550c1419f8b690152d2941b9",
+      "layers": [
+        {
+          "source": "kenney",
+          "file": "Audio/impactMetal_heavy_001.ogg",
+          "delay_seconds": 0,
+          "gain": 0.76,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactMetal_light_003.ogg",
+          "delay_seconds": 0.05,
+          "gain": 0.36,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/impact_arcane.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.9,
+      "sha256": "a035e833ec06a4e80c6a5b8d5ee288f7f89ec73404b280e51a0c02e5490ad4e1",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "zap2.ogg",
+          "delay_seconds": 0,
+          "gain": 0.62,
+          "playback_rate": 1.12
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactGlass_light_001.ogg",
+          "delay_seconds": 0.07,
+          "gain": 0.3,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/impact_lightning.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.75,
+      "sha256": "798c9d226b460c603e85617c28cb7641fe43631fbc72dec2f686aac29ca05209",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "zap.ogg",
+          "delay_seconds": 0,
+          "gain": 0.82,
+          "playback_rate": 1.1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/impact_nature.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.9,
+      "sha256": "6863191ab599fa1d4e485131fc4960fa16675f440f0f64e4511a723d9e579766",
+      "layers": [
+        {
+          "source": "kenney",
+          "file": "Audio/impactWood_medium_001.ogg",
+          "delay_seconds": 0,
+          "gain": 0.68,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/footstep_grass_003.ogg",
+          "delay_seconds": 0.08,
+          "gain": 0.45,
+          "playback_rate": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/impact_light.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.9,
+      "sha256": "eee79bbd3f5bb08e296d7c186b98a4042d750057796506a83ef00c37d2f16248",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "shot2.ogg",
+          "delay_seconds": 0,
+          "gain": 0.62,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactBell_heavy_001.ogg",
+          "delay_seconds": 0.06,
+          "gain": 0.3,
+          "playback_rate": 1.15
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/impact_poison.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.9,
+      "sha256": "e311a19965040e883bd404bef78c10b643316ec67797e3152b88396792578346",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "steam.ogg",
+          "delay_seconds": 0,
+          "gain": 0.66,
+          "playback_rate": 1
+        },
+        {
+          "source": "spells",
+          "file": "water.ogg",
+          "delay_seconds": 0.08,
+          "gain": 0.32,
+          "playback_rate": 0.9
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/impact_sound.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.9,
+      "sha256": "01c25ce9bfb11e47c6fab31587b74edc5acc6c0f49c3df68e8b38e5dd2ddbca6",
+      "layers": [
+        {
+          "source": "spells",
+          "file": "forcepulse.ogg",
+          "delay_seconds": 0,
+          "gain": 0.7,
+          "playback_rate": 1
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactBell_heavy_000.ogg",
+          "delay_seconds": 0.04,
+          "gain": 0.3,
+          "playback_rate": 0.92
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/sky_rift.ogg",
+      "license": "CC-BY-SA-3.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 3.2,
+      "sha256": "ed08b5bd51955d6f037f19d0379632933573695aabf342e92203c0d28de67d3a",
+      "layers": [
+        {
+          "source": "kenney",
+          "file": "Audio/impactMetal_heavy_000.ogg",
+          "delay_seconds": 0,
+          "gain": 0.82,
+          "playback_rate": 0.7
+        },
+        {
+          "source": "spells",
+          "file": "explode1.ogg",
+          "delay_seconds": 0.1,
+          "gain": 0.6,
+          "playback_rate": 0.68
+        },
+        {
+          "source": "oga_various",
+          "file": "crush.wav",
+          "delay_seconds": 0.05,
+          "gain": 0.48,
+          "playback_rate": 0.6
+        },
+        {
+          "source": "oga_wind",
+          "file": "short wind sound.wav",
+          "delay_seconds": 0.12,
+          "gain": 0.3,
+          "playback_rate": 0.58
+        },
+        {
+          "source": "spells",
+          "file": "warp3.ogg",
+          "delay_seconds": 0.9,
+          "gain": 0.34,
+          "playback_rate": 0.6
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactBell_heavy_002.ogg",
+          "delay_seconds": 1.35,
+          "gain": 0.3,
+          "playback_rate": 0.52
+        },
+        {
+          "source": "oga_various",
+          "file": "break_stone.wav",
+          "delay_seconds": 1.8,
+          "gain": 0.3,
+          "playback_rate": 0.55
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/spell/flying_sword.ogg",
+      "license": "CC0-1.0",
+      "changes": "单声道转换、去除前导静音、剪辑、轻微变速、叠层、滤波、响度控制、淡入淡出、Vorbis 编码",
+      "duration_seconds": 0.55,
+      "sha256": "0de184a2f82574dc69ccbdf364682f35d5c706e326bbcdf687e6ce9dfd2ff520",
+      "layers": [
+        {
+          "source": "oga_wind",
+          "file": "short wind sound.wav",
+          "delay_seconds": 0,
+          "gain": 0.9,
+          "playback_rate": 1.55
+        },
+        {
+          "source": "oga_various",
+          "file": "spear.wav",
+          "delay_seconds": 0.02,
+          "gain": 0.58,
+          "playback_rate": 1.35
+        },
+        {
+          "source": "kenney",
+          "file": "Audio/impactMetal_light_001.ogg",
+          "delay_seconds": 0.05,
+          "gain": 0.24,
+          "playback_rate": 1.5
+        }
+      ]
+    }
+  ]
+}

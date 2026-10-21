@@ -1,0 +1,17 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "dimensional_mana:item/element_ring_base",
+    "layer1": "dimensional_mana:item/element_ring_gem"
+  },
+  "tints": [
+    {
+      "type": "minecraft:item",
+      "index": 0
+    },
+    {
+      "type": "minecraft:item",
+      "index": 1
+    }
+  ]
+}

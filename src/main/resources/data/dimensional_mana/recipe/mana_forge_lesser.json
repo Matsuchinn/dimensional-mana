@@ -1,0 +1,8 @@
+{
+  "type": "dimensional_mana:mana_forge_smelting",
+  "category": "misc",
+  "ingredient": {"item": "dimensional_mana:raw_lesser_mana_crystal"},
+  "result": {"id": "dimensional_mana:lesser_mana_crystal"},
+  "experience": 0.5,
+  "cookingtime": 80
+}

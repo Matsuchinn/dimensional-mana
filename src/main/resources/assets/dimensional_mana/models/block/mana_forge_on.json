@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "dimensional_mana:block/mana_forge_side",
+    "down": "dimensional_mana:block/mana_forge_bottom",
+    "up": "dimensional_mana:block/mana_forge_top",
+    "north": "dimensional_mana:block/mana_forge_front_on",
+    "south": "dimensional_mana:block/mana_forge_back",
+    "east": "dimensional_mana:block/mana_forge_side",
+    "west": "dimensional_mana:block/mana_forge_side"
+  }
+}

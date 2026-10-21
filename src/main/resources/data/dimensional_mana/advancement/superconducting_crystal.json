@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:superconducting_dust",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:superconducting_crystal"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.superconducting_crystal.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.superconducting_crystal.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

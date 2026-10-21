@@ -1,0 +1,5 @@
+{
+  "parent": "dimensional_mana:first_reaction",
+  "display": {"icon": {"id": "minecraft:lightning_rod"}, "title": {"translate": "advancement.dimensional_mana.reaction_electro_charged.title"}, "description": {"translate": "advancement.dimensional_mana.reaction_electro_charged.description"}, "frame": "task", "show_toast": true, "announce_to_chat": true, "hidden": false},
+  "criteria": {"done": {"trigger": "minecraft:impossible"}}
+}

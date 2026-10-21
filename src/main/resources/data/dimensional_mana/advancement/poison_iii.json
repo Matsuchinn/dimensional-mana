@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:root",
+  "display": {
+    "icon": {
+      "id": "minecraft:fermented_spider_eye"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.poison_iii.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.poison_iii.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "RQG",
+    " A ",
+    " O "
+  ],
+  "key": {
+    "R": {"item": "minecraft:redstone"},
+    "Q": {"item": "minecraft:quartz"},
+    "G": {"item": "minecraft:glass"},
+    "A": {"item": "dimensional_mana:appraisal_orb"},
+    "O": {"item": "minecraft:observer"}
+  },
+  "result": {
+    "id": "dimensional_mana:mana_detector",
+    "count": 1
+  }
+}

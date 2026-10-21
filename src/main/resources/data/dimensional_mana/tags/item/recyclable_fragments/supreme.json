@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "dimensional_mana:supreme_fire_fragment", "dimensional_mana:supreme_water_fragment", "dimensional_mana:supreme_ice_fragment", "dimensional_mana:supreme_lightning_fragment", "dimensional_mana:supreme_wind_fragment", "dimensional_mana:supreme_earth_fragment", "dimensional_mana:supreme_nature_fragment", "dimensional_mana:supreme_metal_fragment", "dimensional_mana:supreme_light_fragment", "dimensional_mana:supreme_poison_fragment", "dimensional_mana:supreme_sound_fragment",
+    "dimensional_mana:supreme_destruction_school_fragment", "dimensional_mana:supreme_protection_school_fragment", "dimensional_mana:supreme_healing_school_fragment", "dimensional_mana:supreme_blessing_school_fragment", "dimensional_mana:supreme_curse_school_fragment", "dimensional_mana:supreme_control_school_fragment", "dimensional_mana:supreme_summon_school_fragment", "dimensional_mana:supreme_movement_school_fragment", "dimensional_mana:supreme_divination_school_fragment", "dimensional_mana:supreme_psychic_school_fragment", "dimensional_mana:supreme_time_school_fragment", "dimensional_mana:supreme_space_school_fragment", "dimensional_mana:supreme_chaos_school_fragment"
+  ]
+}

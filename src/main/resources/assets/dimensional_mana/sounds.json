@@ -1,0 +1,87 @@
+{
+  "spell_charge": {"subtitle":"subtitles.dimensional_mana.spell_charge","sounds":["dimensional_mana:spell/charge"]},
+  "spell_shatter": {"subtitle":"subtitles.dimensional_mana.spell_shatter","sounds":["dimensional_mana:spell/shatter"]},
+  "spell_sky_rift": {"subtitle":"subtitles.dimensional_mana.spell_sky_rift","sounds":["dimensional_mana:spell/sky_rift"]},
+  "spell_flying_sword": {"subtitle":"subtitles.dimensional_mana.spell_flying_sword","sounds":["dimensional_mana:spell/flying_sword"]},
+  "spell_arcane_ray": {"subtitle":"gui.dimensional_mana.spell.arcane_ray","sounds":["dimensional_mana:spell/arcane_ray"]},
+  "spell_arcane_ward": {"subtitle":"gui.dimensional_mana.spell.arcane_ward","sounds":["dimensional_mana:spell/arcane_ward"]},
+  "spell_arcane_surge": {"subtitle":"gui.dimensional_mana.spell.arcane_surge","sounds":["dimensional_mana:spell/arcane_surge"]},
+  "spell_fireball": {"subtitle":"gui.dimensional_mana.spell.fireball","sounds":["dimensional_mana:spell/fireball"]},
+  "spell_flame_blessing": {"subtitle":"gui.dimensional_mana.spell.flame_blessing","sounds":["dimensional_mana:spell/flame_blessing"]},
+  "spell_water_bolt": {"subtitle":"gui.dimensional_mana.spell.water_bolt","sounds":["dimensional_mana:spell/water_bolt"]},
+  "spell_moisture": {"subtitle":"gui.dimensional_mana.spell.moisture","sounds":["dimensional_mana:spell/moisture"]},
+  "spell_ice_spike": {"subtitle":"gui.dimensional_mana.spell.ice_spike","sounds":["dimensional_mana:spell/ice_spike"]},
+  "spell_ice_shield": {"subtitle":"gui.dimensional_mana.spell.ice_shield","sounds":["dimensional_mana:spell/ice_shield"]},
+  "spell_electric_shock": {"subtitle":"gui.dimensional_mana.spell.electric_shock","sounds":["dimensional_mana:spell/electric_shock"]},
+  "spell_static_field": {"subtitle":"gui.dimensional_mana.spell.static_field","sounds":["dimensional_mana:spell/static_field"]},
+  "spell_wind_blade": {"subtitle":"gui.dimensional_mana.spell.wind_blade","sounds":["dimensional_mana:spell/wind_blade"]},
+  "spell_gale_dash": {"subtitle":"gui.dimensional_mana.spell.gale_dash","sounds":["dimensional_mana:spell/gale_dash"]},
+  "spell_rockfall": {"subtitle":"gui.dimensional_mana.spell.rockfall","sounds":["dimensional_mana:spell/rockfall"]},
+  "spell_stone_armor": {"subtitle":"gui.dimensional_mana.spell.stone_armor","sounds":["dimensional_mana:spell/stone_armor"]},
+  "spell_thorns": {"subtitle":"gui.dimensional_mana.spell.thorns","sounds":["dimensional_mana:spell/thorns"]},
+  "spell_rejuvenation": {"subtitle":"gui.dimensional_mana.spell.rejuvenation","sounds":["dimensional_mana:spell/rejuvenation"]},
+  "spell_sharp_edge": {"subtitle":"gui.dimensional_mana.spell.sharp_edge","sounds":["dimensional_mana:spell/sharp_edge"]},
+  "spell_iron_wall": {"subtitle":"gui.dimensional_mana.spell.iron_wall","sounds":["dimensional_mana:spell/iron_wall"]},
+  "spell_light_bolt": {"subtitle":"gui.dimensional_mana.spell.light_bolt","sounds":["dimensional_mana:spell/light_bolt"]},
+  "spell_purifying_light": {"subtitle":"gui.dimensional_mana.spell.purifying_light","sounds":["dimensional_mana:spell/purifying_light"]},
+  "spell_poison_bolt": {"subtitle":"gui.dimensional_mana.spell.poison_bolt","sounds":["dimensional_mana:spell/poison_bolt"]},
+  "spell_corrosion": {"subtitle":"gui.dimensional_mana.spell.corrosion","sounds":["dimensional_mana:spell/corrosion"]},
+  "spell_sonic_wave": {"subtitle":"gui.dimensional_mana.spell.sonic_wave","sounds":["dimensional_mana:spell/sonic_wave"]},
+  "spell_resonance": {"subtitle":"gui.dimensional_mana.spell.resonance","sounds":["dimensional_mana:spell/resonance"]},
+  "spell_impact_arcane": {"subtitle":"subtitles.dimensional_mana.spell_impact","sounds":["dimensional_mana:spell/impact_arcane"]},
+  "spell_impact_fire": {"subtitle":"subtitles.dimensional_mana.spell_impact","sounds":["dimensional_mana:spell/impact_fire"]},
+  "spell_impact_water": {"subtitle":"subtitles.dimensional_mana.spell_impact","sounds":["dimensional_mana:spell/impact_water"]},
+  "spell_impact_ice": {"subtitle":"subtitles.dimensional_mana.spell_impact","sounds":["dimensional_mana:spell/impact_ice"]},
+  "spell_impact_lightning": {"subtitle":"subtitles.dimensional_mana.spell_impact","sounds":["dimensional_mana:spell/impact_lightning"]},
+  "spell_impact_wind": {"subtitle":"subtitles.dimensional_mana.spell_impact","sounds":["dimensional_mana:spell/impact_wind"]},
+  "spell_impact_earth": {"subtitle":"subtitles.dimensional_mana.spell_impact","sounds":["dimensional_mana:spell/impact_earth"]},
+  "spell_impact_nature": {"subtitle":"subtitles.dimensional_mana.spell_impact","sounds":["dimensional_mana:spell/impact_nature"]},
+  "spell_impact_metal": {"subtitle":"subtitles.dimensional_mana.spell_impact","sounds":["dimensional_mana:spell/impact_metal"]},
+  "spell_impact_light": {"subtitle":"subtitles.dimensional_mana.spell_impact","sounds":["dimensional_mana:spell/impact_light"]},
+  "spell_impact_poison": {"subtitle":"subtitles.dimensional_mana.spell_impact","sounds":["dimensional_mana:spell/impact_poison"]},
+  "spell_impact_sound": {"subtitle":"subtitles.dimensional_mana.spell_impact","sounds":["dimensional_mana:spell/impact_sound"]},
+  "mana_forge_burn": {
+    "subtitle": "subtitles.dimensional_mana.mana_forge_burn",
+    "sounds": [
+      {"name": "minecraft:block.furnace.fire_crackle", "type": "event", "volume": 0.55, "pitch": 0.78},
+      {"name": "minecraft:block.amethyst_block.chime", "type": "event", "volume": 0.12, "pitch": 0.65}
+    ]
+  },
+  "professional_furnace_burn": {
+    "subtitle": "subtitles.dimensional_mana.professional_furnace_burn",
+    "sounds": [
+      {"name": "minecraft:block.blastfurnace.fire_crackle", "type": "event", "volume": 0.65, "pitch": 1.12},
+      {"name": "minecraft:block.beacon.ambient", "type": "event", "volume": 0.08, "pitch": 1.4}
+    ]
+  },
+  "pure_liquid_mana_bubble": {
+    "subtitle": "subtitles.dimensional_mana.pure_liquid_mana_bubble",
+    "sounds": [
+      {"name": "minecraft:block.bubble_column.bubble_pop", "type": "event", "volume": 0.6, "pitch": 0.85},
+      {"name": "minecraft:block.amethyst_block.chime", "type": "event", "volume": 0.12, "pitch": 1.6}
+    ]
+  },
+  "crystal_process_complete": {
+    "subtitle": "subtitles.dimensional_mana.crystal_process_complete",
+    "sounds": [
+      {"name": "minecraft:block.amethyst_block.chime", "type": "event", "volume": 0.9, "pitch": 0.72},
+      {"name": "minecraft:block.enchantment_table.use", "type": "event", "volume": 0.45, "pitch": 1.35},
+      {"name": "minecraft:block.respawn_anchor.charge", "type": "event", "volume": 0.18, "pitch": 1.65}
+    ]
+  },
+  "codex_page_turn": {
+    "subtitle": "subtitles.dimensional_mana.codex_page_turn",
+    "sounds": [
+      {"name": "minecraft:item.book.page_turn", "type": "event", "volume": 0.85, "pitch": 1.0},
+      {"name": "minecraft:block.amethyst_block.chime", "type": "event", "volume": 0.08, "pitch": 1.7}
+    ]
+  },
+  "codex_space_open": {
+    "subtitle": "subtitles.dimensional_mana.codex_space_open",
+    "sounds": [
+      {"name": "minecraft:block.portal.trigger", "type": "event", "volume": 0.45, "pitch": 1.35},
+      {"name": "minecraft:block.beacon.activate", "type": "event", "volume": 0.3, "pitch": 0.9},
+      {"name": "minecraft:block.amethyst_block.resonate", "type": "event", "volume": 0.45, "pitch": 0.72}
+    ]
+  }
+}

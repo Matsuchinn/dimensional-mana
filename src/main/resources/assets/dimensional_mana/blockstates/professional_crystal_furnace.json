@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=north,lit=false": {"model": "dimensional_mana:block/professional_crystal_furnace"},
+    "facing=east,lit=false": {"model": "dimensional_mana:block/professional_crystal_furnace", "y": 90},
+    "facing=south,lit=false": {"model": "dimensional_mana:block/professional_crystal_furnace", "y": 180},
+    "facing=west,lit=false": {"model": "dimensional_mana:block/professional_crystal_furnace", "y": 270},
+    "facing=north,lit=true": {"model": "dimensional_mana:block/professional_crystal_furnace_on"},
+    "facing=east,lit=true": {"model": "dimensional_mana:block/professional_crystal_furnace_on", "y": 90},
+    "facing=south,lit=true": {"model": "dimensional_mana:block/professional_crystal_furnace_on", "y": 180},
+    "facing=west,lit=true": {"model": "dimensional_mana:block/professional_crystal_furnace_on", "y": 270}
+  }
+}

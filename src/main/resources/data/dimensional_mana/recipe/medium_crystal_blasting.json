@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:blasting",
+  "ingredient": {
+    "item": "dimensional_mana:raw_medium_mana_crystal"
+  },
+  "result": {
+    "id": "dimensional_mana:medium_mana_crystal"
+  },
+  "experience": 1.0,
+  "cookingtime": 320
+}

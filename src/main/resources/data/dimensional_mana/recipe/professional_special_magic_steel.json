@@ -1,0 +1,8 @@
+{
+  "type": "dimensional_mana:professional_smelting",
+  "category": "misc",
+  "ingredient": {"item": "dimensional_mana:ancient_magic_steel_billet"},
+  "result": {"id": "dimensional_mana:special_magic_steel"},
+  "experience": 4.0,
+  "cookingtime": 4800
+}

@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:first_accessory",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:mana_enhance_amulet"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.amulet_bond.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.amulet_bond.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

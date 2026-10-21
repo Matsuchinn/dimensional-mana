@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:blasting",
+  "ingredient": {
+    "item": "dimensional_mana:raw_lesser_mana_crystal"
+  },
+  "result": {
+    "id": "dimensional_mana:lesser_mana_crystal"
+  },
+  "experience": 1.0,
+  "cookingtime": 160
+}

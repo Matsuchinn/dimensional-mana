@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SSS",
+    " P "
+  ],
+  "key": {
+    "S": {"item": "minecraft:stone"},
+    "P": {"item": "dimensional_mana:stone_pestle"}
+  },
+  "result": {"id": "dimensional_mana:stone_grinder", "count": 1}
+}

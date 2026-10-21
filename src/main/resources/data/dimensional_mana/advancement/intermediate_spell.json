@@ -1,0 +1,13 @@
+{
+  "parent": "dimensional_mana:first_spell",
+  "display": {
+    "icon": {"id": "dimensional_mana:medium_fire_fragment"},
+    "title": {"text": "中级顿悟"},
+    "description": {"text": "首次精通中级法术顿悟+96，之后每个新中级法术+64基础魔素上限"},
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {"done": {"trigger": "minecraft:impossible"}}
+}

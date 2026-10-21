@@ -1,0 +1,49 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="All Rights Reserved; third-party audio: CC0-1.0 / CC-BY-SA-3.0"
+
+[[mods]]
+modId="dimensional_mana"
+version="1.0.1"
+displayName="次元物语：魔素"
+logoFile="assets/dimensional_mana/textures/gui/mod_logo.png"
+authors="TakisueYuu, AutoMods"
+issueTrackerURL="https://github.com/Matsuchinn/dimensional-mana/issues"
+displayURL="https://github.com/Matsuchinn/dimensional-mana"
+description='''次元物语：魔素（Dimensional Mana）是一套为 Minecraft 1.21.1 打造的魔法体系模组。
+
+它加入魔素与斗气两种资源、十二种元素属性、七十多个可学习与修炼的法术，以及元素附着、元素反应、法杖与饰品、魔晶加工与炼制机器、会交易的冒险者和完整成就进度。
+
+游戏版本：Minecraft 1.21.1
+加载器：NeoForge 21.1+
+当前版本：1.0.1
+作者：TakisueYuu、AutoMods
+语言：简体中文 / English'''
+
+[[dependencies.dimensional_mana]]
+modId="neoforge"
+type="required"
+versionRange="[21.1,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.dimensional_mana]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1]"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.dimensional_mana]]
+modId="curios"
+type="required"
+versionRange="[9.2.2,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.dimensional_mana]]
+modId="jei"
+type="optional"
+versionRange="[19.21,)"
+ordering="AFTER"
+side="CLIENT"

@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {"item": "minecraft:gold_ingot"},
+    {"item": "dimensional_mana:lesser_mana_crystal_dust"},
+    {"item": "dimensional_mana:lesser_mana_crystal_dust"},
+    {"item": "minecraft:lapis_lazuli"}
+  ],
+  "result": {"id": "dimensional_mana:wisdom_ring", "count": 1}
+}

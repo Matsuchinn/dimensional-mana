@@ -1,0 +1,13 @@
+{
+  "parent": "dimensional_mana:root",
+  "display": {
+    "icon": {"id": "dimensional_mana:ancient_magic_stele"},
+    "title": {"translate": "advancement.dimensional_mana.first_stele_research.title"},
+    "description": {"translate": "advancement.dimensional_mana.first_stele_research.description"},
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {"done": {"trigger": "minecraft:impossible"}}
+}

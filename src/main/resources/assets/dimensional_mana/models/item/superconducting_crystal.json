@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "dimensional_mana:item/superconducting_crystal_0"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "dimensional_mana:frame": 0.0
+      },
+      "model": "dimensional_mana:item/superconducting_crystal_0"
+    },
+    {
+      "predicate": {
+        "dimensional_mana:frame": 1.0
+      },
+      "model": "dimensional_mana:item/superconducting_crystal_1"
+    },
+    {
+      "predicate": {
+        "dimensional_mana:frame": 2.0
+      },
+      "model": "dimensional_mana:item/superconducting_crystal_2"
+    },
+    {
+      "predicate": {
+        "dimensional_mana:frame": 3.0
+      },
+      "model": "dimensional_mana:item/superconducting_crystal_3"
+    }
+  ]
+}

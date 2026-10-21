@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:first_mana_crystal",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:ancient_magic_steel_billet"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.ancient_steel.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.ancient_steel.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

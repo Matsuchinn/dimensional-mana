@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "GAG",
+    "P P"
+  ],
+  "key": {
+    "G": {"item": "minecraft:gold_ingot"},
+    "A": {"item": "dimensional_mana:appraisal_orb"},
+    "P": {"item": "minecraft:glass_pane"}
+  },
+  "result": {
+    "id": "dimensional_mana:appraisal_glasses",
+    "count": 1
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "parent": "dimensional_mana:reaction_root",
+  "display": {
+    "icon": {"id": "minecraft:fire_charge"},
+    "title": {"translate": "advancement.dimensional_mana.first_reaction.title"},
+    "description": {"translate": "advancement.dimensional_mana.first_reaction.description"},
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {"done": {"trigger": "minecraft:impossible"}}
+}

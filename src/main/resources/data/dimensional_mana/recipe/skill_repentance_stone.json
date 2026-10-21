@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {"item": "dimensional_mana:special_mana_crystal"},
+    {"item": "minecraft:ghast_tear"}
+  ],
+  "result": {
+    "id": "dimensional_mana:skill_repentance_stone",
+    "count": 1
+  }
+}

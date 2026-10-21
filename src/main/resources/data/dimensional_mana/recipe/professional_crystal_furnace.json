@@ -1,0 +1,35 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "NGL",
+    "LFA",
+    "BBS"
+  ],
+  "key": {
+    "N": {
+      "item": "minecraft:nether_star"
+    },
+    "G": {
+      "item": "minecraft:glass"
+    },
+    "L": {
+      "item": "minecraft:lapis_block"
+    },
+    "F": {
+      "item": "dimensional_mana:mana_forge"
+    },
+    "A": {
+      "item": "dimensional_mana:advanced_mana_crystal"
+    },
+    "B": {
+      "item": "minecraft:amethyst_block"
+    },
+    "S": {
+      "item": "minecraft:netherite_ingot"
+    }
+  },
+  "result": {
+    "id": "dimensional_mana:professional_crystal_furnace",
+    "count": 1
+  }
+}

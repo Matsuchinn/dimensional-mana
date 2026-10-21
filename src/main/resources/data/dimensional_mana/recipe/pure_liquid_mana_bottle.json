@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {"item": "dimensional_mana:pure_liquid_mana_bucket"},
+    {"item": "minecraft:glass_bottle"}
+  ],
+  "result": {
+    "id": "dimensional_mana:pure_liquid_mana",
+    "count": 1
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "dimensional_mana:advanced_fire_fragment", "dimensional_mana:advanced_water_fragment", "dimensional_mana:advanced_ice_fragment", "dimensional_mana:advanced_lightning_fragment", "dimensional_mana:advanced_wind_fragment", "dimensional_mana:advanced_earth_fragment", "dimensional_mana:advanced_nature_fragment", "dimensional_mana:advanced_metal_fragment", "dimensional_mana:advanced_light_fragment", "dimensional_mana:advanced_poison_fragment", "dimensional_mana:advanced_sound_fragment",
+    "dimensional_mana:advanced_destruction_school_fragment", "dimensional_mana:advanced_protection_school_fragment", "dimensional_mana:advanced_healing_school_fragment", "dimensional_mana:advanced_blessing_school_fragment", "dimensional_mana:advanced_curse_school_fragment", "dimensional_mana:advanced_control_school_fragment", "dimensional_mana:advanced_summon_school_fragment", "dimensional_mana:advanced_movement_school_fragment", "dimensional_mana:advanced_divination_school_fragment", "dimensional_mana:advanced_psychic_school_fragment", "dimensional_mana:advanced_time_school_fragment", "dimensional_mana:advanced_space_school_fragment", "dimensional_mana:advanced_chaos_school_fragment"
+  ]
+}

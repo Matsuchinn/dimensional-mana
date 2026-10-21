@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:first_accessory",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:arcane_element_ring"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.element_ring_collection.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.element_ring_collection.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:alternatives",
+          "children": [
+            {
+              "type": "minecraft:item",
+              "name": "dimensional_mana:special_mana_crystal_cluster",
+              "conditions": [
+                {
+                  "condition": "minecraft:match_tool",
+                  "predicate": {
+                    "predicates": {
+                      "minecraft:enchantments": [
+                        {
+                          "enchantments": "minecraft:silk_touch",
+                          "levels": {"min": 1}
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            {"type": "minecraft:item", "name": "dimensional_mana:special_mana_crystal"}
+          ]
+        }
+      ],
+      "conditions": [{"condition": "minecraft:survives_explosion"}]
+    }
+  ],
+  "random_sequence": "dimensional_mana:blocks/special_mana_crystal_cluster"
+}

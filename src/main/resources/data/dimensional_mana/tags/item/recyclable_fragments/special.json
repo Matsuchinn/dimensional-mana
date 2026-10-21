@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "dimensional_mana:special_fire_fragment", "dimensional_mana:special_water_fragment", "dimensional_mana:special_ice_fragment", "dimensional_mana:special_lightning_fragment", "dimensional_mana:special_wind_fragment", "dimensional_mana:special_earth_fragment", "dimensional_mana:special_nature_fragment", "dimensional_mana:special_metal_fragment", "dimensional_mana:special_light_fragment", "dimensional_mana:special_poison_fragment", "dimensional_mana:special_sound_fragment",
+    "dimensional_mana:special_destruction_school_fragment", "dimensional_mana:special_protection_school_fragment", "dimensional_mana:special_healing_school_fragment", "dimensional_mana:special_blessing_school_fragment", "dimensional_mana:special_curse_school_fragment", "dimensional_mana:special_control_school_fragment", "dimensional_mana:special_summon_school_fragment", "dimensional_mana:special_movement_school_fragment", "dimensional_mana:special_divination_school_fragment", "dimensional_mana:special_psychic_school_fragment", "dimensional_mana:special_time_school_fragment", "dimensional_mana:special_space_school_fragment", "dimensional_mana:special_chaos_school_fragment"
+  ]
+}

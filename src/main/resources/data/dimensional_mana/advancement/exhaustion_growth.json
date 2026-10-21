@@ -1,0 +1,13 @@
+{
+  "parent": "dimensional_mana:root",
+  "display": {
+    "icon": {"id": "dimensional_mana:mana_harmonizer"},
+    "title": {"translate": "advancement.dimensional_mana.exhaustion_growth.title"},
+    "description": {"translate": "advancement.dimensional_mana.exhaustion_growth.description"},
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {"done": {"trigger": "minecraft:impossible"}}
+}

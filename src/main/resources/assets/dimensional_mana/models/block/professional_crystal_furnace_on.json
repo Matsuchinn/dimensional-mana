@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "dimensional_mana:block/professional_crystal_furnace_side",
+    "down": "dimensional_mana:block/professional_crystal_furnace_bottom",
+    "up": "dimensional_mana:block/professional_crystal_furnace_top",
+    "north": "dimensional_mana:block/professional_crystal_furnace_front_on",
+    "south": "dimensional_mana:block/professional_crystal_furnace_back",
+    "east": "dimensional_mana:block/professional_crystal_furnace_side",
+    "west": "dimensional_mana:block/professional_crystal_furnace_side"
+  }
+}

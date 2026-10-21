@@ -1,0 +1,13 @@
+{
+  "parent": "dimensional_mana:element_resonance",
+  "display": {
+    "icon": {"id": "dimensional_mana:lesser_arcane_fragment"},
+    "title": {"translate": "advancement.dimensional_mana.first_spell.title"},
+    "description": {"translate": "advancement.dimensional_mana.first_spell.description"},
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {"done": {"trigger": "minecraft:impossible"}}
+}

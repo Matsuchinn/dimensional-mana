@@ -1,0 +1,5 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": {"item": "minecraft:stone"},
+  "result": {"id": "dimensional_mana:stone_pestle", "count": 1}
+}

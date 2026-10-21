@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:mana_1000",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:special_mana_crystal"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.mana_2000.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.mana_2000.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

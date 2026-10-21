@@ -1,0 +1,5 @@
+{
+  "parent": "dimensional_mana:first_reaction",
+  "display": {"icon": {"id": "minecraft:water_bucket"}, "title": {"translate": "advancement.dimensional_mana.reaction_vaporize.title"}, "description": {"translate": "advancement.dimensional_mana.reaction_vaporize.description"}, "frame": "task", "show_toast": true, "announce_to_chat": true, "hidden": false},
+  "criteria": {"done": {"trigger": "minecraft:impossible"}}
+}

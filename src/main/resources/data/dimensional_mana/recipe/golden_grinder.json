@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["GGG", " P "],
+  "key": {
+    "G": {"item": "minecraft:gold_ingot"},
+    "P": {"item": "dimensional_mana:gold_pestle"}
+  },
+  "result": {"id": "dimensional_mana:golden_grinder", "count": 1}
+}

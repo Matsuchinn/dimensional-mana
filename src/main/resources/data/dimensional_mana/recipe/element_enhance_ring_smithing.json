@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:smithing_transform",
+  "template": {"tag": "dimensional_mana:vanilla_smithing_templates"},
+  "base": {"item": "dimensional_mana:arcane_element_ring"},
+  "addition": {"item": "dimensional_mana:superconducting_crystal"},
+  "result": {"id": "dimensional_mana:element_enhance_ring"}
+}

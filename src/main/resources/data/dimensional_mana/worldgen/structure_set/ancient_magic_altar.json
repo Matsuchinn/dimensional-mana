@@ -1,0 +1,14 @@
+{
+  "structures": [
+    {
+      "structure": "dimensional_mana:ancient_magic_altar",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "minecraft:random_spread",
+    "salt": 19264931,
+    "spacing": 56,
+    "separation": 20
+  }
+}

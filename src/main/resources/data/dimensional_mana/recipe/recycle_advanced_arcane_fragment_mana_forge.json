@@ -1,0 +1,8 @@
+{
+  "type": "dimensional_mana:mana_forge_smelting",
+  "category": "misc",
+  "ingredient": {"item": "dimensional_mana:advanced_arcane_fragment"},
+  "result": {"id": "dimensional_mana:advanced_mana_crystal_dust", "count": 3},
+  "experience": 0.4,
+  "cookingtime": 220
+}

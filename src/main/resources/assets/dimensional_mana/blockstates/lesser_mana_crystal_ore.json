@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "dimensional_mana:block/lesser_mana_crystal_ore"
+    }
+  }
+}

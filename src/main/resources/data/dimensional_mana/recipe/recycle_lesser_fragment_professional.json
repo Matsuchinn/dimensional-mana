@@ -1,0 +1,8 @@
+{
+  "type": "dimensional_mana:professional_smelting",
+  "category": "misc",
+  "ingredient": {"tag": "dimensional_mana:recyclable_fragments/lesser"},
+  "result": {"id": "dimensional_mana:lesser_mana_crystal_dust", "count": 2},
+  "experience": 0.1,
+  "cookingtime": 45
+}

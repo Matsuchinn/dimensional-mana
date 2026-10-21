@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["C", "S", "S"],
+  "key": {
+    "C": {"item": "dimensional_mana:medium_mana_crystal"},
+    "S": {"item": "minecraft:stick"}
+  },
+  "result": {"id": "dimensional_mana:medium_general_staff", "count": 1}
+}

@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["DDD", " P "],
+  "key": {
+    "D": {"item": "minecraft:diamond"},
+    "P": {"item": "dimensional_mana:diamond_pestle"}
+  },
+  "result": {"id": "dimensional_mana:diamond_grinder", "count": 1}
+}

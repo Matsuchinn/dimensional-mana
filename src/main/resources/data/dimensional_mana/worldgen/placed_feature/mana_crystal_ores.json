@@ -1,0 +1,6 @@
+{
+  "feature": "dimensional_mana:mana_crystal_ores",
+  "placement": [
+    {"type": "minecraft:biome"}
+  ]
+}

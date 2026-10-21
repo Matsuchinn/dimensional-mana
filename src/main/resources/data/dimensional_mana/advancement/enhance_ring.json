@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:first_accessory",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:element_enhance_ring"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.enhance_ring.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.enhance_ring.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "dimensional_mana:lesser_general_staff",
+    "dimensional_mana:medium_general_staff",
+    "dimensional_mana:advanced_general_staff",
+    "dimensional_mana:supreme_general_staff",
+    "dimensional_mana:special_general_staff"
+  ]
+}

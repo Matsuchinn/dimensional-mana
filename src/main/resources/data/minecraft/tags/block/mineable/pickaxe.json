@@ -1,0 +1,13 @@
+{
+  "replace": false,
+  "values": [
+    "dimensional_mana:lesser_mana_crystal_ore",
+    "dimensional_mana:medium_mana_crystal_ore",
+    "dimensional_mana:advanced_mana_crystal_ore",
+    "dimensional_mana:supreme_mana_crystal_ore",
+    "dimensional_mana:special_mana_crystal_cluster",
+    "dimensional_mana:mana_forge",
+    "dimensional_mana:professional_crystal_furnace",
+    "dimensional_mana:crystal_processor"
+  ]
+}

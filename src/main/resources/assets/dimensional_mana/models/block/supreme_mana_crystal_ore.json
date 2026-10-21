@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "dimensional_mana:block/supreme_mana_crystal_ore"
+  }
+}

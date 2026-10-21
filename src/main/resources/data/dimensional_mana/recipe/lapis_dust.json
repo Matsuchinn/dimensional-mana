@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [{"item": "minecraft:lapis_lazuli"}],
+  "result": {"id": "dimensional_mana:lapis_dust", "count": 1}
+}

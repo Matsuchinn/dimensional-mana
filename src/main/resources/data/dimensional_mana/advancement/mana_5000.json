@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:mana_2000",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:pure_liquid_mana"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.mana_5000.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.mana_5000.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

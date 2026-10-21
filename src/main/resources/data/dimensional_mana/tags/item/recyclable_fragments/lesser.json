@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "dimensional_mana:lesser_fire_fragment", "dimensional_mana:lesser_water_fragment", "dimensional_mana:lesser_ice_fragment", "dimensional_mana:lesser_lightning_fragment", "dimensional_mana:lesser_wind_fragment", "dimensional_mana:lesser_earth_fragment", "dimensional_mana:lesser_nature_fragment", "dimensional_mana:lesser_metal_fragment", "dimensional_mana:lesser_light_fragment", "dimensional_mana:lesser_poison_fragment", "dimensional_mana:lesser_sound_fragment",
+    "dimensional_mana:lesser_destruction_school_fragment", "dimensional_mana:lesser_protection_school_fragment", "dimensional_mana:lesser_healing_school_fragment", "dimensional_mana:lesser_blessing_school_fragment", "dimensional_mana:lesser_curse_school_fragment", "dimensional_mana:lesser_control_school_fragment", "dimensional_mana:lesser_summon_school_fragment", "dimensional_mana:lesser_movement_school_fragment", "dimensional_mana:lesser_divination_school_fragment", "dimensional_mana:lesser_psychic_school_fragment", "dimensional_mana:lesser_time_school_fragment", "dimensional_mana:lesser_space_school_fragment", "dimensional_mana:lesser_chaos_school_fragment"
+  ]
+}

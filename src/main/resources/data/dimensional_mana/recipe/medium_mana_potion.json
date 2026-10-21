@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {"item": "minecraft:glass_bottle"},
+    {"item": "dimensional_mana:medium_mana_crystal_dust"},
+    {"item": "minecraft:lapis_lazuli"},
+    {"item": "minecraft:glowstone_dust"},
+    {"item": "dimensional_mana:mana_harmonizer"}
+  ],
+  "result": {"id": "dimensional_mana:medium_mana_potion", "count": 1}
+}

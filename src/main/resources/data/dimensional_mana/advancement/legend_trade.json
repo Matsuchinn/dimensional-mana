@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:first_trade",
+  "display": {
+    "icon": {
+      "id": "minecraft:gold_block"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.legend_trade.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.legend_trade.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

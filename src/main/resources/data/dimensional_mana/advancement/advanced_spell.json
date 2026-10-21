@@ -1,0 +1,13 @@
+{
+  "parent": "dimensional_mana:intermediate_spell",
+  "display": {
+    "icon": {"id": "dimensional_mana:advanced_arcane_fragment"},
+    "title": {"text": "高级顿悟"},
+    "description": {"text": "首次精通高级法术顿悟+192，之后每个新高级法术+144基础魔素上限"},
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {"done": {"trigger": "minecraft:impossible"}}
+}

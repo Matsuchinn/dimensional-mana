@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": {"model": "dimensional_mana:block/crystal_processor"},
+    "facing=east": {"model": "dimensional_mana:block/crystal_processor", "y": 90},
+    "facing=south": {"model": "dimensional_mana:block/crystal_processor", "y": 180},
+    "facing=west": {"model": "dimensional_mana:block/crystal_processor", "y": 270}
+  }
+}

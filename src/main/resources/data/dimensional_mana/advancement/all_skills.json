@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:skill_maxed",
+  "display": {
+    "icon": {
+      "id": "minecraft:nether_star"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.all_skills.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.all_skills.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

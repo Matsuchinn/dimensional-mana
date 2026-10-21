@@ -1,0 +1,7 @@
+{
+  "type": "dimensional_mana:ancient_magic_altar",
+  "biomes": "#dimensional_mana:has_structure/ancient_magic_altar",
+  "step": "surface_structures",
+  "spawn_overrides": {},
+  "terrain_adaptation": "beard_thin"
+}

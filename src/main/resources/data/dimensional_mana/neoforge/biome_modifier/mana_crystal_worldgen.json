@@ -1,0 +1,9 @@
+{
+  "type": "neoforge:add_features",
+  "biomes": "#minecraft:is_overworld",
+  "features": [
+    "dimensional_mana:mana_crystal_cave",
+    "dimensional_mana:mana_crystal_ores"
+  ],
+  "step": "underground_ores"
+}

@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": ["III", "PDP", "PPP"],
+  "key": {
+    "I": {"item": "minecraft:iron_ingot"},
+    "D": {"item": "dimensional_mana:diamond_pestle"},
+    "P": {"tag": "minecraft:planks"}
+  },
+  "result": {"id": "dimensional_mana:crystal_processor", "count": 1}
+}
