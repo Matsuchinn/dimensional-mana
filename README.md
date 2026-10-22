@@ -50,7 +50,7 @@
 
 ## 版本与授权
 
-- 当前版本：`1.1.1`（构建号 `1.1.1-r129`）
+- 当前版本：`1.1.1`
 - 作者：TakisueYuu，AutoMods
 - 授权：All Rights Reserved；模组内第三方音频素材遵循 CC0-1.0 / CC-BY-SA-3.0。
 - 语言：简体中文 / English
