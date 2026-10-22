@@ -8,7 +8,6 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.RandomizableContainer;
-import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.WorldGenLevel;
@@ -19,7 +18,6 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
-import net.minecraft.world.phys.AABB;
 
 /** 单区块祭坛构件：环形地基、中央碑台、宝箱和守卫均在同一构件内生成。 */
 public final class AncientMagicAltarPiece extends StructurePiece {
@@ -53,54 +51,112 @@ public final class AncientMagicAltarPiece extends StructurePiece {
         BlockState tile = Blocks.DEEPSLATE_TILES.defaultBlockState();
         BlockState cracked = Blocks.CRACKED_DEEPSLATE_BRICKS.defaultBlockState();
         BlockState polished = Blocks.POLISHED_DEEPSLATE.defaultBlockState();
+        BlockState chiseled = Blocks.CHISELED_DEEPSLATE.defaultBlockState();
         BlockState crying = Blocks.CRYING_OBSIDIAN.defaultBlockState();
+        BlockState carpet = Blocks.PURPLE_CARPET.defaultBlockState();
+        BlockState lantern = Blocks.SOUL_LANTERN.defaultBlockState();
 
-        // 压入地面的完整地基；切去四角后形成十五格宽的圆角祭坛轮廓。
-        for (int x = 0; x < 15; x++) for (int z = 0; z < 15; z++) {
-            int dx = Math.abs(x - 7), dz = Math.abs(z - 7);
-            if (dx + dz > 11) continue;
-            BlockState floor = (x + z) % 7 == 0 ? cracked : (dx == 7 || dz == 7 ? brick : tile);
-            placeBlock(level, floor, x, 4, z, chunkBox);
-            fillColumnDown(level, brick, x, 3, z, chunkBox);
+        // ---------- 地基：半径七格的圆形平台 ----------
+        // 旧版是方形切角 + 两条悬在半空的地毯；这里改成真正的圆形露天祭坛，
+        // 地毯一律铺在地面方块上，结构里不会再出现任何浮空装饰。
+        for (int x = 0; x < 15; x++) {
+            for (int z = 0; z < 15; z++) {
+                int dx = Math.abs(x - 7), dz = Math.abs(z - 7);
+                int radius = dx * dx + dz * dz;
+                if (radius > 50) continue;
+                BlockState floor;
+                if (radius >= 40) {
+                    // 最外圈抛光深板岩镶边，勾出圆形轮廓。
+                    floor = polished;
+                } else if (radius >= 33) {
+                    // 紧贴镶边的一圈哭泣黑曜石，就是祭坛的“魔法阵”光环。
+                    floor = crying;
+                } else if (dx <= 1 || dz <= 1) {
+                    // 十字大道：四向入口到中央台座的主路。
+                    floor = polished;
+                } else {
+                    floor = (x * 7 + z * 13) % 17 == 0 ? cracked : tile;
+                }
+                placeBlock(level, floor, x, 4, z, chunkBox);
+                fillColumnDown(level, brick, x, 3, z, chunkBox);
+            }
         }
 
-        // 四向宽台阶与中央三层仪式台。
-        generateBox(level, chunkBox, 5, 4, 0, 9, 4, 14, polished, polished, false);
-        generateBox(level, chunkBox, 0, 4, 5, 14, 4, 9, polished, polished, false);
-        generateBox(level, chunkBox, 4, 5, 4, 10, 5, 10, brick, brick, false);
+        // ---------- 中央三层台座 ----------
+        // 第一层削角、第二层内收、第三层托起碑体；由外到内逐层变亮，视觉上像被托起的祭品。
+        for (int x = 4; x <= 10; x++) {
+            for (int z = 4; z <= 10; z++) {
+                boolean edge = x == 4 || x == 10 || z == 4 || z == 10;
+                placeBlock(level, edge ? chiseled : polished, x, 5, z, chunkBox);
+            }
+        }
         generateBox(level, chunkBox, 5, 6, 5, 9, 6, 9, tile, tile, false);
-        generateBox(level, chunkBox, 6, 7, 6, 8, 7, 8, crying, crying, false);
+        generateBox(level, chunkBox, 6, 7, 6, 8, 7, 8, brick, brick, false);
+        placeBlock(level, crying, 7, 7, 7, chunkBox);
         placeBlock(level, GeneratedMod.MOD_BLOCKS.get("ancient_magic_stele").get().defaultBlockState()
                 .setValue(AncientMagicSteleBlock.FACING, Direction.SOUTH), 7, 8, 7, chunkBox);
+        // 碑体四角的魂灯，夜里从四面都能看见祭坛的位置。
+        placeBlock(level, lantern, 6, 8, 7, chunkBox);
+        placeBlock(level, lantern, 8, 8, 7, chunkBox);
+        placeBlock(level, lantern, 7, 8, 6, chunkBox);
+        placeBlock(level, lantern, 7, 8, 8, chunkBox);
 
-        // 四座残缺的魔法柱，深色材质、灵魂灯和哭泣黑曜石强调远古祭祀感。
-        int[][] pillars = {{2, 2}, {12, 2}, {2, 12}, {12, 12}};
-        for (int i = 0; i < pillars.length; i++) {
-            int x = pillars[i][0], z = pillars[i][1];
-            int height = 3 + (i % 2);
-            for (int y = 5; y <= 4 + height; y++) placeBlock(level,
-                    y == 6 ? crying : (y == 4 + height ? Blocks.CHISELED_DEEPSLATE.defaultBlockState() : brick),
-                    x, y, z, chunkBox);
-            placeBlock(level, Blocks.SOUL_LANTERN.defaultBlockState(), x, 5 + height, z, chunkBox);
+        // ---------- 四向门楼 ----------
+        // 每侧入口两侧各立一根短柱，柱顶魂灯；入口中间铺紫色地毯直通台座。
+        int[][] southPosts = {{5, 1}, {9, 1}};
+        int[][] northPosts = {{5, 13}, {9, 13}};
+        int[][] westPosts = {{1, 5}, {1, 9}};
+        int[][] eastPosts = {{13, 5}, {13, 9}};
+        for (int[][] pair : new int[][][]{southPosts, northPosts, westPosts, eastPosts}) {
+            for (int[] post : pair) buildGatePost(level, chunkBox, post[0], post[1], chiseled, brick, lantern);
+        }
+        carpetRunner(level, chunkBox, carpet, 6, 1, 8, 3);
+        carpetRunner(level, chunkBox, carpet, 6, 11, 8, 13);
+        carpetRunner(level, chunkBox, carpet, 1, 6, 3, 8);
+        carpetRunner(level, chunkBox, carpet, 11, 6, 13, 8);
+
+        // ---------- 四角尖塔 ----------
+        // 比门楼高，形成向上的收势；中间夹一段哭泣黑曜石作为“封印纹”。
+        int[][] spires = {{2, 2}, {12, 2}, {2, 12}, {12, 12}};
+        for (int[] spire : spires) {
+            int x = spire[0], z = spire[1];
+            placeBlock(level, chiseled, x, 5, z, chunkBox);
+            placeBlock(level, brick, x, 6, z, chunkBox);
+            placeBlock(level, crying, x, 7, z, chunkBox);
+            placeBlock(level, brick, x, 8, z, chunkBox);
+            placeBlock(level, chiseled, x, 9, z, chunkBox);
+            placeBlock(level, lantern, x, 10, z, chunkBox);
         }
 
-        // 低矮外环保留四个入口，结构始终是露天祭坛而不是封闭房间。
-        for (int i = 2; i <= 12; i++) {
-            if (i >= 6 && i <= 8) continue;
-            placeBlock(level, brick, i, 5, 1, chunkBox);
-            placeBlock(level, brick, i, 5, 13, chunkBox);
-            placeBlock(level, brick, 1, 5, i, chunkBox);
-            placeBlock(level, brick, 13, 5, i, chunkBox);
-        }
-        placeBlock(level, Blocks.PURPLE_CARPET.defaultBlockState(), 7, 8, 5, chunkBox);
-        placeBlock(level, Blocks.PURPLE_CARPET.defaultBlockState(), 7, 8, 9, chunkBox);
-
-        createLootChest(level, random, chunkBox, 3, 5, 7, Direction.EAST);
-        if (random.nextBoolean()) createLootChest(level, random, chunkBox, 11, 5, 7, Direction.WEST);
+        // ---------- 宝箱 ----------
+        // 南北各一口，正对入口、背靠台座，两座祭坛左右对称。
+        createLootChest(level, random, chunkBox, 4, 5, 2, Direction.NORTH);
+        if (random.nextBoolean()) createLootChest(level, random, chunkBox, 10, 5, 12, Direction.SOUTH);
 
         int witchCount = 1 + random.nextInt(3);
-        int[][] spawnPoints = {{4, 5, 4}, {10, 5, 10}, {10, 5, 4}};
+        int[][] spawnPoints = {{4, 5, 3}, {10, 5, 11}, {3, 5, 10}};
         for (int i = 0; i < witchCount; i++) spawnWitch(level, spawnPoints[i][0], spawnPoints[i][1], spawnPoints[i][2]);
+    }
+
+    /** 门柱：底座、柱身、柱头、魂灯，四格高，站在入口两侧。 */
+    private void buildGatePost(WorldGenLevel level, BoundingBox box, int x, int z,
+                               BlockState chiseled, BlockState brick, BlockState lantern) {
+        placeBlock(level, chiseled, x, 5, z, box);
+        placeBlock(level, brick, x, 6, z, box);
+        placeBlock(level, chiseled, x, 7, z, box);
+        placeBlock(level, lantern, x, 8, z, box);
+    }
+
+    /** 地毯铺在平台上表面（局部 y=5），只在真正有地面的位置铺，避免再次出现悬空地毡。 */
+    private void carpetRunner(WorldGenLevel level, BoundingBox box, BlockState carpet,
+                              int fromX, int fromZ, int toX, int toZ) {
+        for (int x = fromX; x <= toX; x++) {
+            for (int z = fromZ; z <= toZ; z++) {
+                if (!level.getBlockState(worldPos(x, 4, z)).isSolid()) continue;
+                if (!level.getBlockState(worldPos(x, 5, z)).isAir()) continue;
+                placeBlock(level, carpet, x, 5, z, box);
+            }
+        }
     }
 
     private void createLootChest(WorldGenLevel level, RandomSource random, BoundingBox box,
@@ -111,17 +167,12 @@ public final class AncientMagicAltarPiece extends StructurePiece {
         RandomizableContainer.setBlockEntityLootTable(level, random, pos, ALTAR_LOOT);
     }
 
+    /**
+     * 世界生成阶段不能直接刷实体：先排队，等区块真正加载后由 {@link WorldgenSpawnQueue} 补刷。
+     * 女巫的最终生成逻辑（含去重、持久化）也在那里。
+     */
     private void spawnWitch(WorldGenLevel level, int x, int y, int z) {
-        BlockPos pos = worldPos(x, y, z);
-        AABB area = new AABB(pos).inflate(1.5);
-        if (!level.getEntities(net.minecraft.world.level.entity.EntityTypeTest.forClass(WanderingWitch.class), area,
-                entity -> true).isEmpty()) return;
-        WanderingWitch witch = GeneratedMod.WANDERING_WITCH.get().create(level.getLevel());
-        if (witch == null) return;
-        witch.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, level.getRandom().nextFloat() * 360.0F, 0.0F);
-        witch.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), MobSpawnType.STRUCTURE, null);
-        witch.setPersistenceRequired();
-        level.addFreshEntityWithPassengers(witch);
+        WorldgenSpawnQueue.queueWitch(level.getLevel(), worldPos(x, y, z));
     }
 
     private BlockPos worldPos(int x, int y, int z) {

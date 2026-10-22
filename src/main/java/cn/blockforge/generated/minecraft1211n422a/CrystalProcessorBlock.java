@@ -6,7 +6,9 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
@@ -21,7 +23,13 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
+
+import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class CrystalProcessorBlock extends BaseEntityBlock {
     public static final MapCodec<CrystalProcessorBlock> CODEC = simpleCodec(CrystalProcessorBlock::new);
@@ -69,6 +77,39 @@ public final class CrystalProcessorBlock extends BaseEntityBlock {
             serverPlayer.openMenu(processor, pos);
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    /**
+     * 破坏时把魔素存量记到掉落的那份加工台上，重新放下就能接着用。
+     * 用 {@code getDrops} 而不是只在玩家挖掘时处理，所以炸开、活塞推掉也一样保住魔素。
+     */
+    @Override
+    public List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
+        BlockEntity blockEntity = params.getOptionalParameter(LootContextParams.BLOCK_ENTITY);
+        int mana = blockEntity instanceof CrystalProcessorBlockEntity processor ? processor.mana() : 0;
+        List<ItemStack> drops = super.getDrops(state, params);
+        if (mana <= 0) return drops;
+        List<ItemStack> stamped = new ArrayList<>(drops.size());
+        for (ItemStack drop : drops) {
+            if (drop.is(GeneratedMod.MOD_ITEMS.get("crystal_processor").get())) {
+                ItemStack copy = drop.copy();
+                CrystalProcessorItem.storeMana(copy, mana);
+                stamped.add(copy);
+            } else {
+                stamped.add(drop);
+            }
+        }
+        return stamped;
+    }
+
+    /** 放下加工台时把物品上记着的魔素倒回去；九宫格与燃料槽的物品不跟着走。 */
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
+        super.setPlacedBy(level, pos, state, placer, stack);
+        int mana = CrystalProcessorItem.storedMana(stack);
+        if (mana > 0 && level.getBlockEntity(pos) instanceof CrystalProcessorBlockEntity processor) {
+            processor.setMana(mana);
+        }
     }
 
     @Override

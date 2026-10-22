@@ -6,10 +6,13 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 
 public final class ManaData {
-    private static final String ROOT = "DimensionalMana";
+    /** 玩家/生物身上存魔素与斗气的根标签；跨类读取时用同一个常量，避免拼错。 */
+    public static final String ROOT_TAG = "DimensionalMana";
+    private static final String ROOT = ROOT_TAG;
 
     public record Snapshot(double mana, double maxMana, double affinity, int aura, int maxAura, int permanentAuraBonus, int exhaustionTicks) {}
 
@@ -152,6 +155,27 @@ public final class ManaData {
         setAura(player, t.getInt("aura"));
     }
 
+    /** 永久提高斗气上限（绝境凝聚渠道）；提高多少就补给多少当前斗气。 */
+    public static void increaseMaxAura(Player player, int points) {
+        if (points <= 0) return;
+        CompoundTag t = tag(player);
+        int oldBase = t.getInt("baseMaxAura");
+        int cap = ManaConfig.GLOBAL_AURA_CAP.get();
+        int newBase = Math.min(cap, oldBase + points);
+        int gained = newBase - oldBase;
+        if (gained <= 0) return;
+        t.putInt("baseMaxAura", newBase);
+        t.putInt("permanentAuraBonus", t.getInt("permanentAuraBonus") + gained);
+        t.putInt("maxAura", get(player).maxAura());
+        setAura(player, Math.min(cap, t.getInt("aura") + gained));
+        if (player instanceof ServerPlayer serverPlayer) {
+            net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer,
+                    new ManaSyncPayload(get(player).mana(), get(player).maxMana(), get(player).aura(),
+                            get(player).maxAura(), get(player).exhaustionTicks() > 0,
+                            ManaConfig.OVERCHARGE_SAFE_RATIO.get()));
+        }
+    }
+
     public static boolean spendMana(LivingEntity entity, double amount) {
         // 作弊开关：关闭魔素消耗时直接放行，不扣魔素也不会进魔力枯竭。
         if (!ManaCheats.manaCostEnabled(entity)) return true;
@@ -187,6 +211,24 @@ public final class ManaData {
 
     public static void setAura(LivingEntity entity, int aura) {
         tag(entity).putInt("aura", Math.max(0, Math.min(aura, ManaConfig.GLOBAL_AURA_CAP.get())));
+    }
+
+    /**
+     * 凝聚斗气：玩家站着不动时按住 Alt+Z，每 10 刻消耗 1 点魔素换 1 点斗气。
+     * 服务端会自己复核“静止”，客户端发来的请求只是节奏提示。
+     */
+    public static boolean condenseAura(ServerPlayer player) {
+        Snapshot d = get(player);
+        if (d.aura() >= d.maxAura()) return false;
+        if (!player.onGround() || player.getDeltaMovement().horizontalDistanceSqr() > 0.01) return false;
+        CompoundTag t = tag(player);
+        long now = player.level().getGameTime();
+        // 服务端限流：无论客户端怎么连点，都是每 10 刻最多凝聚 1 点。
+        if (now < t.getLong("nextCondenseTick")) return false;
+        if (!spendMana(player, 1.0)) return false;
+        t.putLong("nextCondenseTick", now + 10);
+        setAura(player, Math.min(d.maxAura(), d.aura() + 1));
+        return true;
     }
 
     public static void setExhaustion(LivingEntity entity, int ticks) {

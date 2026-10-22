@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:smelting",
+  "ingredient": {
+    "item": "dimensional_mana:supreme_mana_crystal_ore"
+  },
+  "result": {
+    "id": "dimensional_mana:supreme_mana_crystal"
+  },
+  "experience": 0.5,
+  "cookingtime": 12000
+}

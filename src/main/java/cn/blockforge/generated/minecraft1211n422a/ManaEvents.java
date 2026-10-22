@@ -142,6 +142,10 @@ public final class ManaEvents {
         }
         ElementReactionSystem.deepFreezeHit(target, event.getSource());
         event.setAmount(ElementReactionSystem.modifyPhysicalDamage(target, event.getSource(), incoming));
+        // 元素镀层：举盾时按层数掷完美格挡，成功就直接取消这次伤害；护甲抗性在 onDamagePre 里结算。
+        // 放在斗气扣费之前，避免完美格挡了还白扣斗气。
+        ElementPlating.onIncomingDamage(event);
+        if (event.isCanceled()) return;
         // 攻击已经命中就打断施法；后续即使被斗气或临时生命完全吸收，也不恢复施法。
         SpellCasting.interruptByAttack(target, event.getSource());
         ManaData.Snapshot d = ManaData.get(target);
@@ -175,10 +179,18 @@ public final class ManaEvents {
         }
         // 高频声波穿透金钟罩与磐石外壳，只吃斗气减伤。
         if (SonicSpells.isSonic(event.getSource())) return;
+        // 元素镀层：盔甲、附魔与药水减伤都已算完，这里乘上的抗性就是最终扣血的数字。
+        ElementPlating.onDamagePre(event);
         // 金钟罩先接住伤害，其次才是磐石外壳；两者都只吸收经过护甲/斗气减免后的实际伤害。
         event.setNewDamage(MetalSpells.absorbBell(victim, event.getNewDamage(), event.getSource()));
         // 磐石外壳在护甲/韧性/药水减伤之后接住实际伤害；外壳破裂后溢出的部分才落到生命值。
         event.setNewDamage(EarthSpells.absorbShell(victim, event.getNewDamage(), event.getSource()));
+    }
+
+    /** 玩家挖到铁矿或高级以上魔晶矿时，叫醒附近的守矿史莱姆。 */
+    public void onBlockBreak(net.neoforged.neoforge.event.level.BlockEvent.BreakEvent event) {
+        if (event.isCanceled() || event.getPlayer().level().isClientSide) return;
+        ElementalSlime.onBlockMined(event.getPlayer(), event.getPos(), event.getState());
     }
 
     public void onStruckByLightning(EntityStruckByLightningEvent event) {
@@ -226,8 +238,32 @@ public final class ManaEvents {
         if (victim.level().isClientSide || event.getNewDamage() <= 0.0F) return;
         // 共鸣核心：充能 ≥50 时受到任何伤害都会掉充能，环境与 DOT 伤害同样算数。
         ResonanceCore.onDamaged(victim);
+        // 一次掉血超过最大生命 80%：咬牙凝聚斗气，有概率把斗气上限永久提高一点。
+        if (victim instanceof ServerPlayer player) rollAuraBreakthrough(player, event.getNewDamage());
         if (!(event.getSource().getEntity() instanceof LivingEntity attacker)) return;
         MagicEquipment.tryReflect(victim, attacker, event.getNewDamage());
+    }
+
+    /**
+     * 斗气上限的成长渠道：单次伤害超过自身最大生命 80% 时，25% 概率提升上限。
+     * 提升量 1/2/4/8 点的权重分别是 65% / 25% / 9% / 1%，每个游戏日最多两次。
+     */
+    private static void rollAuraBreakthrough(ServerPlayer player, float damage) {
+        if (damage < player.getMaxHealth() * 0.80F) return;
+        var root = player.getPersistentData().getCompound(ManaData.ROOT_TAG);
+        long day = player.level().getDayTime() / 24000L;
+        if (root.getLong("auraBreakthroughDay") != day) {
+            root.putLong("auraBreakthroughDay", day);
+            root.putInt("auraBreakthroughs", 0);
+        }
+        int used = root.getInt("auraBreakthroughs");
+        if (used >= 2 || player.getRandom().nextFloat() >= 0.25F) return;
+        int roll = player.getRandom().nextInt(100);
+        int gain = roll < 65 ? 1 : roll < 90 ? 2 : roll < 99 ? 4 : 8;
+        ManaData.increaseMaxAura(player, gain);
+        root.putInt("auraBreakthroughs", used + 1);
+        player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
+                "message.dimensional_mana.aura_breakthrough", gain, 2 - used - 1), false);
     }
 
     public void onTick(EntityTickEvent.Post event) {
@@ -252,7 +288,12 @@ public final class ManaEvents {
             else if (!player.isSleeping()) RESTED_THIS_SLEEP.remove(player.getUUID());
         }
         if (living.tickCount % 10 == 0 && living.isInFluidType(GeneratedMod.PURE_LIQUID_MANA_TYPE.get())) {
-            living.addEffect(new MobEffectInstance(MobEffects.POISON, 60, 1));
+            // 魔素史莱姆把纯态液态魔晶当作滋养液：免疫其毒性，每秒恢复 2.5% 最大生命。
+            if (living instanceof ElementalSlime slime && slime.variant() == ElementalSlimeVariant.MANA) {
+                if (living.tickCount % 20 == 0) living.heal(living.getMaxHealth() * 0.025F);
+            } else {
+                living.addEffect(new MobEffectInstance(MobEffects.POISON, 60, 1));
+            }
         }
         if (living.tickCount % 20 != 0) return;
         ManaData.Snapshot d = ManaData.get(living);
@@ -277,6 +318,12 @@ public final class ManaEvents {
             // 魔素增强护符同样是固定每秒回复。
             regen += MagicEquipment.manaRegenPerSecond(living);
             ManaData.restoreMana(living, regen, false);
+        }
+
+        // 被驯服的魔素史莱姆：待在 4 格内，每只每秒额外恢复 1 点魔素，最多叠 4 层。
+        if (living instanceof ServerPlayer player) {
+            int manaSlimes = tamedManaSlimeStacks(player);
+            if (manaSlimes > 0) ManaData.restoreMana(player, manaSlimes, false);
         }
 
         d = ManaData.get(living);
@@ -308,6 +355,17 @@ public final class ManaEvents {
             ProgressSyncPayload.send(player);
             syncAppraisal(player);
         }
+    }
+
+    /** 4 格内已驯服的魔素史莱姆数量，作为魔素恢复层数（上限 4）。 */
+    private static int tamedManaSlimeStacks(ServerPlayer player) {
+        int stacks = 0;
+        for (ElementalSlime ignored : player.level().getEntitiesOfClass(ElementalSlime.class,
+                player.getBoundingBox().inflate(4.0),
+                slime -> slime.variant() == ElementalSlimeVariant.MANA && slime.isTamed())) {
+            if (++stacks >= 4) break;
+        }
+        return stacks;
     }
 
     private static void syncAppraisal(ServerPlayer player) {

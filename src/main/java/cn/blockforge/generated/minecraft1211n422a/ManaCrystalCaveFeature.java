@@ -22,9 +22,11 @@ public final class ManaCrystalCaveFeature extends Feature<NoneFeatureConfigurati
         WorldGenLevel level = context.level();
         RandomSource random = context.random();
         BlockPos center = context.origin();
-        int radiusX = 8 + random.nextInt(4);
-        int radiusY = 6 + random.nextInt(3);
-        int radiusZ = 8 + random.nextInt(4);
+        // 22% 为大型洞穴；普通洞穴也比旧版扩大约三成，大型洞穴的横向直径可达 32～40 格。
+        boolean large = random.nextFloat() < 0.22F;
+        int radiusX = large ? 16 + random.nextInt(5) : 10 + random.nextInt(4);
+        int radiusY = large ? 10 + random.nextInt(3) : 7 + random.nextInt(3);
+        int radiusZ = large ? 16 + random.nextInt(5) : 10 + random.nextInt(4);
         int changed = 0;
 
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
@@ -59,7 +61,11 @@ public final class ManaCrystalCaveFeature extends Feature<NoneFeatureConfigurati
         }
 
         decorateInterior(level, random, center, radiusX, radiusY, radiusZ);
-        if (changed > 0) ManaCaveData.get(level.getLevel()).add(center);
+        if (changed > 0) {
+            // 这里还在区块生成阶段，不能直接改 ServerLevel 的实体和存档数据；
+            // 先把洞穴位置排进队列，等服务器刻、区块加载后再补刷史莱姆。
+            WorldgenSpawnQueue.queueManaCave(level.getLevel(), center, large);
+        }
         return changed > 0;
     }
 
@@ -75,7 +81,7 @@ public final class ManaCrystalCaveFeature extends Feature<NoneFeatureConfigurati
 
     private static void decorateInterior(WorldGenLevel level, RandomSource random, BlockPos center,
                                          int radiusX, int radiusY, int radiusZ) {
-        int attempts = 90 + random.nextInt(41);
+        int attempts = Math.max(110, (radiusX * radiusY * radiusZ) / 9);
         for (int i = 0; i < attempts; i++) {
             BlockPos cavityPos = center.offset(
                     random.nextInt(radiusX * 2 - 3) - radiusX + 2,

@@ -49,6 +49,8 @@ public record SpellActionPayload(String action, String spellId, int slot) implem
                 case "target_cancel" -> SpellCasting.cancelTarget(player);
                 // 主手持魔法大师披风时按 Shift+O：切换“施法生成魔素凝聚球”功能。
                 case "toggle_orb" -> MagicCloakItem.toggleOrb(player);
+                // 静止时按住 Alt+Z：消耗魔素凝聚斗气（每 10 刻 1 点）
+                case "condense_aura" -> ManaData.condenseAura(player);
                 default -> { }
             }
         }));

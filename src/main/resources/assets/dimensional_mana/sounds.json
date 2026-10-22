@@ -83,5 +83,101 @@
       {"name": "minecraft:block.beacon.activate", "type": "event", "volume": 0.3, "pitch": 0.9},
       {"name": "minecraft:block.amethyst_block.resonate", "type": "event", "volume": 0.45, "pitch": 0.72}
     ]
+  },
+  "elemental_slime_mana": {
+    "subtitle": "subtitles.dimensional_mana.elemental_slime",
+    "sounds": [
+      {"name": "minecraft:block.amethyst_block.chime", "type": "event", "volume": 0.55, "pitch": 1.15},
+      {"name": "minecraft:entity.slime.squish_small", "type": "event", "volume": 0.55, "pitch": 1.0},
+      {"name": "dimensional_mana:spell/arcane_ray", "volume": 0.22, "pitch": 1.45}
+    ]
+  },
+  "elemental_slime_fire": {
+    "subtitle": "subtitles.dimensional_mana.elemental_slime",
+    "sounds": [
+      {"name": "minecraft:item.firecharge.use", "type": "event", "volume": 0.45, "pitch": 1.25},
+      {"name": "minecraft:entity.slime.squish_small", "type": "event", "volume": 0.5, "pitch": 0.9},
+      {"name": "dimensional_mana:spell/fireball", "volume": 0.2, "pitch": 1.4}
+    ]
+  },
+  "elemental_slime_water": {
+    "subtitle": "subtitles.dimensional_mana.elemental_slime",
+    "sounds": [
+      {"name": "minecraft:entity.generic.splash", "type": "event", "volume": 0.5, "pitch": 1.3},
+      {"name": "minecraft:entity.slime.squish_small", "type": "event", "volume": 0.5, "pitch": 1.05},
+      {"name": "dimensional_mana:spell/water_bolt", "volume": 0.18, "pitch": 1.4}
+    ]
+  },
+  "elemental_slime_ice": {
+    "subtitle": "subtitles.dimensional_mana.elemental_slime",
+    "sounds": [
+      {"name": "minecraft:block.glass.break", "type": "event", "volume": 0.3, "pitch": 1.6},
+      {"name": "minecraft:entity.slime.squish_small", "type": "event", "volume": 0.5, "pitch": 1.15},
+      {"name": "dimensional_mana:spell/ice_spike", "volume": 0.2, "pitch": 1.4}
+    ]
+  },
+  "elemental_slime_lightning": {
+    "subtitle": "subtitles.dimensional_mana.elemental_slime",
+    "sounds": [
+      {"name": "minecraft:entity.lightning_bolt.impact", "type": "event", "volume": 0.14, "pitch": 1.6},
+      {"name": "dimensional_mana:spell/electric_shock", "volume": 0.32, "pitch": 1.3},
+      {"name": "minecraft:entity.slime.squish_small", "type": "event", "volume": 0.45, "pitch": 1.1}
+    ]
+  },
+  "elemental_slime_nature": {
+    "subtitle": "subtitles.dimensional_mana.elemental_slime",
+    "sounds": [
+      {"name": "minecraft:block.grass.break", "type": "event", "volume": 0.5, "pitch": 1.2},
+      {"name": "minecraft:entity.slime.squish_small", "type": "event", "volume": 0.5, "pitch": 1.0},
+      {"name": "dimensional_mana:spell/thorns", "volume": 0.24, "pitch": 1.3}
+    ]
+  },
+  "elemental_slime_poison": {
+    "subtitle": "subtitles.dimensional_mana.elemental_slime",
+    "sounds": [
+      {"name": "minecraft:entity.slime.squish_small", "type": "event", "volume": 0.6, "pitch": 0.85},
+      {"name": "minecraft:block.brewing_stand.brew", "type": "event", "volume": 0.22, "pitch": 1.4},
+      {"name": "dimensional_mana:spell/poison_bolt", "volume": 0.22, "pitch": 1.2}
+    ]
+  },
+  "elemental_slime_metal": {
+    "subtitle": "subtitles.dimensional_mana.elemental_slime",
+    "sounds": [
+      {"name": "minecraft:block.chain.hit", "type": "event", "volume": 0.45, "pitch": 1.2},
+      {"name": "minecraft:block.anvil.place", "type": "event", "volume": 0.1, "pitch": 1.5},
+      {"name": "minecraft:entity.slime.squish_small", "type": "event", "volume": 0.4, "pitch": 1.0}
+    ]
+  },
+  "elemental_slime_wind": {
+    "subtitle": "subtitles.dimensional_mana.elemental_slime",
+    "sounds": [
+      {"name": "minecraft:entity.breeze.wind_burst", "type": "event", "volume": 0.4, "pitch": 1.3},
+      {"name": "dimensional_mana:spell/wind_blade", "volume": 0.24, "pitch": 1.35},
+      {"name": "minecraft:entity.slime.squish_small", "type": "event", "volume": 0.4, "pitch": 1.2}
+    ]
+  },
+  "elemental_slime_earth": {
+    "subtitle": "subtitles.dimensional_mana.elemental_slime",
+    "sounds": [
+      {"name": "minecraft:block.gravel.break", "type": "event", "volume": 0.55, "pitch": 1.1},
+      {"name": "dimensional_mana:spell/rockfall", "volume": 0.2, "pitch": 1.3},
+      {"name": "minecraft:entity.slime.squish_small", "type": "event", "volume": 0.45, "pitch": 0.9}
+    ]
+  },
+  "elemental_slime_light": {
+    "subtitle": "subtitles.dimensional_mana.elemental_slime",
+    "sounds": [
+      {"name": "minecraft:block.amethyst_block.chime", "type": "event", "volume": 0.5, "pitch": 1.7},
+      {"name": "dimensional_mana:spell/purifying_light", "volume": 0.2, "pitch": 1.4},
+      {"name": "minecraft:entity.slime.squish_small", "type": "event", "volume": 0.4, "pitch": 1.2}
+    ]
+  },
+  "elemental_slime_sound": {
+    "subtitle": "subtitles.dimensional_mana.elemental_slime",
+    "sounds": [
+      {"name": "minecraft:block.note_block.chime", "type": "event", "volume": 0.5, "pitch": 1.25},
+      {"name": "dimensional_mana:spell/sonic_wave", "volume": 0.28, "pitch": 1.3},
+      {"name": "minecraft:entity.slime.squish_small", "type": "event", "volume": 0.4, "pitch": 1.1}
+    ]
   }
 }

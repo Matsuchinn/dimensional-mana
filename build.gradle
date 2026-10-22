@@ -7,12 +7,22 @@ group = mod_group_id
 base { archivesName = mod_id }
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 repositories {
-    maven { url = 'https://maven.theillusivec4.top/' }
-    maven { url = 'https://maven.blamejared.com/' }
+    clear()
+    maven { url = "https://libraries.minecraft.net/" }
+    maven { url = "https://neoforged.forgecdn.net/releases" }
+    maven { url = "https://neoforged.forgecdn.net/mojang-meta" }
+    maven { 
+        name = "Jared's maven" 
+        url = "https://maven.blamejared.com/" 
+    }
+     maven {
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+    }
 }
 
 dependencies {
-    implementation "top.theillusivec4.curios:curios-neoforge:${curios_version}"
+    implementation "maven.modrinth:BaqCltvf:6UN1b1Vc"
     compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
     compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}"
 }
@@ -30,4 +40,8 @@ processResources {
     inputs.properties props
     filteringCharset = 'UTF-8'
     filesMatching('META-INF/neoforge.mods.toml') { expand props }
+}
+// 强制忽略打包时产生的重复文件
+tasks.withType(Jar) {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

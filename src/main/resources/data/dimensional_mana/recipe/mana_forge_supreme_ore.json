@@ -1,0 +1,8 @@
+{
+  "type": "dimensional_mana:mana_forge_smelting",
+  "category": "misc",
+  "ingredient": {"item": "dimensional_mana:supreme_mana_crystal_ore"},
+  "result": {"id": "dimensional_mana:supreme_mana_crystal"},
+  "experience": 4.0,
+  "cookingtime": 2400
+}

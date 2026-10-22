@@ -83,6 +83,34 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
 
     public static void serverTick(Level level, BlockPos pos, BlockState state, CrystalProcessorBlockEntity processor) {
         boolean changed = processor.digestFuel();
+        // 元素镀层是“原地强化”：中心装备 + 四周 8 份同种元素结晶粉末，不产出新物品，
+        // 所以走单独的进度分支，不参与普通配方的产物匹配。
+        ElementPlating.PlatingJob plating = ElementPlating.findJob(processor.items);
+        if (plating != null) {
+            if (!processor.activeRecipe.equals(plating.recipeId())) {
+                processor.activeRecipe = plating.recipeId();
+                processor.processProgress = 0;
+                processor.processTotal = plating.ticks();
+                changed = true;
+            }
+            if (processor.mana >= plating.manaCost()) {
+                processor.processTotal = plating.ticks();
+                processor.processProgress++;
+                changed = true;
+                if (processor.processProgress >= plating.ticks()) {
+                    processor.finishPlating(plating);
+                    if (!processor.isRemoved()) {
+                        level.playSound(null, pos, GeneratedMod.CRYSTAL_PROCESS_COMPLETE.get(), SoundSource.BLOCKS, 0.9F,
+                                0.92F + level.random.nextFloat() * 0.16F);
+                    }
+                }
+            } else if (processor.processProgress != 0) {
+                processor.processProgress = 0;
+                changed = true;
+            }
+            if (changed) processor.setChanged();
+            return;
+        }
         ProcessRecipe recipe = processor.findRecipe();
         String recipeId = recipe == null ? "" : recipe.id();
         if (!processor.activeRecipe.equals(recipeId)) {
@@ -302,6 +330,24 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
     }
 
     /**
+     * 完成一次元素镀层：中心装备原地升一层，四周 8 份粉各消耗 1 份。
+     *
+     * <p>层数上限由 {@link ElementPlating#findJob} 在匹配阶段就拦住了，
+     * 这里只处理扣料、扣魔素与进度复位。</p>
+     */
+    private void finishPlating(ElementPlating.PlatingJob job) {
+        for (int slot = INPUT_START; slot < INPUT_END; slot++) {
+            if (slot == 4) continue;
+            items.get(slot).shrink(1);
+        }
+        ElementPlating.addLayer(items.get(4), job.elementId());
+        mana = Math.max(0, mana - job.manaCost());
+        processProgress = 0;
+        activeRecipe = "";
+        setChanged();
+    }
+
+    /**
      * 超导魔晶这种“过载合成”会让加工台当场损坏：铁砧损坏音效、方块消失，
      * 箱内剩余内容物与三块铁锭、五根木棍一起掉在地上，产物也在其中。
      */
@@ -381,8 +427,14 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
         recipes.add(patternRecipe("refined_magic_component", List.of(
                 "supreme_mana_crystal_dust", "minecraft:nether_star", "supreme_mana_crystal_dust",
                 "minecraft:netherite_ingot", "rough_magic_component", "minecraft:netherite_ingot",
-                "supreme_mana_crystal_dust", "", "supreme_mana_crystal_dust"),
+                "supreme_mana_crystal_dust", "minecraft:amethyst_block", "supreme_mana_crystal_dust"),
                 "refined_magic_component", 1_800, 1_800));
+        // 专业魔晶锻造炉：原来的工作台九宫格配方已删除，改成加工台 800 魔素 / 10 秒（200 刻）。
+        recipes.add(patternRecipe("professional_crystal_furnace", List.of(
+                "minecraft:lapis_block", "special_mana_crystal", "minecraft:lapis_block",
+                "minecraft:iron_block", "mana_forge", "minecraft:iron_block",
+                "minecraft:lapis_block", "minecraft:netherite_ingot", "minecraft:lapis_block"),
+                "professional_crystal_furnace", 800, 200));
         recipes.add(patternRecipe("ancient_casket", List.of(
                 "", "advanced_mana_crystal", "",
                 "", "minecraft:diamond", "",
@@ -436,6 +488,14 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
      * 特级碎片不参与元素结晶合成，因此引子只接受非特级碎片。
      */
     private static void addElementCrystalRecipes(List<ProcessRecipe> recipes) {
+        // 元素史莱姆快捷路线：九份对应元素结晶粉末，1200 魔素，32 秒（640 tick）产出一枚结晶。
+        // 旧的“魔晶 + 碎片”路线继续保留，避免已有存档和旧手册配方失效。
+        for (ElementalSlimeVariant variant : ElementalSlimeVariant.values()) {
+            recipes.add(new ProcessRecipe("slime_element_crystal_" + variant.id(),
+                    List.of(new IngredientStack(variant.powderId(), 9)), List.of(),
+                    List.of(new OutputStack(variant.crystalId(), 1)),
+                    1_200, 640, variant.crystalId()));
+        }
         String[] grades = {"lesser", "medium", "advanced", "supreme"};
         int[] counts = {9, 7, 5, 2};
         int[] manaCosts = {1_000, 500, 250, 125};
@@ -637,6 +697,31 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
     @Override public void clearContent() { items.clear(); }
 
     public ContainerData dataAccess() { return data; }
+
+    /**
+     * 炉子联动充能用的入口：只往上加，满了就把多出来的部分丢掉。
+     *
+     * <p>和 {@link #digestFuel()} 一样直接改字段，不走 {@code data.set}，否则客户端菜单
+     * 每次广播都会把服务端真值再写一遍。</p>
+     */
+    public void addMana(int amount) {
+        if (amount <= 0 || mana >= MAX_MANA) return;
+        mana = Math.min(MAX_MANA, mana + amount);
+        setChanged();
+    }
+
+    /** 当前存量，炉子联动与图鉴说明都用它。 */
+    public int mana() {
+        return mana;
+    }
+
+    /** 放下加工台时把掉落物里记着的魔素倒回来。 */
+    public void setMana(int value) {
+        int next = Math.max(0, Math.min(MAX_MANA, value));
+        if (next == mana) return;
+        mana = next;
+        setChanged();
+    }
 
     /** 图鉴与加工逻辑共用同一份只读配方，新增加工产物时无需再维护第二份清单。 */
     public static List<ProcessRecipe> recipes() { return RECIPES; }

@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:blasting",
+  "ingredient": {
+    "item": "dimensional_mana:advanced_mana_crystal_ore"
+  },
+  "result": {
+    "id": "dimensional_mana:advanced_mana_crystal"
+  },
+  "experience": 1.0,
+  "cookingtime": 640
+}

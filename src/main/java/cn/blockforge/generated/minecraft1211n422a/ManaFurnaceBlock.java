@@ -3,6 +3,7 @@ package cn.blockforge.generated.minecraft1211n422a;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
@@ -16,6 +17,7 @@ import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
+import org.joml.Vector3f;
 
 public final class ManaFurnaceBlock extends AbstractFurnaceBlock {
     private static final MapCodec<ManaFurnaceBlock> MANA_FORGE_CODEC = simpleCodec(
@@ -69,6 +71,15 @@ public final class ManaFurnaceBlock extends AbstractFurnaceBlock {
         else x += side;
         level.addParticle(ParticleTypes.SMOKE, x, y, z, 0.0, 0.015, 0.0);
         if (random.nextDouble() < 0.45) level.addParticle(ParticleTypes.FLAME, x, y, z, 0.0, 0.0, 0.0);
+        // 联动时再从背面往魔晶加工台飘一串紫色魔素，让玩家一眼看出两台机器连上了。
+        if (random.nextDouble() < 0.35
+                && level.getBlockState(pos.relative(direction.getOpposite())).getBlock() instanceof CrystalProcessorBlock) {
+            level.addParticle(new DustParticleOptions(new Vector3f(0.68F, 0.41F, 1.0F), 0.85F),
+                    pos.getX() + 0.5 - direction.getStepX() * 0.55,
+                    pos.getY() + 0.5 + random.nextDouble() * 0.3,
+                    pos.getZ() + 0.5 - direction.getStepZ() * 0.55,
+                    -direction.getStepX() * 0.055, 0.014, -direction.getStepZ() * 0.055);
+        }
     }
 
     @Override

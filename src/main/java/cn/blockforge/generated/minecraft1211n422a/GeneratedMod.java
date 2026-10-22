@@ -94,6 +94,10 @@ public final class GeneratedMod {
             net.minecraft.world.level.storage.loot.predicates.LootItemConditionType> ANCIENT_FRAGMENT_LIMIT_CONDITION =
             LOOT_CONDITIONS.register("ancient_fragment_limit", () -> new net.minecraft.world.level.storage.loot.predicates.LootItemConditionType(
                     AncientFragmentLimitCondition.CODEC));
+    public static final DeferredHolder<net.minecraft.world.level.storage.loot.predicates.LootItemConditionType,
+            net.minecraft.world.level.storage.loot.predicates.LootItemConditionType> ELEMENTAL_SLIME_LOOT_CHANCE =
+            LOOT_CONDITIONS.register("elemental_slime_loot_chance", () -> new net.minecraft.world.level.storage.loot.predicates.LootItemConditionType(
+                    ElementalSlimeLootChance.CODEC));
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MOD_ID);
     public static final DeferredRegister<Feature<?>> FEATURES = DeferredRegister.create(BuiltInRegistries.FEATURE, MOD_ID);
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES = DeferredRegister.create(Registries.ENTITY_TYPE, MOD_ID);
@@ -107,6 +111,8 @@ public final class GeneratedMod {
     public static final List<String> SCHOOL_IDS = List.of("destruction", "protection", "healing", "blessing", "curse",
             "control", "summon", "movement", "divination", "psychic", "time", "space", "chaos");
     private static final Map<ElementType, DeferredHolder<MobEffect, MobEffect>> ELEMENT_EFFECTS = new EnumMap<>(ElementType.class);
+    private static final Map<ElementalSlimeVariant, DeferredHolder<EntityType<?>, EntityType<ElementalSlime>>> ELEMENTAL_SLIMES =
+            new EnumMap<>(ElementalSlimeVariant.class);
 
     public static final DeferredHolder<MobEffect, MobEffect> MANA_EXHAUSTION = EFFECTS.register("mana_exhaustion", ManaExhaustionEffect::new);
     public static final DeferredHolder<MobEffect, MobEffect> ARCANE_SURGE = EFFECTS.register("arcane_surge", ArcaneSurgeEffect::new);
@@ -133,6 +139,28 @@ public final class GeneratedMod {
             () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "codex_page_turn")));
     public static final DeferredHolder<SoundEvent, SoundEvent> CODEX_SPACE_OPEN = SOUNDS.register("codex_space_open",
             () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "codex_space_open")));
+    /**
+     * 十二种元素史莱姆各一套叫声：蹦跳、落地、受伤、死亡和随机环境音共用。
+     * 音色在 sounds.json 里由「原版史莱姆软音 + 对应元素法术音」叠加，无需额外音频文件。
+     */
+    public static final DeferredHolder<SoundEvent, SoundEvent> SLIME_VOICE_MANA = slimeVoice("mana");
+    public static final DeferredHolder<SoundEvent, SoundEvent> SLIME_VOICE_FIRE = slimeVoice("fire");
+    public static final DeferredHolder<SoundEvent, SoundEvent> SLIME_VOICE_WATER = slimeVoice("water");
+    public static final DeferredHolder<SoundEvent, SoundEvent> SLIME_VOICE_ICE = slimeVoice("ice");
+    public static final DeferredHolder<SoundEvent, SoundEvent> SLIME_VOICE_LIGHTNING = slimeVoice("lightning");
+    public static final DeferredHolder<SoundEvent, SoundEvent> SLIME_VOICE_NATURE = slimeVoice("nature");
+    public static final DeferredHolder<SoundEvent, SoundEvent> SLIME_VOICE_POISON = slimeVoice("poison");
+    public static final DeferredHolder<SoundEvent, SoundEvent> SLIME_VOICE_METAL = slimeVoice("metal");
+    public static final DeferredHolder<SoundEvent, SoundEvent> SLIME_VOICE_WIND = slimeVoice("wind");
+    public static final DeferredHolder<SoundEvent, SoundEvent> SLIME_VOICE_EARTH = slimeVoice("earth");
+    public static final DeferredHolder<SoundEvent, SoundEvent> SLIME_VOICE_LIGHT = slimeVoice("light");
+    public static final DeferredHolder<SoundEvent, SoundEvent> SLIME_VOICE_SOUND = slimeVoice("sound");
+
+    private static DeferredHolder<SoundEvent, SoundEvent> slimeVoice(String id) {
+        return SOUNDS.register("elemental_slime_" + id,
+                () -> SoundEvent.createVariableRangeEvent(
+                        ResourceLocation.fromNamespaceAndPath(MOD_ID, "elemental_slime_" + id)));
+    }
     public static final DeferredHolder<MenuType<?>, MenuType<GrinderMenu>> GRINDER_MENU = MENUS.register("grinder",
             () -> new MenuType<>(GrinderMenu::new, FeatureFlags.DEFAULT_FLAGS));
     public static final DeferredHolder<MenuType<?>, MenuType<ManaFurnaceMenu>> MANA_FORGE_MENU = MENUS.register("mana_forge",
@@ -206,8 +234,13 @@ public final class GeneratedMod {
         device("professional_crystal_furnace", () -> new ManaFurnaceBlock(BlockBehaviour.Properties.of().strength(10.0F, 1200.0F)
                 .sound(SoundType.METAL).lightLevel(state -> state.getValue(AbstractFurnaceBlock.LIT) ? 13 : 0),
                 ManaCookingRecipe.FurnaceKind.PROFESSIONAL), Rarity.EPIC);
-        device("crystal_processor", () -> new CrystalProcessorBlock(BlockBehaviour.Properties.of().strength(5.0F, 10.0F)
-                .requiresCorrectToolForDrops().sound(SoundType.METAL)), Rarity.RARE);
+        // 加工台的方块物品要自己实现：拆下来时得把里面的魔素一并带走。
+        DeferredBlock<Block> crystalProcessor = BLOCKS.register("crystal_processor",
+                () -> new CrystalProcessorBlock(BlockBehaviour.Properties.of().strength(5.0F, 10.0F)
+                        .requiresCorrectToolForDrops().sound(SoundType.METAL)));
+        MOD_BLOCKS.put("crystal_processor", crystalProcessor);
+        MOD_ITEMS.put("crystal_processor", ITEMS.register("crystal_processor",
+                () -> new CrystalProcessorItem(crystalProcessor.get(), new Item.Properties().rarity(Rarity.RARE))));
 
         simple("raw_lesser_mana_crystal", Rarity.COMMON);
         simple("raw_medium_mana_crystal", Rarity.UNCOMMON);
@@ -337,6 +370,7 @@ public final class GeneratedMod {
         magicItem("adventurer_spawn_egg", ITEMS.register("adventurer_spawn_egg", () ->
                 new DeferredSpawnEggItem(ADVENTURER, 0x3D536C, 0xC59A55,
                         new Item.Properties().rarity(Rarity.RARE))));
+        registerElementalSlimes();
     }
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ManaFurnaceBlockEntity>> MANA_FORGE_BLOCK_ENTITY = BLOCK_ENTITIES.register(
@@ -401,6 +435,28 @@ public final class GeneratedMod {
         return ELEMENT_EFFECTS.get(element);
     }
 
+    public static EntityType<ElementalSlime> elementalSlimeType(ElementalSlimeVariant variant) {
+        return ELEMENTAL_SLIMES.get(variant).get();
+    }
+
+    /** 变种 -> 音效事件。只有实体 tick 里会调用，那时枚举早已初始化。 */
+    public static SoundEvent elementalSlimeSound(ElementalSlimeVariant variant) {
+        return switch (variant) {
+            case MANA -> SLIME_VOICE_MANA.get();
+            case FIRE -> SLIME_VOICE_FIRE.get();
+            case WATER -> SLIME_VOICE_WATER.get();
+            case ICE -> SLIME_VOICE_ICE.get();
+            case LIGHTNING -> SLIME_VOICE_LIGHTNING.get();
+            case NATURE -> SLIME_VOICE_NATURE.get();
+            case POISON -> SLIME_VOICE_POISON.get();
+            case METAL -> SLIME_VOICE_METAL.get();
+            case WIND -> SLIME_VOICE_WIND.get();
+            case EARTH -> SLIME_VOICE_EARTH.get();
+            case LIGHT -> SLIME_VOICE_LIGHT.get();
+            case SOUND -> SLIME_VOICE_SOUND.get();
+        };
+    }
+
     private static BaseFlowingFluid.Properties pureLiquidManaProperties() {
         return new BaseFlowingFluid.Properties(PURE_LIQUID_MANA_TYPE, PURE_LIQUID_MANA, FLOWING_PURE_LIQUID_MANA)
                 .bucket(PURE_LIQUID_MANA_BUCKET).block(PURE_LIQUID_MANA_BLOCK)
@@ -439,6 +495,7 @@ public final class GeneratedMod {
         modBus.addListener(SpellVisualPayload::register);
         modBus.addListener(ReactionVisualPayload::register);
         modBus.addListener(FrozenVisualPayload::register);
+        modBus.addListener(ManaSensePayload::register);
         modBus.addListener(SpellActionPayload::register);
         modBus.addListener(ElementTalentSyncPayload::register);
         modBus.addListener(ElementTalentActionPayload::register);
@@ -464,8 +521,13 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(events::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(events::onDamagePre);
         NeoForge.EVENT_BUS.addListener(events::onStruckByLightning);
+        NeoForge.EVENT_BUS.addListener(events::onBlockBreak);
         NeoForge.EVENT_BUS.addListener(events::onTick);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::tickLevel);
+        NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::tickLevel);
+        NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::onEntityJoin);
+        NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::onExplosion);
+        NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::onSound);
         NeoForge.EVENT_BUS.addListener(AdventurerSpawning::onChunkLoad);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::heal);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::effectRemoved);
@@ -489,6 +551,9 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(accessoryLoot::onLootTableLoad);
         NeoForge.EVENT_BUS.addListener(accessoryLoot::onVillagerTrades);
         NeoForge.EVENT_BUS.addListener(events::onDamagePost);
+        NeoForge.EVENT_BUS.addListener(ElementPlating::onTooltip);
+        NeoForge.EVENT_BUS.addListener(ElementPlating::onGrindstonePlace);
+        NeoForge.EVENT_BUS.addListener(ElementPlating::onGrindstoneTake);
         NeoForge.EVENT_BUS.addListener(this::brewingRecipes);
         container.registerConfig(ModConfig.Type.COMMON, ManaConfig.SPEC, "dimensional_mana-common.toml");
         if (FMLEnvironment.dist == Dist.CLIENT) {
@@ -499,11 +564,32 @@ public final class GeneratedMod {
     private void createEntityAttributes(EntityAttributeCreationEvent event) {
         event.put(WANDERING_WITCH.get(), WanderingWitch.createAttributes().build());
         event.put(ADVENTURER.get(), Adventurer.createAttributes().build());
+        for (ElementalSlimeVariant variant : ElementalSlimeVariant.values())
+            event.put(elementalSlimeType(variant), ElementalSlime.createAttributes().build());
         event.put(NewSpellContent.VINE_SERVANT.get(), SpellSummon.attributes(10, 3, 0.18, 0, 0).build());
         event.put(NewSpellContent.FLYING_SWORD.get(), SpellSummon.attributes(20, 10, 0.05, 20, 8).build());
         event.put(NewSpellContent.POISON_TENTACLE.get(), SpellSummon.attributes(8, 4, 0, 0, 0).build());
         // 寒冰傀儡：35 生命、与雪傀儡一致的 0.2 移速，本身不近战，只射冰锥。
         event.put(NewSpellContent.FROST_GOLEM.get(), SpellSummon.attributes(35, 0, 0.2, 0, 0).build());
+    }
+
+    private static void registerElementalSlimes() {
+        for (ElementalSlimeVariant variant : ElementalSlimeVariant.values()) {
+            DeferredHolder<EntityType<?>, EntityType<ElementalSlime>> type = ENTITY_TYPES.register(variant.entityId(), () ->
+                    EntityType.Builder.<ElementalSlime>of((entityType, level) -> new ElementalSlime(entityType, level, variant),
+                                    MobCategory.CREATURE)
+                            // Slime#getDefaultDimensions 会把注册尺寸再乘一次体型（size 1/2/4），
+                            // 所以这里必须用原版史莱姆的 0.52：碰撞箱才和「0.5×体型」的模型一样大。
+                            // 旧值 2.04 会让精英体变成 8 格宽的隐形墙，玩家看到模型只有 2 格。
+                            .sized(0.52F, 0.52F).clientTrackingRange(10).updateInterval(3)
+                            .build(MOD_ID + ":" + variant.entityId()));
+            ELEMENTAL_SLIMES.put(variant, type);
+            MOD_ITEMS.put(variant.powderId(), ITEMS.registerSimpleItem(variant.powderId(),
+                    new Item.Properties().rarity(Rarity.UNCOMMON)));
+            magicItem(variant.spawnEggId(), ITEMS.register(variant.spawnEggId(), () ->
+                    new DeferredSpawnEggItem(type, variant.color() & 0xFFFFFF,
+                            (variant.color() ^ 0x6A4C7A) & 0xFFFFFF, new Item.Properties().rarity(Rarity.RARE))));
+        }
     }
 
     private static void simple(String name, Rarity rarity) {

@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:blasting",
+  "ingredient": {
+    "item": "dimensional_mana:special_mana_crystal_cluster"
+  },
+  "result": {
+    "id": "dimensional_mana:special_mana_crystal"
+  },
+  "experience": 1.0,
+  "cookingtime": 6000
+}

@@ -41,6 +41,9 @@ public final class ClientModEvents {
     /** 主手持魔法大师披风时按 Shift+O 切换凝聚球功能（O 键可改绑）。 */
     private static final KeyMapping TOGGLE_ORB = new KeyMapping("key.dimensional_mana.toggle_orb",
             InputConstants.Type.KEYSYM, InputConstants.KEY_O, "key.categories.dimensional_mana");
+    /** 静止不动时按住 Alt+Z 消耗魔素凝聚斗气（Z 键可改绑）。 */
+    private static final KeyMapping CONDENSE_AURA = new KeyMapping("key.dimensional_mana.condense_aura",
+            InputConstants.Type.KEYSYM, InputConstants.KEY_Z, "key.categories.dimensional_mana");
     private static final ResourceLocation APPRAISAL_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "appraisal_hud");
     private static final ResourceLocation REACTION_TEXT_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "reaction_text");
     private static final ResourceLocation RESONANCE_CORE_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "resonance_core_hud");
@@ -70,12 +73,14 @@ public final class ClientModEvents {
         NeoForge.EVENT_BUS.addListener(ClientReactionText::tick);
         NeoForge.EVENT_BUS.addListener(ClientReactionText::renderWorld);
         NeoForge.EVENT_BUS.addListener(ClientFrozenVisuals::tick);
+        NeoForge.EVENT_BUS.addListener(ClientManaSenseState::tick);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event)
                 -> {
             ClientResonanceCoreState.clear();
             ClientMagicToggleState.clear();
         });
         NeoForge.EVENT_BUS.addListener(ClientFrozenVisuals::render);
+        NeoForge.EVENT_BUS.addListener(ClientManaSenseState::render);
         NeoForge.EVENT_BUS.addListener(InventoryGlowEffects::render);
     }
 
@@ -117,6 +122,7 @@ public final class ClientModEvents {
         event.register(SPELL_WHEEL);
         event.register(CAST_SPELL);
         event.register(TOGGLE_ORB);
+        event.register(CONDENSE_AURA);
     }
 
     /** 使用当前玩家配置的按键判断，而不是写死左 Alt。 */
@@ -168,6 +174,7 @@ public final class ClientModEvents {
             }
         }
         sonicHoldAdd(minecraft);
+        condenseAuraHold(minecraft);
     }
 
     /**
@@ -191,6 +198,32 @@ public final class ClientModEvents {
         if (sonicHoldAt > 0) return;
         sonicHoldAt = SONIC_HOLD_INTERVAL;
         PacketDistributor.sendToServer(new SpellActionPayload("sonic_add", "", 0));
+    }
+
+    /** 凝聚斗气时的发包节流：10 刻一次，和服务器的「每 10 刻 1 点」对齐。 */
+    private static int condenseCooldown;
+
+    /**
+     * 静止不动时按住 Alt+Z 凝聚斗气：每 10 刻请求服务器扣 1 点魔素换 1 点斗气。
+     * 这里只控制发起时机，真正的「是不是站着不动、有没有魔素」由服务端复核。
+     */
+    private static void condenseAuraHold(Minecraft minecraft) {
+        if (condenseCooldown > 0) condenseCooldown--;
+        var player = minecraft.player;
+        if (player == null || minecraft.screen != null || !CONDENSE_AURA.isDown()
+                || !net.minecraft.client.gui.screens.Screen.hasAltDown()) {
+            condenseCooldown = 0;
+            return;
+        }
+        boolean standing = player.onGround() && !player.isInWaterOrBubble()
+                && player.getDeltaMovement().horizontalDistanceSqr() < 1.0E-4;
+        if (!standing) {
+            condenseCooldown = 0;
+            return;
+        }
+        if (condenseCooldown > 0) return;
+        condenseCooldown = 10;
+        PacketDistributor.sendToServer(new SpellActionPayload("condense_aura", "", 0));
     }
 
     private static void movementInput(net.neoforged.neoforge.client.event.MovementInputUpdateEvent event) {
@@ -281,6 +314,8 @@ public final class ClientModEvents {
     private static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(GeneratedMod.WANDERING_WITCH.get(), WanderingWitchRenderer::new);
         event.registerEntityRenderer(GeneratedMod.ADVENTURER.get(), AdventurerRenderer::new);
+        for (ElementalSlimeVariant variant : ElementalSlimeVariant.values())
+            event.registerEntityRenderer(GeneratedMod.elementalSlimeType(variant), ElementalSlimeRenderer::new);
         event.registerEntityRenderer(NewSpellContent.VINE_SERVANT.get(), SpellSummonRenderer::new);
         event.registerEntityRenderer(NewSpellContent.FLYING_SWORD.get(), SpellSummonRenderer::new);
         event.registerEntityRenderer(NewSpellContent.POISON_TENTACLE.get(), SpellSummonRenderer::new);

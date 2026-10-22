@@ -100,6 +100,14 @@ public final class ElementReactionSystem {
         }
 
         Reaction reaction = match.reaction();
+        // 冻结反应对两类目标不成立，直接当普通附着处理（不消耗附着、不弹「冻结」文字）：
+        // 1. 冻结免疫的生物（冰史莱姆等）——旧版照挂冰封，冰史莱姆被水打一下就被定住；
+        // 2. 水史莱姆身上的天气附着（下雪、零伤害）——它只吃「冰雪/降雪每秒 1 点」的固定伤害，
+        //    否则会被冻在原地，根本没法执行「远离冰雪」。
+        if (reaction == Reaction.FREEZE && !canFreezeByReaction(target, damage)) {
+            attach(target, incoming, attachmentTicks(caster, incoming));
+            return damage;
+        }
         int existingTicks = remaining(target, match.existing());
         // 同元素重复施加应先刷新到较长时长，再作为本次反应的一方参与消耗。
         int incomingTicks = Math.max(remaining(target, incoming), attachmentTicks(caster, incoming));
@@ -122,8 +130,15 @@ public final class ElementReactionSystem {
                 knockFrom(target.position(), target, 1.1);
             }
             case ELECTRO_CHARGED -> {
-                reactionDamage = damage * 0.24F;
-                chain(caster, target, ElementType.WATER, ElementType.LIGHTNING, reactionDamage, 5, 8.0, 0.90F);
+                if (target instanceof ElementalSlime slime && slime.variant() == ElementalSlimeVariant.LIGHTNING) {
+                    // 感电可能由水伤触发：整次反应对雷史莱姆不扣血，并恢复 2.5% 最大生命。
+                    slime.absorbElectroCharged();
+                    damage = 0.0F;
+                    reactionDamage = 0.0F;
+                } else {
+                    reactionDamage = damage * 0.24F;
+                    chain(caster, target, ElementType.WATER, ElementType.LIGHTNING, reactionDamage, 5, 8.0, 0.90F);
+                }
             }
             case SUPERCONDUCT -> {
                 damage *= 1.5F;
@@ -293,6 +308,16 @@ public final class ElementReactionSystem {
     }
 
     /**
+     * 冻结反应能不能真正生效：冻结免疫的生物（冰史莱姆等）不成立；
+     * 水史莱姆只吃「冰雪/降雪每秒 1 点」的固定环境伤害，零伤害的天气冰附着也不会把它冻住。
+     */
+    private static boolean canFreezeByReaction(LivingEntity target, float damage) {
+        if (!target.canFreeze()) return false;
+        return !(damage <= 0.0F && target instanceof ElementalSlime slime
+                && slime.variant() == ElementalSlimeVariant.WATER);
+    }
+
+    /**
      * 冻结反应命中：把冰冻值顶到满值，客户端据此把生物渲染成泛蓝的冰晶状态；
      * 同时给附近客户端发一次冰壳特效，并补上碎裂声。只有刚开始冻结时才调用。
      */
@@ -331,6 +356,8 @@ public final class ElementReactionSystem {
     /** 零下领域的深层冻结：20 秒起步、不易被解除，期间每 4 秒刷新冰附着。 */
     public static void deepFreeze(LivingEntity caster, LivingEntity target, int ticks, float damageBonus, float reactionBonus) {
         if (target == null || !target.isAlive()) return;
+        // 冰史莱姆这类「冻结免疫」生物连着深冻也不吃，不然冰系大招照样把它冻成冰块。
+        if (!target.canFreeze()) return;
         long now = target.level().getGameTime();
         int duration = Math.max(20, ticks);
         DEEP_FROZEN.put(target.getUUID(), new DeepFreeze(caster.getUUID(), now + duration, now,
@@ -593,8 +620,9 @@ public final class ElementReactionSystem {
             damage *= i == 0 ? 1.0F : decay;
             // damage 已经来自本次实际伤害，不能再次乘魔素强度或暴击。
             float dealt = (float)SpellAttributes.applySpellResistance(next, damage);
-            // 连锁的每一跳都要吃满，不能被上一跳留下的受击冷却吞掉。
-            SpellDamage.hitResolved(level, caster, next, dealt);
+            // 感电等带元素的连锁必须保留元素伤害类型：雷史莱姆才能正确免疫并回血。
+            if (damageElement != null) SpellDamage.hitResolvedElement(level, caster, next, damageElement.id(), dealt);
+            else SpellDamage.hitResolved(level, caster, next, dealt);
             lightning(level, from.getBoundingBox().getCenter(), next.getBoundingBox().getCenter(), damageElement.color());
             hit.add(next.getUUID());
             current = next;

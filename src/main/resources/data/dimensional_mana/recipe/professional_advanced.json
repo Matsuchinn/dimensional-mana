@@ -3,6 +3,6 @@
   "category": "misc",
   "ingredient": {"item": "dimensional_mana:raw_advanced_mana_crystal"},
   "result": {"id": "dimensional_mana:advanced_mana_crystal"},
-  "experience": 1.0,
+  "experience": 4.5,
   "cookingtime": 80
 }

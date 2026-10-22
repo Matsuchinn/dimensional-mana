@@ -3,7 +3,6 @@ package cn.blockforge.generated.minecraft1211n422a;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -33,18 +32,8 @@ public final class AdventurerSpawning {
             int x = chunk.getMinBlockX() + 4 + random.nextInt(8);
             int z = chunk.getMinBlockZ() + 4 + random.nextInt(8);
             BlockPos pos = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, new BlockPos(x, 0, z));
-            if (!level.getFluidState(pos.below()).isEmpty() || !level.getBlockState(pos).isAir()) continue;
-            Adventurer adventurer = GeneratedMod.ADVENTURER.get().create(level);
-            if (adventurer == null) continue;
-            adventurer.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5,
-                    random.nextFloat() * 360.0F, 0.0F);
-            if (!level.noCollision(adventurer)) {
-                adventurer.discard();
-                continue;
-            }
-            adventurer.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), MobSpawnType.STRUCTURE, null);
-            adventurer.setPersistenceRequired();
-            level.addFreshEntityWithPassengers(adventurer);
+            // 区块加载回调里不直接加实体：先排队，等服务器刻、区块真正进入世界后再生成。
+            WorldgenSpawnQueue.queueAdventurer(level, pos);
         }
     }
 

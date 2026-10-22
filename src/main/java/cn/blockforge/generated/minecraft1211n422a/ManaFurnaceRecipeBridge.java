@@ -50,6 +50,9 @@ public final class ManaFurnaceRecipeBridge {
         List<RecipeHolder<SmeltingRecipe>> standardRecipes = manager.getAllRecipesFor(RecipeType.SMELTING);
         for (RecipeHolder<SmeltingRecipe> holder : standardRecipes) {
             SmeltingRecipe recipe = holder.value();
+            // 魔晶自己的烧炼配方在 data 里单独写好了时间和经验，再镜像一份只会跟它抢同一份原料，
+            // 还会把经验拉回原版数值，所以这里直接跳过。
+            if (ManaFurnaceBlockEntity.crystalTier(recipe.getResultItem(registries)) >= 0) continue;
             addMirroredRecipe(rebuilt, holder.id(), recipe, ManaCookingRecipe.FurnaceKind.MANA_FORGE,
                     MANA_FORGE_TIME_MULTIPLIER, registries);
             addMirroredRecipe(rebuilt, holder.id(), recipe, ManaCookingRecipe.FurnaceKind.PROFESSIONAL,

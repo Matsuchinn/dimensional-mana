@@ -3,6 +3,6 @@
   "category": "misc",
   "ingredient": {"item": "dimensional_mana:raw_medium_mana_crystal"},
   "result": {"id": "dimensional_mana:medium_mana_crystal"},
-  "experience": 0.7,
+  "experience": 2.0,
   "cookingtime": 160
 }

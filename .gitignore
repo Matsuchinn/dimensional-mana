@@ -1,7 +1,6 @@
 build/
 .gradle/
 run/
-.idea/
-*.iml
-out/
-*.log
+logs/
+*.class
+.audio-cache/

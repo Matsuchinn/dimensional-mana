@@ -1,0 +1,6 @@
+{
+  "order": 60,
+  "size": 2,
+  "use_native_gui": true,
+  "validators": ["curios:tag"]
+}

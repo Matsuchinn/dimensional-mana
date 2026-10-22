@@ -19,6 +19,8 @@ public final class NaturalElementSystem {
     private static final String JUMPED_KEY = "jumped";
     private static final String GRASS_TICKS_KEY = "grassTicks";
     private static final String SUN_TICKS_KEY = "sunTicks";
+    private static final String GRASS_READY_AT_KEY = "grassReadyAt";
+    private static final String SUN_READY_AT_KEY = "sunReadyAt";
 
     private static final int WATER = 1 << 0;
     private static final int LAVA = 1 << 1;
@@ -31,6 +33,8 @@ public final class NaturalElementSystem {
 
     private static final int GRASS_REQUIRED_TICKS = 12 * 20;
     private static final int SUN_REQUIRED_TICKS = 30 * 20;
+    /** 草地与日光环境附着各自每 120 秒最多触发一次（法术/攻击附着不受影响）。 */
+    private static final long PASSIVE_ATTACHMENT_COOLDOWN = 120L * 20L;
     private static final double WIND_BLOCKS_PER_TICK = 13.9 / 20.0;
     private static final double SOUND_BLOCKS_PER_TICK = 340.0 / 20.0;
 
@@ -55,8 +59,8 @@ public final class NaturalElementSystem {
         int grassTicks = grounded && ground.is(Blocks.GRASS_BLOCK)
                 ? Math.min(GRASS_REQUIRED_TICKS, data.getInt(GRASS_TICKS_KEY) + 1) : 0;
         data.putInt(GRASS_TICKS_KEY, grassTicks);
-        currentConditions = updateCondition(living, previousConditions, currentConditions,
-                GRASS, grassTicks >= GRASS_REQUIRED_TICKS, ElementType.NATURE);
+        currentConditions = updateCooledCondition(living, data, currentConditions,
+                GRASS, grassTicks >= GRASS_REQUIRED_TICKS, ElementType.NATURE, GRASS_READY_AT_KEY);
 
         BlockPos weatherPos = BlockPos.containing(living.getEyePosition());
         boolean exposedToSky = level.canSeeSky(weatherPos);
@@ -74,8 +78,8 @@ public final class NaturalElementSystem {
         int sunTicks = inSunlight
                 ? Math.min(SUN_REQUIRED_TICKS, data.getInt(SUN_TICKS_KEY) + 1) : 0;
         data.putInt(SUN_TICKS_KEY, sunTicks);
-        currentConditions = updateCondition(living, previousConditions, currentConditions,
-                SUN, sunTicks >= SUN_REQUIRED_TICKS, ElementType.LIGHT);
+        currentConditions = updateCooledCondition(living, data, currentConditions,
+                SUN, sunTicks >= SUN_REQUIRED_TICKS, ElementType.LIGHT, SUN_READY_AT_KEY);
 
         double speedSquared = living.getDeltaMovement().lengthSqr();
         currentConditions = updateCondition(living, previousConditions, currentConditions,
@@ -102,6 +106,22 @@ public final class NaturalElementSystem {
             ElementReactionSystem.apply(living, living, element);
         } else {
             ElementReactionSystem.refresh(living, element);
+        }
+        return currentConditions;
+    }
+
+    /**
+     * 草地/日光属于低频被动来源：达到蓄积时间后只触发一次，不在条件持续时刷新附着。
+     * readyAt 写进实体持久数据，所以每只生物独立计时，重进世界也不会绕过 120 秒冷却。
+     */
+    private static int updateCooledCondition(LivingEntity living, CompoundTag data, int currentConditions,
+                                             int condition, boolean active, ElementType element, String readyAtKey) {
+        if (!active) return currentConditions;
+        currentConditions |= condition;
+        long now = living.level().getGameTime();
+        if (now >= data.getLong(readyAtKey)) {
+            ElementReactionSystem.apply(living, living, element);
+            data.putLong(readyAtKey, now + PASSIVE_ATTACHMENT_COOLDOWN);
         }
         return currentConditions;
     }

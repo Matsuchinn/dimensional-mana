@@ -10,10 +10,12 @@ import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.saveddata.SavedData;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
-/** 保存已生成魔晶洞穴的中心，供浓度加成和检测器定位使用。 */
+/** 保存已生成魔晶洞穴的中心与规模，供浓度、检测器和洞穴守卫补刷使用。 */
 public final class ManaCaveData extends SavedData {
     private static final String FILE_NAME = GeneratedMod.MOD_ID + "_mana_caves";
     private static final Factory<ManaCaveData> FACTORY = new Factory<>(
@@ -22,16 +24,22 @@ public final class ManaCaveData extends SavedData {
             DataFixTypes.SAVED_DATA_COMMAND_STORAGE
     );
     private final List<BlockPos> caves = new ArrayList<>();
+    private final Set<BlockPos> largeCaves = new HashSet<>();
 
     public static ManaCaveData get(ServerLevel level) {
         return (ManaCaveData) level.getDataStorage().computeIfAbsent(FACTORY, FILE_NAME);
     }
 
-    public synchronized void add(BlockPos pos) {
+    public synchronized void add(BlockPos pos, boolean large) {
         for (BlockPos existing : caves) {
-            if (existing.distSqr(pos) < 64 * 64) return;
+            if (existing.distSqr(pos) < 64 * 64) {
+                if (large && largeCaves.add(existing)) setDirty();
+                return;
+            }
         }
-        caves.add(pos.immutable());
+        BlockPos stored = pos.immutable();
+        caves.add(stored);
+        if (large) largeCaves.add(stored);
         setDirty();
     }
 
@@ -46,6 +54,10 @@ public final class ManaCaveData extends SavedData {
             }
         }
         return Optional.ofNullable(nearest);
+    }
+
+    public synchronized boolean isLarge(BlockPos cave) {
+        return largeCaves.contains(cave);
     }
 
     public synchronized boolean isNearCave(BlockPos pos, int radius) {
@@ -64,6 +76,7 @@ public final class ManaCaveData extends SavedData {
             entry.putInt("x", cave.getX());
             entry.putInt("y", cave.getY());
             entry.putInt("z", cave.getZ());
+            entry.putBoolean("large", largeCaves.contains(cave));
             list.add(entry);
         }
         tag.put("caves", list);
@@ -75,7 +88,9 @@ public final class ManaCaveData extends SavedData {
         ListTag list = tag.getList("caves", Tag.TAG_COMPOUND);
         for (int i = 0; i < list.size(); i++) {
             CompoundTag entry = list.getCompound(i);
-            data.caves.add(new BlockPos(entry.getInt("x"), entry.getInt("y"), entry.getInt("z")));
+            BlockPos cave = new BlockPos(entry.getInt("x"), entry.getInt("y"), entry.getInt("z"));
+            data.caves.add(cave);
+            if (entry.getBoolean("large")) data.largeCaves.add(cave);
         }
         return data;
     }

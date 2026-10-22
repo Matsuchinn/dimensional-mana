@@ -30,13 +30,14 @@ import java.util.function.Predicate;
 
 /** 帕秋莉手册式的首页、章节阅读与分类配方图鉴。 */
 public final class ArcaneCodexGuideScreen extends Screen {
-    private enum View { HOME, CHAPTER_INDEX, CHAPTER, RECIPE_CATEGORIES, RECIPE_KINDS, RECIPE_INDEX, RECIPE_DETAIL }
+    private enum View { HOME, CHAPTER_INDEX, CHAPTER, RECIPE_CATEGORIES, RECIPE_KINDS, RECIPE_INDEX, RECIPE_DETAIL,
+        BESTIARY_INDEX, BESTIARY_DETAIL }
 
     private static final int PANEL_WIDTH = 440;
     private static final int PANEL_HEIGHT = 268;
     private static final int RECIPE_ENTRIES_PER_PAGE = 18;
     private static final List<GuidePage> PAGES = List.of(
-            page("basics", 8), page("crystals", 9), page("furnaces", 8), page("processor", 10),
+            page("basics", 8), page("crystals", 9), page("furnaces", 9), page("processor", 11),
             page("grinding", 8), page("potions", 9), page("exploration", 8), page("enchantments", 8),
             page("magic_equipment", 12), page("progression", 9), page("magic_system", 8), page("schools", 13),
             page("media", 8), page("element_talents", 5), page("element_talents_more", 5),
@@ -50,19 +51,32 @@ public final class ArcaneCodexGuideScreen extends Screen {
             page("new_thunder", 8), page("new_wind_storm", 9), page("new_earth_stone", 9),
             page("new_arcane_chaos", 9), page("new_nature_tree", 9), page("new_metal_ward_swords", 8),
             page("new_light_shelter_rift", 9), page("new_poison_pair", 9), page("new_sound_bells", 9),
-            page("achievements", 9), page("adventurer_trade", 9)
+            page("achievements", 9), page("adventurer_trade", 9), page("element_plating", 10),
+            page("furnace_link", 9)
     );
+    /**
+     * 章节里按 id 引用页面，不再手写页码：页码一改就容易对不上，之前“元素镀层”那一页
+     * 就是因为页码写错被静默丢掉，玩家在书里根本找不到。
+     */
     private static final List<Chapter> CHAPTERS = List.of(
-            chapter("basics", Items.BOOK, 0, 5),
-            chapter("magic", Items.ENCHANTED_BOOK, 10, 11, 12, 13, 14, 32),
-            chapter("reactions", Items.BLAZE_POWDER, 17, 18, 19, 20, 21, 22),
-            chapter("spells", Items.AMETHYST_SHARD, 15, 16, 24, 25, 26, 27, 28, 29, 30, 31,
-                    34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44),
-            chapter("crystals", Items.AMETHYST_CLUSTER, 1, 4),
-            chapter("devices", Items.CRAFTING_TABLE, 2, 3),
+            chapter("basics", Items.BOOK, "basics", "potions"),
+            chapter("magic", Items.ENCHANTED_BOOK, "magic_system", "schools", "media", "element_talents",
+                    "element_talents_more", "tiers"),
+            chapter("reactions", Items.BLAZE_POWDER, "reaction_rules", "reaction_priority", "reaction_charge",
+                    "reaction_amplify", "reaction_status", "reaction_secondary"),
+            chapter("spells", Items.AMETHYST_SHARD, "implemented_spells", "implemented_spells_more",
+                    "new_spells_rules", "new_fire_water", "new_ice_lightning", "new_wind_earth",
+                    "new_nature_metal", "new_light_poison", "new_sound", "new_advanced_arcane",
+                    "new_fire_siege", "new_ice_domain", "new_thunder", "new_wind_storm", "new_earth_stone",
+                    "new_arcane_chaos", "new_nature_tree", "new_metal_ward_swords", "new_light_shelter_rift",
+                    "new_poison_pair", "new_sound_bells"),
+            chapter("crystals", Items.AMETHYST_CLUSTER, "crystals", "grinding"),
+            chapter("devices", Items.CRAFTING_TABLE, "furnaces", "processor", "furnace_link", "element_plating"),
             chapter("recipes", Items.KNOWLEDGE_BOOK),
-            chapter("exploration", Items.SPYGLASS, 6, 23, 46),
-            chapter("progression", Items.EXPERIENCE_BOTTLE, 7, 8, 9, 33, 45)
+            chapter("bestiary", Items.SLIME_BALL),
+            chapter("exploration", Items.SPYGLASS, "exploration", "living_casters", "adventurer_trade"),
+            chapter("progression", Items.EXPERIENCE_BOTTLE, "enchantments", "magic_equipment", "progression",
+                    "insight", "achievements")
     );
     private static final ResourceLocation ARCANE_ICON = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID,
             "textures/mob_effect/arcane_attachment.png");
@@ -105,6 +119,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
     private String selectedCategory = "materials";
     private String selectedKind = "crafting";
     private ItemStack selectedRecipeProduct = ItemStack.EMPTY;
+    private ElementalSlimeVariant selectedSlime = ElementalSlimeVariant.MANA;
     private ItemStack hoveredStack = ItemStack.EMPTY;
     /** 配方只在打开本次图鉴时整理一次，避免每一帧重复遍历配方管理器和全部物品注册表。 */
     private List<GuideRecipe> guideRecipeCache;
@@ -120,15 +135,38 @@ public final class ArcaneCodexGuideScreen extends Screen {
     }
 
     /**
-     * 章节页码只保留真实存在的页面。这样以后增删图鉴页时，即使漏改章节清单，最多只会少一张卡片，
-     * 不会再因为 {@link List#get(int)} 越界让玩家打开整章就闪退。
+     * 章节按页面 id 组装，找不到的 id 直接跳过（不闪退）。页面写好了却没挂进任何章节就等于
+     * 永远读不到，所以下面还有一个静态检查，把漏挂的页面记进日志，方便下次改图鉴时排查。
      */
-    private static Chapter chapter(String id, Item icon, int... pageIndexes) {
-        List<Integer> validPages = new ArrayList<>(pageIndexes.length);
-        for (int pageIndex : pageIndexes) {
-            if (pageIndex >= 0 && pageIndex < PAGES.size() && !validPages.contains(pageIndex)) validPages.add(pageIndex);
+    private static Chapter chapter(String id, Item icon, String... pageIds) {
+        List<Integer> validPages = new ArrayList<>(pageIds.length);
+        for (String pageId : pageIds) {
+            int index = pageIndex(pageId);
+            if (index >= 0 && !validPages.contains(index)) validPages.add(index);
         }
         return new Chapter(id, List.copyOf(validPages), icon);
+    }
+
+    private static int pageIndex(String pageId) {
+        for (int index = 0; index < PAGES.size(); index++) {
+            if (PAGES.get(index).id().equals(pageId)) return index;
+        }
+        return -1;
+    }
+
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("dimensional_mana/guide");
+
+    /** 图鉴页没挂进任何章节就等于“写了却永远读不到”，初始化时在日志里喊一声。 */
+    static {
+        List<String> covered = new ArrayList<>();
+        for (Chapter chapter : CHAPTERS) {
+            for (int index : chapter.pages()) covered.add(PAGES.get(index).id());
+        }
+        for (GuidePage guide : PAGES) {
+            if (!covered.contains(guide.id())) {
+                LOGGER.warn("图鉴页 {} 没有挂进任何章节，玩家在书里读不到它", guide.id());
+            }
+        }
     }
 
     @Override
@@ -148,6 +186,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
             case RECIPE_KINDS -> addBackButton("gui.dimensional_mana.guide.back_to_categories", View.RECIPE_CATEGORIES, 100);
             case RECIPE_INDEX -> addRecipeIndexNavigation();
             case RECIPE_DETAIL -> addRecipeDetailNavigation();
+            case BESTIARY_DETAIL -> addBackButton("gui.dimensional_mana.bestiary.back", View.BESTIARY_INDEX, 100);
             default -> { }
         }
     }
@@ -239,6 +278,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
             case RECIPE_KINDS -> renderRecipeKinds(graphics, mouseX, mouseY);
             case RECIPE_INDEX -> renderRecipeIndex(graphics, mouseX, mouseY);
             case RECIPE_DETAIL -> renderRecipeDetail(graphics, mouseX, mouseY);
+            case BESTIARY_INDEX -> renderBestiaryIndex(graphics, mouseX, mouseY);
+            case BESTIARY_DETAIL -> renderBestiaryDetail(graphics);
         }
     }
 
@@ -247,21 +288,64 @@ public final class ArcaneCodexGuideScreen extends Screen {
                 left + 22, top + 30, PANEL_WIDTH - 44, 0xFF3B2A32);
         for (int i = 0; i < CHAPTERS.size(); i++) {
             Chapter chapter = CHAPTERS.get(i);
-            int x = left + 16 + (i % 3) * 138;
-            int y = top + 66 + (i / 3) * 55;
-            boolean hover = inside(mouseX, mouseY, x, y, 132, 48);
-            graphics.fill(x, y, x + 132, y + 48, hover ? 0x66A36BC1 : 0x33705063);
-            graphics.renderOutline(x, y, 132, 48, hover ? 0xFF8A3FA5 : 0xFF8A6A46);
+            int x = left + 16 + (i % 2) * 205;
+            int y = top + 62 + (i / 2) * 36;
+            boolean hover = inside(mouseX, mouseY, x, y, 195, 32);
+            graphics.fill(x, y, x + 195, y + 32, hover ? 0x66A36BC1 : 0x33705063);
+            graphics.renderOutline(x, y, 195, 32, hover ? 0xFF8A3FA5 : 0xFF8A6A46);
             ItemStack icon = new ItemStack(chapter.icon());
-            graphics.renderItem(icon, x + 8, y + 15);
+            graphics.renderItem(icon, x + 7, y + 8);
             graphics.drawString(font, Component.translatable("gui.dimensional_mana.guide.chapter." + chapter.id()),
-                    x + 31, y + 9, 0xFF4A274E, false);
-            graphics.drawWordWrap(font, Component.translatable("gui.dimensional_mana.guide.chapter." + chapter.id() + ".hint"),
-                    x + 31, y + 23, 94, 0xFF5E5144);
+                    x + 29, y + 4, 0xFF4A274E, false);
+            graphics.drawString(font, Component.translatable("gui.dimensional_mana.guide.chapter." + chapter.id() + ".hint"),
+                    x + 29, y + 17, 0xFF5E5144, false);
             if (hover) hoveredStack = icon;
         }
         graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.home_footer"),
                 width / 2, top + PANEL_HEIGHT - 22, 0xFF715D49);
+    }
+
+    private void renderBestiaryIndex(GuiGraphics graphics, int mouseX, int mouseY) {
+        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.bestiary.title"),
+                width / 2, top + 31, 0xFF6A2B76);
+        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.bestiary.hint"),
+                width / 2, top + 46, 0xFF715D49);
+        ElementalSlimeVariant[] variants = ElementalSlimeVariant.values();
+        for (int i = 0; i < variants.length; i++) {
+            ElementalSlimeVariant variant = variants[i];
+            int x = left + 20 + (i % 4) * 102;
+            int y = top + 64 + (i / 4) * 53;
+            boolean hover = inside(mouseX, mouseY, x, y, 92, 44);
+            graphics.fill(x, y, x + 92, y + 44, hover ? 0x667D4EA1 : 0x33FFFFFF);
+            graphics.renderOutline(x, y, 92, 44, hover ? variant.color() : 0xFF9A805E);
+            ItemStack icon = modStack(variant.spawnEggId(), 1);
+            graphics.renderItem(icon, x + 7, y + 14);
+            graphics.drawWordWrap(font, Component.translatable(variant.translationKey()),
+                    x + 29, y + 8, 57, 0xFF4A274E);
+            if (hover) hoveredStack = icon;
+        }
+    }
+
+    private void renderBestiaryDetail(GuiGraphics graphics) {
+        ElementalSlimeVariant variant = selectedSlime;
+        graphics.drawCenteredString(font, Component.translatable(variant.translationKey()),
+                width / 2, top + 29, variant.color());
+        ItemStack icon = modStack(variant.spawnEggId(), 1);
+        graphics.renderItem(icon, left + 24, top + 47);
+        String base = "gui.dimensional_mana.bestiary." + variant.id() + ".";
+        String[] fields = {"element", "spawn", "stats", "mechanics", "drops", "resistance"};
+        int y = top + 48;
+        for (String field : fields) {
+            Component label = Component.translatable("gui.dimensional_mana.bestiary.field." + field)
+                    .withStyle(ChatFormatting.DARK_PURPLE);
+            Component value = Component.translatable(base + field);
+            int x = field.equals("element") ? left + 50 : left + 22;
+            graphics.drawString(font, label, x, y, 0xFF6A2B76, false);
+            int valueX = x + font.width(label) + 4;
+            int valueWidth = left + PANEL_WIDTH - 22 - valueX;
+            graphics.drawWordWrap(font, value, valueX, y, Math.max(80, valueWidth), 0xFF3D343A);
+            y += Math.max(25, font.split(value, Math.max(80, valueWidth)).size() * 10 + 7);
+        }
     }
 
     private void renderChapterIndex(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -473,6 +557,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
         if (id.equals("exploration")) return Items.SPYGLASS;
         if (id.equals("achievements")) return Items.EXPERIENCE_BOTTLE;
         if (id.equals("adventurer_trade")) return Items.EMERALD;
+        if (id.equals("element_plating")) return Items.SHIELD;
+        if (id.equals("furnace_link")) return Items.FURNACE;
         return Items.ENCHANTED_BOOK;
     }
 
@@ -908,12 +994,27 @@ public final class ArcaneCodexGuideScreen extends Screen {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (view == View.HOME && button == 0) {
             for (int i = 0; i < CHAPTERS.size(); i++) {
-                int x = left + 16 + (i % 3) * 138;
-                int y = top + 66 + (i / 3) * 55;
-                if (inside(mouseX, mouseY, x, y, 132, 48)) {
+                int x = left + 16 + (i % 2) * 205;
+                int y = top + 62 + (i / 2) * 36;
+                if (inside(mouseX, mouseY, x, y, 195, 32)) {
                     selectedChapter = i;
                     Chapter chapter = CHAPTERS.get(i);
-                    view = chapter.pages().isEmpty() ? View.RECIPE_CATEGORIES : View.CHAPTER_INDEX;
+                    view = chapter.id().equals("bestiary") ? View.BESTIARY_INDEX
+                            : chapter.pages().isEmpty() ? View.RECIPE_CATEGORIES : View.CHAPTER_INDEX;
+                    playTurn();
+                    rebuildWidgets();
+                    return true;
+                }
+            }
+        }
+        if (view == View.BESTIARY_INDEX && button == 0) {
+            ElementalSlimeVariant[] variants = ElementalSlimeVariant.values();
+            for (int i = 0; i < variants.length; i++) {
+                int x = left + 20 + (i % 4) * 102;
+                int y = top + 64 + (i / 4) * 53;
+                if (inside(mouseX, mouseY, x, y, 92, 44)) {
+                    selectedSlime = variants[i];
+                    view = View.BESTIARY_DETAIL;
                     playTurn();
                     rebuildWidgets();
                     return true;

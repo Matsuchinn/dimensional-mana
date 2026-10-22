@@ -3,6 +3,6 @@
   "category": "misc",
   "ingredient": {"item": "dimensional_mana:raw_lesser_mana_crystal"},
   "result": {"id": "dimensional_mana:lesser_mana_crystal"},
-  "experience": 0.5,
+  "experience": 1.5,
   "cookingtime": 20
 }

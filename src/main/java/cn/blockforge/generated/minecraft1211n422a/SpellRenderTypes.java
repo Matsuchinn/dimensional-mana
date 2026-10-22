@@ -5,8 +5,25 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
 
+import java.util.OptionalDouble;
+
 /** 双面、带遮挡的加色光效，不写入深度，避免透明外壳遮掉内部光芯。 */
 public final class SpellRenderTypes extends RenderStateShard {
+    /**
+     * 魔素感知的穿墙轮廓线：不做深度测试，因此被土石埋住的魔晶矿和躲在山体后的生物
+     * 也能把外框画到屏幕上。线宽交给线条着色器按屏幕空间展开，远距离也看得清。
+     */
+    public static final RenderType SENSE_OUTLINE = RenderType.create("dimensional_mana_sense_outline",
+            DefaultVertexFormat.POSITION_COLOR_NORMAL, VertexFormat.Mode.LINES, 65536, false, false,
+            RenderType.CompositeState.builder()
+                    .setShaderState(RENDERTYPE_LINES_SHADER)
+                    .setLineState(new LineStateShard(OptionalDouble.of(2.5)))
+                    .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                    .setDepthTestState(NO_DEPTH_TEST)
+                    .setCullState(NO_CULL)
+                    .setWriteMaskState(COLOR_WRITE)
+                    .setOutputState(WEATHER_TARGET)
+                    .createCompositeState(false));
     public static final RenderType GLOW = RenderType.create("dimensional_mana_spell_glow",
             DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 262144, false, false,
             RenderType.CompositeState.builder()

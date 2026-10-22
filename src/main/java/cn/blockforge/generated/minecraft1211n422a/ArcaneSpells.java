@@ -32,8 +32,8 @@ import java.util.UUID;
  * <p>乱魔（中级·削弱）朝身前 30° 扇形喷出乱魔粒子，被扫到的生物奥术沉默 60 秒，
  * 期间无法释放技能、无法打出法术暴击，身上除奥术沉默外的增幅效果会被随机削掉一半。</p>
  *
- * <p>魔素感知（中级·预言）扫描自己所在区块：魔素超过 1000 的生物挂上 30 秒高亮，
- * 区块里各级魔晶矿与特级魔晶簇则被持续标注，方便挖矿和找目标。</p>
+ * <p>魔素感知（中级·预言）扫描自己所在区块：魔素超过 1000 的生物与各级魔晶矿都会被标成
+ * 隔着方块也能看见的穿墙轮廓（原版发光只在实体露脸时描边，这里由客户端补一层线框）。</p>
  *
  * <p>魔素潮汐（中级·混沌）在脚下放下混乱魔力锚点：半径 16 格，每 1～40 刻不定时波动一次，
  * 造成 10 点随机元素伤害并附着；除奥术以外的元素结算完之后，下一次必定是奥术伤害。</p>
@@ -58,6 +58,11 @@ public final class ArcaneSpells {
     private static final int SENSE_PARTICLE_INTERVAL = 10;
     private static final int SENSE_PARTICLE_BUDGET = 24;
     private static final double SENSE_PARTICLE_RANGE = 48.0;
+    /**
+     * 每隔一秒把剩余时长补发一次。客户端只认这一份“还剩多少刻”，万一它把列表清掉了
+     * （换维度、重进世界、丢包），下一秒就能重新画出来，30 秒的窗口不会被提前掐断。
+     */
+    private static final int SENSE_RESYNC_INTERVAL = 20;
 
     // ───────────────────────── 魔素潮汐 ─────────────────────────
 
@@ -71,19 +76,25 @@ public final class ArcaneSpells {
     private static final Map<UUID, Sense> SENSES = new HashMap<>();
     private static final Map<UUID, Tide> TIDES = new HashMap<>();
 
-    /** 一次施法扫描到的结果：生物靠高亮效果，矿物靠逐刻粒子标注。 */
+    /** 一次施法扫描到的结果：生物与矿物都交给客户端画穿墙轮廓，粒子只作点缀。 */
     private static final class Sense {
         private final ServerLevel level;
         private final UUID owner;
         private final long until;
         private final List<BlockPos> ores;
+        /**
+         * 被标记的生物 UUID：客户端按这份列表画穿墙外框，不再依赖只有实体露出画面才描边的
+         * 原版发光效果；用 UUID 而不是实体 id，区块重新加载后也能找回同一只生物。
+         */
+        private final List<UUID> mobs;
         private int cursor;
 
-        private Sense(ServerLevel level, UUID owner, long until, List<BlockPos> ores) {
+        private Sense(ServerLevel level, UUID owner, long until, List<BlockPos> ores, List<UUID> mobs) {
             this.level = level;
             this.owner = owner;
             this.until = until;
             this.ores = ores;
+            this.mobs = mobs;
         }
     }
 
@@ -194,7 +205,7 @@ public final class ArcaneSpells {
 
     // ───────────────────────── 魔素感知 ─────────────────────────
 
-    /** 前摇结束：扫描自己所在区块，把高魔素生物与各级魔晶矿标注 30 秒。 */
+    /** 前摇结束：扫描自己所在区块，把高魔素生物与各级魔晶矿标成穿墙轮廓 30 秒。 */
     public static void castManaSense(ServerPlayer player) {
         ServerLevel level = player.serverLevel();
         long now = level.getGameTime();
@@ -203,17 +214,20 @@ public final class ArcaneSpells {
 
         AABB column = new AABB(chunk.getMinBlockX(), level.getMinBuildHeight(), chunk.getMinBlockZ(),
                 chunk.getMaxBlockX() + 1.0, level.getMaxBuildHeight(), chunk.getMaxBlockZ() + 1.0);
-        int mobs = 0;
+        List<UUID> mobIds = new ArrayList<>();
         for (LivingEntity living : level.getEntitiesOfClass(LivingEntity.class, column)) {
             if (living == player || !living.isAlive() || living.isSpectator()) continue;
             if (ManaData.get(living).mana() < SENSE_MANA_THRESHOLD) continue;
+            // 原版发光保留：实体露在画面里时多一层贴脸描边，穿墙那层由客户端自己画。
             living.addEffect(new MobEffectInstance(MobEffects.GLOWING, SENSE_TICKS, 0, false, false, true));
-            mobs++;
+            mobIds.add(living.getUUID());
         }
 
-        Sense sense = new Sense(level, player.getUUID(), now + SENSE_TICKS, ores);
+        Sense sense = new Sense(level, player.getUUID(), now + SENSE_TICKS, ores, mobIds);
         SENSES.put(player.getUUID(), sense);
-        // 立刻把已经看得到的那部分矿标出来，不用等第一个刷新周期。
+        // 先把扫描结果发给施法者：客户端马上就能画出穿墙轮廓，不必等粒子逐个点亮。
+        ManaSensePayload.send(player, ores, mobIds, SENSE_TICKS);
+        // 粒子只作为点缀，继续轮流点亮附近的一部分矿。
         markOres(level, player, sense, true);
 
         Vec3 at = player.position().add(0, 1.0, 0);
@@ -225,7 +239,7 @@ public final class ArcaneSpells {
                 0.85F, 0.9F);
         NewSpellSystem.visual(player, SpellDefinition.MANA_SENSE, at, at.add(0, 1.2, 0), -1, 30);
         player.displayClientMessage(Component.translatable("message.dimensional_mana.mana_sense_cast",
-                ores.size(), mobs, SENSE_TICKS / 20), true);
+                ores.size(), mobIds.size(), SENSE_TICKS / 20), true);
         SpellSyncPayload.send(player);
     }
 
@@ -476,10 +490,14 @@ public final class ArcaneSpells {
                 iterator.remove();
                 continue;
             }
-            if (now % SENSE_PARTICLE_INTERVAL != 0) continue;
             ServerPlayer owner = level.getServer() == null ? null
                     : level.getServer().getPlayerList().getPlayer(sense.owner);
             if (owner == null || !owner.isAlive() || owner.level() != level) continue;
+            // 每隔一秒补发一次剩余时长，客户端那边就算清过状态也会马上重新画出轮廓。
+            if (now % SENSE_RESYNC_INTERVAL == 0) {
+                ManaSensePayload.send(owner, sense.ores, sense.mobs, (int)Math.max(1L, sense.until - now));
+            }
+            if (now % SENSE_PARTICLE_INTERVAL != 0) continue;
             markOres(level, owner, sense, false);
         }
     }
