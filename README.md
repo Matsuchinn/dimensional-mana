@@ -15,7 +15,7 @@
 | 必需前置 | **Curios 9.5.1+** |
 | 可选前置 | JEI 19.64.0.454+（查配方用） |
 
-把 **Curios** 和本模组的 `dimensional_mana-1.0.1.jar` 一起放进 `mods` 文件夹即可。不要同时放多个旧版本 jar。
+把 **Curios** 和本模组的 `dimensional_mana-1.2.0.jar` 一起放进 `mods` 文件夹即可。不要同时放多个旧版本 jar。
 
 ## 快速上手
 
@@ -47,7 +47,7 @@
 
 ## 版本与授权
 
-- 当前版本：`1.0.1`
+- 当前版本：`1.2.0`
 - 作者：TakisueYuu, AutoMods
 - 授权：All Rights Reserved；模组内第三方音频素材遵循 CC0-1.0 / CC-BY-SA-3.0。
 - 语言：简体中文 / English
