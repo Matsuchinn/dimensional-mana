@@ -1,0 +1,12 @@
+{
+  "description": {"translate": "enchantment.dimensional_mana.goblin_slayer"},
+  "supported_items": "#minecraft:enchantable/weapon",
+  "primary_items": "#minecraft:enchantable/weapon",
+  "weight": 5,
+  "max_level": 5,
+  "min_cost": {"base": 8, "per_level_above_first": 10},
+  "max_cost": {"base": 28, "per_level_above_first": 10},
+  "anvil_cost": 4,
+  "slots": ["mainhand"],
+  "effects": {}
+}

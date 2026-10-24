@@ -1,6 +1,9 @@
 {
-  "order": 60,
+  "order": 160,
   "size": 2,
   "use_native_gui": true,
-  "validators": ["curios:tag"]
+  "icon": "curios:slot/empty_ring_slot",
+  "validators": [
+    "curios:tag"
+  ]
 }

@@ -6,13 +6,13 @@ import java.util.List;
 
 public final class ManaConfig {
     public static final ModConfigSpec SPEC;
-    public static final ModConfigSpec.DoubleValue AURA_REDUCTION_PER_LAYER;
-    public static final ModConfigSpec.DoubleValue AURA_REDUCTION_CAP;
-    public static final ModConfigSpec.IntValue GLOBAL_AURA_CAP;
-    public static final ModConfigSpec.DoubleValue DAMAGE_PER_AURA_COST;
-    public static final ModConfigSpec.DoubleValue BASE_AURA_COST;
-    public static final ModConfigSpec.IntValue MIN_AURA_COST;
-    public static final ModConfigSpec.DoubleValue OVERCAP_AURA_DECAY;
+    public static final ModConfigSpec.DoubleValue BATTLE_QI_REDUCTION_PER_LAYER;
+    public static final ModConfigSpec.DoubleValue BATTLE_QI_REDUCTION_CAP;
+    public static final ModConfigSpec.IntValue GLOBAL_BATTLE_QI_CAP;
+    public static final ModConfigSpec.DoubleValue DAMAGE_PER_BATTLE_QI_COST;
+    public static final ModConfigSpec.DoubleValue BASE_BATTLE_QI_COST;
+    public static final ModConfigSpec.IntValue MIN_BATTLE_QI_COST;
+    public static final ModConfigSpec.DoubleValue OVERCAP_BATTLE_QI_DECAY;
     public static final ModConfigSpec.DoubleValue PLAYER_INITIAL_MANA;
     public static final ModConfigSpec.DoubleValue GLOBAL_MANA_CAP;
     public static final ModConfigSpec.DoubleValue PLAYER_MANA_REGEN;
@@ -45,26 +45,26 @@ public final class ManaConfig {
                 .defineInRange("overcharge_decay", 0.04, 0.0, 1000.0);
         b.pop();
 
-        b.push("battle_aura");
-        AURA_REDUCTION_PER_LAYER = b.comment("单层斗气减伤比例，0.0001 = 0.01%")
+        b.push("battle_qi");
+        BATTLE_QI_REDUCTION_PER_LAYER = b.comment("单层斗气减伤比例，0.0001 = 0.01%")
                 .translation("config.dimensional_mana.common.reduction_per_layer")
                 .defineInRange("reduction_per_layer", 0.0001, 0.0, 1.0);
-        AURA_REDUCTION_CAP = b.comment("斗气减伤最高比例")
+        BATTLE_QI_REDUCTION_CAP = b.comment("斗气减伤最高比例")
                 .translation("config.dimensional_mana.common.reduction_cap")
                 .defineInRange("reduction_cap", 0.80, 0.0, 1.0);
-        GLOBAL_AURA_CAP = b.comment("斗气层数全局硬上限")
+        GLOBAL_BATTLE_QI_CAP = b.comment("斗气层数全局硬上限")
                 .translation("config.dimensional_mana.common.global_layer_cap")
                 .defineInRange("global_layer_cap", 10_000_000, 1, 100_000_000);
-        DAMAGE_PER_AURA_COST = b.comment("每多少点伤害作为一次斗气消耗单位")
+        DAMAGE_PER_BATTLE_QI_COST = b.comment("每多少点伤害作为一次斗气消耗单位")
                 .translation("config.dimensional_mana.common.damage_threshold")
                 .defineInRange("damage_threshold", 1.0, 0.01, 10000.0);
-        BASE_AURA_COST = b.comment("伤害消耗斗气基础系数")
+        BASE_BATTLE_QI_COST = b.comment("伤害消耗斗气基础系数")
                 .translation("config.dimensional_mana.common.base_cost_multiplier")
                 .defineInRange("base_cost_multiplier", 1.0, 0.0, 1000.0);
-        MIN_AURA_COST = b.comment("受到有效伤害时最低消耗层数")
+        MIN_BATTLE_QI_COST = b.comment("受到有效伤害时最低消耗层数")
                 .translation("config.dimensional_mana.common.minimum_cost")
                 .defineInRange("minimum_cost", 1, 0, 100000);
-        OVERCAP_AURA_DECAY = b.comment("超限斗气每秒流失自身上限的比例")
+        OVERCAP_BATTLE_QI_DECAY = b.comment("超限斗气每秒流失自身上限的比例")
                 .translation("config.dimensional_mana.common.overcap_decay")
                 .defineInRange("overcap_decay", 0.05, 0.0, 1.0);
         DIMENSION_WHITELIST = b.comment("允许常规生物生成斗气的维度；留空代表全部")

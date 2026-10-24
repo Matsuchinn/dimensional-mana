@@ -1,0 +1,9 @@
+{
+  "order": 260,
+  "size": 0,
+  "use_native_gui": true,
+  "icon": "curios:slot/empty_curio_slot",
+  "validators": [
+    "curios:tag"
+  ]
+}

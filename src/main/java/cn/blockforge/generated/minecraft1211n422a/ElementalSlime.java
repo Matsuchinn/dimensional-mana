@@ -9,6 +9,7 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -33,8 +34,11 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
+import net.minecraft.world.entity.animal.IronGolem;
 import net.minecraft.world.entity.monster.Slime;
+import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.raid.Raider;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
@@ -61,6 +65,8 @@ public final class ElementalSlime extends Slime {
     private static final EntityDataAccessor<Boolean> TAMED = SynchedEntityData.defineId(ElementalSlime.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Optional<UUID>> OWNER = SynchedEntityData.defineId(ElementalSlime.class, EntityDataSerializers.OPTIONAL_UUID);
     private static final EntityDataAccessor<Boolean> SADDLED = SynchedEntityData.defineId(ElementalSlime.class, EntityDataSerializers.BOOLEAN);
+    /** 被哥布林萨满驯服的个体：不是玩家的宠物，会跟着哥布林一起打架。 */
+    private static final EntityDataAccessor<Boolean> GOBLIN_ALLY = SynchedEntityData.defineId(ElementalSlime.class, EntityDataSerializers.BOOLEAN);
     private static final float[] SPELL_DIFFICULTY = {0.20F, 0.60F, 1.00F, 1.40F};
     private static final float[] PHYSICAL_DAMAGE = {1.0F, 2.0F, 3.0F, 4.0F};
     private static final float[] ELEMENT_DAMAGE = {1.0F, 3.0F, 5.0F, 7.0F};
@@ -131,6 +137,7 @@ public final class ElementalSlime extends Slime {
         builder.define(TAMED, false);
         builder.define(OWNER, Optional.empty());
         builder.define(SADDLED, false);
+        builder.define(GOBLIN_ALLY, false);
     }
 
     @Override
@@ -139,6 +146,8 @@ public final class ElementalSlime extends Slime {
         goalSelector.addGoal(2, new FloatGoal(this));
         goalSelector.addGoal(3, new ElementalSlimeSpellGoal(this));
         goalSelector.addGoal(4, new ElementalSlimeCombatGoal(this));
+        // 结盟个体没有独立敌对行为，只跟着哥布林的目标走。
+        goalSelector.addGoal(5, new ElementalSlimeGoblinAllyGoal(this));
         if (variant == ElementalSlimeVariant.POISON) goalSelector.addGoal(5, new ElementalSlimeShadeGoal(this));
         goalSelector.addGoal(6, new ElementalSlimeWanderGoal(this));
         goalSelector.addGoal(6, new LookAtPlayerGoal(this, LivingEntity.class, 8.0F));
@@ -152,6 +161,18 @@ public final class ElementalSlime extends Slime {
     public boolean isTamed() { return entityData.get(TAMED); }
     public Optional<UUID> ownerUUID() { return entityData.get(OWNER); }
     public boolean isSaddled() { return entityData.get(SADDLED); }
+    /** 哥布林萨满驯服的盟友：帮哥布林打架，但不会被玩家用栓绳牵走。 */
+    public boolean isGoblinAlly() { return entityData.get(GOBLIN_ALLY); }
+
+    public void makeGoblinAlly() {
+        entityData.set(GOBLIN_ALLY, true);
+        setPersistenceRequired();
+        setTarget(null);
+        if (level() instanceof ServerLevel server)
+            server.sendParticles(ParticleTypes.HEART, getX(), getY() + getBbHeight() * 0.8, getZ(),
+                    10, 0.35, 0.35, 0.35, 0.02);
+        level().playSound(null, blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME, getSoundSource(), 0.8F, 1.4F);
+    }
     public int replicationLimit() { return replicationLimit; }
     public void setReplicationLimit(int value) { replicationLimit = Mth.clamp(value, 0, 4); }
     public void setTier(ElementalSlimeTier value, boolean rerollHealth) {
@@ -763,6 +784,13 @@ public final class ElementalSlime extends Slime {
     public void castBasicSpell(LivingEntity target) {
         if (!isSpellReady() || target == null || !validCombatTarget(target)) return;
         float damage = variant.basicSpellDamage() * SPELL_DIFFICULTY[difficultyIndex()] * tier().damageScale();
+        // 这一发没有弹道、瞬间命中，招架系统照样能接：处于招架姿态且距离够近就弹开，
+        // 左键窗口内还算完美招架。被弹掉时伤害和元素附着一起取消，只留碎裂特效。
+        if (target instanceof ServerPlayer parryTarget
+                && BattleQiParry.parryInstantSpell(parryTarget, this, variant.damageElementId(), damage)) {
+            nextSpellTick = level().getGameTime() + variant.basicSpell().cooldownTicks();
+            return;
+        }
         if (variant == ElementalSlimeVariant.MANA) {
             damage = ElementReactionSystem.arcaneDamage(this, target, damage);
             SpellDamage.hitResolvedElement(level(), this, target, MagicEquipment.ARCANE, damage);
@@ -814,6 +842,7 @@ public final class ElementalSlime extends Slime {
 
     boolean validTerritoryTarget(LivingEntity target) {
         if (target == null || target == this || !target.isAlive() || isTamed()) return false;
+        if (isGoblinAlly()) return goblinAllyTarget(target);
         if (target instanceof Player player) {
             if (player.isCreative() || player.isSpectator()) return false;
             if (level().getDifficulty() == Difficulty.PEACEFUL) return false;
@@ -821,6 +850,19 @@ public final class ElementalSlime extends Slime {
         // 同类永不互相攻击；雷史莱姆只是对其他生物更暴躁，不再把同类当目标。
         if (target instanceof ElementalSlime other && other.variant() == variant) return false;
         return !ownerUUID().filter(target.getUUID()::equals).isPresent();
+    }
+
+    /**
+     * 与哥布林结盟后的敌人只有哥布林的对手：玩家、铁傀儡、村民和灾厄村民。
+     * 哥布林和其他结盟史莱姆永远不在名单里，避免营地内部误伤。
+     */
+    private boolean goblinAllyTarget(LivingEntity target) {
+        if (target instanceof Goblin) return false;
+        if (target instanceof ElementalSlime other && other.isGoblinAlly()) return false;
+        if (target instanceof Player player)
+            return !player.isCreative() && !player.isSpectator()
+                    && level().getDifficulty() != Difficulty.PEACEFUL;
+        return target instanceof IronGolem || target instanceof Villager || target instanceof Raider;
     }
 
     private boolean validCombatTarget(LivingEntity target) {
@@ -1272,6 +1314,7 @@ public final class ElementalSlime extends Slime {
         super.addAdditionalSaveData(tag);
         tag.putString("ElementalTier", tier().id());
         tag.putBoolean("ElementalTamed", isTamed());
+        tag.putBoolean("GoblinAlly", isGoblinAlly());
         ownerUUID().ifPresent(uuid -> tag.putUUID("ElementalOwner", uuid));
         tag.putBoolean("ElementalSaddled", isSaddled());
         tag.putLong("NextSpell", nextSpellTick);
@@ -1292,6 +1335,7 @@ public final class ElementalSlime extends Slime {
         super.readAdditionalSaveData(tag);
         entityData.set(TIER, tag.getString("ElementalTier").isBlank() ? ElementalSlimeTier.MATURE.id() : tag.getString("ElementalTier"));
         entityData.set(TAMED, tag.getBoolean("ElementalTamed"));
+        entityData.set(GOBLIN_ALLY, tag.getBoolean("GoblinAlly"));
         entityData.set(OWNER, tag.hasUUID("ElementalOwner") ? Optional.of(tag.getUUID("ElementalOwner")) : Optional.empty());
         entityData.set(SADDLED, tag.getBoolean("ElementalSaddled"));
         nextSpellTick = tag.getLong("NextSpell");

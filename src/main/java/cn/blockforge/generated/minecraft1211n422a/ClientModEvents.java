@@ -15,6 +15,9 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.neoforged.bus.api.IEventBus;
+import net.minecraft.client.renderer.item.ItemProperties;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.GatherEffectScreenTooltipsEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
@@ -42,14 +45,35 @@ public final class ClientModEvents {
     private static final KeyMapping TOGGLE_ORB = new KeyMapping("key.dimensional_mana.toggle_orb",
             InputConstants.Type.KEYSYM, InputConstants.KEY_O, "key.categories.dimensional_mana");
     /** 静止不动时按住 Alt+Z 消耗魔素凝聚斗气（Z 键可改绑）。 */
-    private static final KeyMapping CONDENSE_AURA = new KeyMapping("key.dimensional_mana.condense_aura",
+    private static final KeyMapping CONDENSE_BATTLE_QI = new KeyMapping("key.dimensional_mana.condense_battle_qi",
             InputConstants.Type.KEYSYM, InputConstants.KEY_Z, "key.categories.dimensional_mana");
+    /** 斗气技能轮盘：默认大小写锁定键（Caps Lock），按住选、松开即关（可改绑）。 */
+    private static final KeyMapping QI_WHEEL = new KeyMapping("key.dimensional_mana.qi_wheel",
+            InputConstants.Type.KEYSYM, InputConstants.KEY_CAPSLOCK, "key.categories.dimensional_mana");
+    /** 点按 Alt 施放当前选中的斗气技能（可改绑）。 */
+    private static final KeyMapping QI_CAST = new KeyMapping("key.dimensional_mana.qi_cast",
+            InputConstants.Type.KEYSYM, InputConstants.KEY_LALT, "key.categories.dimensional_mana");
+    /** 专业鉴定眼镜的主动扫描：手持任意物品或空手都能按（V 键可改绑）。 */
+    private static final KeyMapping APPRAISAL_SCAN = new KeyMapping("key.dimensional_mana.appraisal_scan",
+            InputConstants.Type.KEYSYM, InputConstants.KEY_V, "key.categories.dimensional_mana");
     private static final ResourceLocation APPRAISAL_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "appraisal_hud");
+    private static final ResourceLocation PRO_APPRAISAL_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "pro_appraisal_hud");
     private static final ResourceLocation REACTION_TEXT_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "reaction_text");
     private static final ResourceLocation RESONANCE_CORE_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "resonance_core_hud");
     private static final ResourceLocation RADIANT_FLASH_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "radiant_flash");
+    private static final ResourceLocation PARRY_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "parry_hud");
+    /** 招架姿态：右键按住多少刻、这一轮有没有把 begin 发出去。 */
+    private static int parryHoldTicks;
+    private static boolean parryStanceSent;
+    /** 姿态下左键是否还按着：只在「按下去的那一下」发一次弹反，按住不会连发。 */
+    private static boolean parryAttackWasDown;
     /** 风狂期间被临时压低的鼠标灵敏度原值；状态结束后必须还原。 */
     private static Double windFrenzySensitivity;
+    /** 点按 Alt 施放斗气的边沿检测：上一刻是否按着、这一轮 Alt 有没有被组合键占用。 */
+    private static boolean qiCastHeld;
+    private static boolean qiCastSuppressed;
+    /** 老版本把斗气轮盘默认绑在鼠标键 5，这里只迁移一次到大小写锁定键。 */
+    private static boolean qiWheelDefaultMigrated;
     /** 断魂鸣弦按住追加的节流：十刻一颗，刚好赶得上服务器每十刻一次的状态同步。 */
     private static final int SONIC_HOLD_INTERVAL = 10;
     private static int sonicHoldAt;
@@ -58,6 +82,7 @@ public final class ClientModEvents {
         modBus.addListener(ClientModEvents::registerHud);
         modBus.addListener(ClientModEvents::registerScreens);
         modBus.addListener(ClientModEvents::registerEntityRenderers);
+        modBus.addListener(ClientModEvents::registerLayerDefinitions);
         modBus.addListener(ClientModEvents::registerKeys);
         modBus.addListener(ClientModEvents::registerFluidRendering);
         modBus.addListener(ClientModEvents::registerMagicModels);
@@ -70,17 +95,31 @@ public final class ClientModEvents {
         NeoForge.EVENT_BUS.addListener(ClientModEvents::movementInput);
         NeoForge.EVENT_BUS.addListener(ClientSpellVisuals::tick);
         NeoForge.EVENT_BUS.addListener(ClientSpellVisuals::render);
+        NeoForge.EVENT_BUS.addListener(ClientParryVisuals::tick);
+        NeoForge.EVENT_BUS.addListener(ClientParryVisuals::cameraAngles);
+        NeoForge.EVENT_BUS.addListener(ClientParryVisuals::renderWorld);
+        // 招架姿势：第三人称把手臂举成举盾的样子，第一人称把刀抬到胸前横住。
+        NeoForge.EVENT_BUS.addListener(ClientParryVisuals::onRenderPlayer);
+        NeoForge.EVENT_BUS.addListener(ClientParryVisuals::onRenderHand);
         NeoForge.EVENT_BUS.addListener(ClientReactionText::tick);
         NeoForge.EVENT_BUS.addListener(ClientReactionText::renderWorld);
         NeoForge.EVENT_BUS.addListener(ClientFrozenVisuals::tick);
         NeoForge.EVENT_BUS.addListener(ClientManaSenseState::tick);
+        NeoForge.EVENT_BUS.addListener(ClientManaRadarState::tick);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event)
                 -> {
             ClientResonanceCoreState.clear();
             ClientMagicToggleState.clear();
+            ClientParryVisuals.clear();
+            // 退出世界时把鉴定 HUD 的数据清干净，免得下次进服先闪一帧上一个存档的目标。
+            ClientProAppraisalState.clear();
+            ClientQiState.clear();
+            qiCastHeld = false;
+            qiCastSuppressed = false;
         });
         NeoForge.EVENT_BUS.addListener(ClientFrozenVisuals::render);
         NeoForge.EVENT_BUS.addListener(ClientManaSenseState::render);
+        NeoForge.EVENT_BUS.addListener(ClientManaRadarState::render);
         NeoForge.EVENT_BUS.addListener(InventoryGlowEffects::render);
     }
 
@@ -97,6 +136,30 @@ public final class ClientModEvents {
     /** 客户端初始化：登记物品图标的帧动画属性，时间点必须早于模型烘焙。 */
     private static void clientSetup(FMLClientSetupEvent event) {
         ClientItemAnimations.register(event);
+        event.enqueueWork(ClientModEvents::registerGoblinItemProperties);
+    }
+
+    /**
+     * 破损弓 / 圆盾的模型切换条件。
+     *
+     * <p>原版只给 {@code Items.BOW} 和 {@code Items.SHIELD} 登记了 {@code pulling} / {@code pull} /
+     * {@code blocking} 这几个属性，自定义物品必须自己再登记一遍，否则模型 JSON 里写了 overrides
+     * 也永远不会切换——拉弓时看不到箭、举盾时看不到盾面就是这个原因。</p>
+     */
+    private static void registerGoblinItemProperties() {
+        Item bow = GeneratedMod.MOD_ITEMS.get(RoughEquipment.BROKEN_BOW).get();
+        ItemProperties.register(bow, ResourceLocation.withDefaultNamespace("pulling"),
+                (stack, level, entity, seed) ->
+                        entity != null && entity.isUsingItem() && entity.getUseItem() == stack ? 1.0F : 0.0F);
+        ItemProperties.register(bow, ResourceLocation.withDefaultNamespace("pull"),
+                (stack, level, entity, seed) -> {
+                    if (entity == null || entity.getUseItem() != stack) return 0.0F;
+                    return (stack.getUseDuration(entity) - entity.getUseItemRemainingTicks()) / 20.0F;
+                });
+        Item buckler = GeneratedMod.MOD_ITEMS.get(RoughEquipment.BUCKLER).get();
+        ItemProperties.register(buckler, ResourceLocation.withDefaultNamespace("blocking"),
+                (stack, level, entity, seed) ->
+                        entity != null && entity.isUsingItem() && entity.getUseItem() == stack ? 1.0F : 0.0F);
     }
 
     private static void registerMagicModels(ModelEvent.RegisterAdditional event) {
@@ -122,7 +185,10 @@ public final class ClientModEvents {
         event.register(SPELL_WHEEL);
         event.register(CAST_SPELL);
         event.register(TOGGLE_ORB);
-        event.register(CONDENSE_AURA);
+        event.register(CONDENSE_BATTLE_QI);
+        event.register(APPRAISAL_SCAN);
+        event.register(QI_WHEEL);
+        event.register(QI_CAST);
     }
 
     /** 使用当前玩家配置的按键判断，而不是写死左 Alt。 */
@@ -143,8 +209,41 @@ public final class ClientModEvents {
         }
     }
 
+    /** 斗气轮盘可能被玩家改绑到鼠标键，那时键盘释放事件不会来，靠这两个方法判断真实松开。 */
+    public static boolean matchesQiWheelKey(int keyCode, int scanCode) {
+        return QI_WHEEL.matches(keyCode, scanCode);
+    }
+
+    public static boolean matchesQiWheelMouse(int button) {
+        return QI_WHEEL.matchesMouse(button);
+    }
+
+    /** 轮盘关闭时清掉按键状态与积压点击。 */
+    public static void releaseQiWheelInput() {
+        QI_WHEEL.setDown(false);
+        while (QI_WHEEL.consumeClick()) {
+            // 清空界面打开期间可能积压的点击。
+        }
+    }
+
+    /**
+     * 老存档的按键表里还留着「鼠标键 5」这个旧默认值，而按键默认值只在 options.txt 没有
+     * 记录时才生效。所以启动后核对一次：还停在旧默认值就换成大小写锁定键并存回配置，
+     * 玩家自己改过的按键（不是鼠标键 5）不会被碰。
+     */
+    private static void migrateQiWheelDefault(Minecraft minecraft) {
+        if (qiWheelDefaultMigrated) return;
+        qiWheelDefaultMigrated = true;
+        InputConstants.Key legacy = InputConstants.Type.MOUSE.getOrCreate(5);
+        if (!QI_WHEEL.getKey().equals(legacy)) return;
+        QI_WHEEL.setKey(InputConstants.Type.KEYSYM.getOrCreate(InputConstants.KEY_CAPSLOCK));
+        KeyMapping.resetMapping();
+        minecraft.options.save();
+    }
+
     private static void clientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
+        migrateQiWheelDefault(minecraft);
         ClientSpellState.clientTick();
         syncWindFrenzySensitivity(minecraft);
         while (OPEN_CODEX.consumeClick()) {
@@ -173,8 +272,21 @@ public final class ClientModEvents {
                 PacketDistributor.sendToServer(new SpellActionPayload("toggle_orb", "", 0));
             }
         }
+        while (QI_WHEEL.consumeClick()) {
+            if (minecraft.player != null && minecraft.screen == null) minecraft.setScreen(new QiWheelScreen());
+        }
+        qiCastInput(minecraft);
         sonicHoldAdd(minecraft);
-        condenseAuraHold(minecraft);
+        condenseBattleQiHold(minecraft);
+        parryInput(minecraft);
+        // 专业鉴定眼镜的扫描线小窗是纯客户端动画，每刻自己往前走一格。
+        ClientProAppraisalState.tick();
+        // V 键主动扫描：佩戴并由服务端复核魔素，客户端只管把请求发出去。
+        while (APPRAISAL_SCAN.consumeClick()) {
+            if (minecraft.player != null && minecraft.screen == null) {
+                PacketDistributor.sendToServer(new SpellActionPayload("appraisal_scan", "", 0));
+            }
+        }
     }
 
     /**
@@ -207,10 +319,10 @@ public final class ClientModEvents {
      * 静止不动时按住 Alt+Z 凝聚斗气：每 10 刻请求服务器扣 1 点魔素换 1 点斗气。
      * 这里只控制发起时机，真正的「是不是站着不动、有没有魔素」由服务端复核。
      */
-    private static void condenseAuraHold(Minecraft minecraft) {
+    private static void condenseBattleQiHold(Minecraft minecraft) {
         if (condenseCooldown > 0) condenseCooldown--;
         var player = minecraft.player;
-        if (player == null || minecraft.screen != null || !CONDENSE_AURA.isDown()
+        if (player == null || minecraft.screen != null || !CONDENSE_BATTLE_QI.isDown()
                 || !net.minecraft.client.gui.screens.Screen.hasAltDown()) {
             condenseCooldown = 0;
             return;
@@ -223,7 +335,84 @@ public final class ClientModEvents {
         }
         if (condenseCooldown > 0) return;
         condenseCooldown = 10;
-        PacketDistributor.sendToServer(new SpellActionPayload("condense_aura", "", 0));
+        PacketDistributor.sendToServer(new SpellActionPayload("condense_battle_qi", "", 0));
+    }
+
+    /**
+     * 点按 Alt 施放斗气技能。
+     *
+     * <p>用「松开 Alt」的那一刻发包：按住 Alt 只是组合键的前缀（Alt+Z 凝聚斗气、Alt+左键追加法术、
+     * Alt+大小写锁定键打开斗气轮盘），这些组合全都不会顺手丢一个技能出去。按下期间碰到任何一个
+     * 组合键，这一轮 Alt 就直接作废，松开也不施放。</p>
+     */
+    private static void qiCastInput(Minecraft minecraft) {
+        var player = minecraft.player;
+        boolean eligible = player != null && minecraft.screen == null && minecraft.mouseHandler.isMouseGrabbed()
+                && ClientSpellState.casting() == null && !ClientSpellState.targeting()
+                && !NewSpellSystem.immobilized(player);
+        boolean down = QI_CAST.isDown();
+        if (down) {
+            if (!qiCastHeld) qiCastSuppressed = !eligible;
+            // 组合键占用：凝聚斗气、左/右键、法术轮盘、斗气轮盘。
+            if (CONDENSE_BATTLE_QI.isDown() || minecraft.options.keyAttack.isDown()
+                    || minecraft.options.keyUse.isDown() || SPELL_WHEEL.isDown() || QI_WHEEL.isDown()) {
+                qiCastSuppressed = true;
+            }
+        } else if (qiCastHeld) {
+            if (!qiCastSuppressed && eligible && ClientQiState.selected() != null) {
+                PacketDistributor.sendToServer(new QiActionPayload("cast", "", 0));
+            }
+            qiCastSuppressed = false;
+        }
+        qiCastHeld = down;
+    }
+
+    /**
+     * 斗气招架：主手剑、副手空时长按右键 5 刻进入招架姿态，松开或换手立刻退出。
+     *
+     * <p>进入/退出都只发一次请求，服务器自己也会每刻复核前置条件；
+     * 客户端留着这个状态只是为了画镜头下沉和剑身光晕。</p>
+     *
+     * <p>姿态下按左键弹反，没有冷却：但只在按下去的那一下发一次，按住不放不会连发，
+     * 也不会因为原版「按住左键打空就一直挥手」把剑抽成风车。</p>
+     */
+    private static void parryInput(Minecraft minecraft) {
+        var player = minecraft.player;
+        boolean eligible = player != null && minecraft.screen == null && minecraft.mouseHandler.isMouseGrabbed()
+                && BattleQiParry.canParry(player)
+                // 正在读条或选目标时不抢输入，交给施法流程。
+                && ClientSpellState.casting() == null && !ClientSpellState.targeting();
+        boolean holding = eligible && minecraft.options.keyUse.isDown();
+        if (!holding) {
+            parryHoldTicks = 0;
+            parryAttackWasDown = false;
+            if (parryStanceSent) {
+                parryStanceSent = false;
+                PacketDistributor.sendToServer(new SpellActionPayload("parry_end", "", 0));
+            }
+            ClientParryVisuals.setStance(false);
+            return;
+        }
+        if (parryHoldTicks < BattleQiParry.STANCE_HOLD_TICKS) parryHoldTicks++;
+        if (!parryStanceSent && parryHoldTicks >= BattleQiParry.STANCE_HOLD_TICKS) {
+            parryStanceSent = true;
+            ClientParryVisuals.setStance(true);
+            PacketDistributor.sendToServer(new SpellActionPayload("parry_begin", "", 0));
+        }
+        boolean attackDown = minecraft.options.keyAttack.isDown();
+        if (parryStanceSent) {
+            if (attackDown && !parryAttackWasDown) {
+                PacketDistributor.sendToServer(new SpellActionPayload("parry_attempt", "", 0));
+                // 这一刀是玩家自己按出来的，放开挥刀锁让动作播出来。
+                if (player != null) player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                ClientParryVisuals.allowSwing();
+            }
+            // 姿态下按住左键不许啃方块：这一整段输入是给弹反用的。
+            if (attackDown && minecraft.gameMode != null && minecraft.gameMode.isDestroying()) {
+                minecraft.gameMode.stopDestroyBlock();
+            }
+        }
+        parryAttackWasDown = attackDown;
     }
 
     private static void movementInput(net.neoforged.neoforge.client.event.MovementInputUpdateEvent event) {
@@ -238,6 +427,21 @@ public final class ClientModEvents {
         var player = Minecraft.getInstance().player;
         if (player != null && NewSpellSystem.immobilized(player)) {
             event.setCanceled(true); event.setSwingHand(false); return;
+        }
+        // 招架姿态下：左键改成弹反，不再挥砍或挖方块；右键的使用逻辑一并拦掉。
+        // 弹反请求在 parryInput 里按「按下那一下」发，这里只负责把原版动作吃掉，
+        // 连手臂都不用抬——否则按住左键会一直抽刀。
+        if (ClientParryVisuals.stance() && !ClientSpellState.targeting()) {
+            if (event.isAttack()) {
+                event.setCanceled(true);
+                event.setSwingHand(false);
+                return;
+            }
+            if (event.isUseItem()) {
+                event.setCanceled(true);
+                event.setSwingHand(false);
+                return;
+            }
         }
         // 天雷滚滚前摇期间：按住 Alt 左键追加雷球，服务器扣 555 魔素并校验两次上限。
         if (event.isAttack() && ClientSpellState.tempestCharging()
@@ -316,6 +520,9 @@ public final class ClientModEvents {
         event.registerEntityRenderer(GeneratedMod.ADVENTURER.get(), AdventurerRenderer::new);
         for (ElementalSlimeVariant variant : ElementalSlimeVariant.values())
             event.registerEntityRenderer(GeneratedMod.elementalSlimeType(variant), ElementalSlimeRenderer::new);
+        for (GoblinVariant variant : GoblinVariant.values())
+            event.registerEntityRenderer(GeneratedMod.goblinType(variant),
+                    context -> new GoblinRenderer(context, variant));
         event.registerEntityRenderer(NewSpellContent.VINE_SERVANT.get(), SpellSummonRenderer::new);
         event.registerEntityRenderer(NewSpellContent.FLYING_SWORD.get(), SpellSummonRenderer::new);
         event.registerEntityRenderer(NewSpellContent.POISON_TENTACLE.get(), SpellSummonRenderer::new);
@@ -327,6 +534,13 @@ public final class ClientModEvents {
     }
 
     /** 元素结晶戒指共用一张底图：第二层宝石按元素染色，所以十二枚外观一致、颜色不同。 */
+    /** 三套哥布林骨骼（幼崽 / 成年 / 首领）各注册一次模型层。 */
+    private static void registerLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {
+        for (GoblinShape shape : GoblinShape.values()) {
+            event.registerLayerDefinition(shape.layer(), () -> GoblinModelGeometry.create(shape));
+        }
+    }
+
     private static void registerItemColors(net.neoforged.neoforge.client.event.RegisterColorHandlersEvent.Item event) {
         java.util.List<net.minecraft.world.level.ItemLike> rings = new java.util.ArrayList<>();
         for (ElementType element : ElementType.values()) {
@@ -336,6 +550,17 @@ public final class ClientModEvents {
         net.minecraft.client.color.item.ItemColor color = (stack, tintIndex) ->
                 tintIndex == 1 && stack.getItem() instanceof ElementRingItem ring ? ring.tintColor() : -1;
         event.register(color, rings.toArray(new net.minecraft.world.level.ItemLike[0]));
+
+        // 新饰品同样共用一张底图：第二层宝石按各自的梯度配色染色。
+        java.util.List<net.minecraft.world.level.ItemLike> relics = new java.util.ArrayList<>();
+        for (Relics.Relic relic : Relics.ALL) {
+            var holder = GeneratedMod.MOD_ITEMS.get(relic.id());
+            if (holder != null) relics.add(holder.get());
+        }
+        net.minecraft.client.color.item.ItemColor relicColor = (stack, tintIndex) ->
+                tintIndex == 1 && stack.getItem() instanceof RelicAccessoryItem item
+                        ? item.relic().tint() : -1;
+        event.register(relicColor, relics.toArray(new net.minecraft.world.level.ItemLike[0]));
     }
 
     private static void registerScreens(RegisterMenuScreensEvent event) {
@@ -371,13 +596,23 @@ public final class ClientModEvents {
     private static void registerHud(RegisterGuiLayersEvent event) {
         event.registerAboveAll(MANA_HUD, (graphics, delta) -> renderManaHud(graphics));
         event.registerAboveAll(APPRAISAL_HUD, (graphics, delta) -> renderAppraisalHud(graphics));
+        event.registerAboveAll(PRO_APPRAISAL_HUD, (graphics, delta) -> ProAppraisalHud.render(graphics));
         event.registerAboveAll(REACTION_TEXT_HUD, ClientReactionText::renderHud);
         event.registerAboveAll(RESONANCE_CORE_HUD, (graphics, delta) -> ResonanceCoreHud.renderHud(graphics));
         // 曜光裂界爆裂的 16 刻黑白闪光画在最上层，压过其它 HUD。
         event.registerAboveAll(RADIANT_FLASH_HUD, (graphics, delta) -> ClientSpellVisuals.renderRadiantFlash(graphics));
+        // 招架的准心白圈、完美招架白闪/金色光晕、斗气不足的泛红都画在最上层。
+        event.registerAboveAll(PARRY_HUD, (graphics, delta) -> ClientParryVisuals.renderHud(graphics));
     }
 
     private static void addEffectTooltips(GatherEffectScreenTooltipsEvent event) {
+        if (event.getEffectInstance().is(GeneratedMod.BATTLE_QI_COLLAPSE)) {
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.battle_qi_collapse.damage_taken").withStyle(ChatFormatting.RED));
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.battle_qi_collapse.damage_dealt").withStyle(ChatFormatting.DARK_RED));
+            return;
+        }
         if (!event.getEffectInstance().is(GeneratedMod.MANA_EXHAUSTION)) return;
         event.getTooltip().add(Component.translatable("effect.dimensional_mana.mana_exhaustion.no_regen")
                 .withStyle(ChatFormatting.GRAY));
@@ -425,13 +660,13 @@ public final class ClientModEvents {
         graphics.fill(centerX - 8, centerY - 12, centerX - 3, centerY - 10, 0x70FFFFFF);
         graphics.fill(centerX - 10, centerY - 9, centerX - 7, centerY - 7, 0x45FFFFFF);
 
-        double auraRatio = Math.max(0.0, ClientManaState.aura() / (double)Math.max(1, ClientManaState.maxAura()));
-        drawAuraRing(graphics, centerX, centerY, radius + 4, Math.min(1.0, auraRatio), 0xFF3C3422, 0xFFFFC84A);
-        if (auraRatio > 1.0) {
-            double excessRatio = Math.min(1.0, auraRatio - 1.0);
-            drawAuraRing(graphics, centerX, centerY, radius + 7, excessRatio, 0xFF40243C, 0xFFFF67DB);
+        double battleQiRatio = Math.max(0.0, ClientManaState.battleQi() / (double)Math.max(1, ClientManaState.maxBattleQi()));
+        drawBattleQiRing(graphics, centerX, centerY, radius + 4, Math.min(1.0, battleQiRatio), 0xFF3C3422, 0xFFFFC84A);
+        if (battleQiRatio > 1.0) {
+            double excessRatio = Math.min(1.0, battleQiRatio - 1.0);
+            drawBattleQiRing(graphics, centerX, centerY, radius + 7, excessRatio, 0xFF40243C, 0xFFFF67DB);
         }
-        if (ClientManaState.exhausted()) drawAuraRing(graphics, centerX, centerY, radius + 1, 1.0, 0xFFFF4050, 0xFFFF4050);
+        if (ClientManaState.exhausted()) drawBattleQiRing(graphics, centerX, centerY, radius + 1, 1.0, 0xFFFF4050, 0xFFFF4050);
 
         double textScale = ClientManaConfig.MANA_TEXT_SCALE.get();
         int manaTextColor = overloaded ? 0xFF000000 | overloadRgb
@@ -441,6 +676,38 @@ public final class ClientModEvents {
         drawScaledCenteredString(graphics, minecraft, "/ " + String.format("%.0f", ClientManaState.maxMana()),
                 centerX, centerY + 5, overloaded ? 0xFFFFFFFF : 0xFFBED5FF, textScale);
         renderSelectedSpellHud(graphics, minecraft, centerX + radius + 13, centerY - 12);
+        renderQiSlotIcon(graphics, minecraft, centerX + radius + 13, centerY - 12);
+    }
+
+    /**
+     * 斗气技能图标：缩成一个小方块，贴在法术技能选择块的右边。
+     *
+     * <p>以前是一整块带文字的提示板，压在左下角魔素球和法术图标上面；现在只留一个
+     * 带细边框的技能图标——有法术选中时排在「按 X 施法」那行文字后面，
+     * 没选法术时就直接放在法术图标的位置，两种情况都不会和法术 HUD 重叠。</p>
+     */
+    private static void renderQiSlotIcon(GuiGraphics graphics, Minecraft minecraft, int spellX, int spellY) {
+        QiProgression.Ability ability = ClientQiState.selected();
+        if (ability == null) return;
+        var holder = GeneratedMod.MOD_ITEMS.get(ability.manualId());
+        if (holder == null) return;
+        int x;
+        int y;
+        SpellDefinition spell = ClientSpellState.selected();
+        if (spell != null) {
+            Component castKey = Component.translatable("hud.dimensional_mana.cast_key",
+                    CAST_SPELL.getTranslatedKeyMessage());
+            x = spellX + 25 + minecraft.font.width(castKey) + 6;
+            y = spellY + 10;
+        } else {
+            x = spellX;
+            y = spellY;
+        }
+        // 玩家把魔素 HUD 挪到屏幕右边时别让图标跑出屏幕。
+        if (x > graphics.guiWidth() - 20) x = graphics.guiWidth() - 20;
+        graphics.fill(x - 1, y - 1, x + 17, y + 17, 0x88180A08);
+        graphics.renderOutline(x - 1, y - 1, 18, 18, 0xB0C9A25C);
+        graphics.renderItem(new ItemStack(holder.get()), x + 1, y + 1);
     }
 
     private static void renderSelectedSpellHud(GuiGraphics graphics, Minecraft minecraft, int x, int y) {
@@ -610,8 +877,8 @@ public final class ClientModEvents {
                 graphics.drawString(minecraft.font, Component.translatable("hud.dimensional_mana.target.mana",
                         formatOne(ClientAppraisalState.mana()), formatOne(ClientAppraisalState.maxMana())),
                         x, y + 20, 0xFF70D8FF, true);
-                graphics.drawString(minecraft.font, Component.translatable("hud.dimensional_mana.target.aura",
-                        ClientAppraisalState.aura(), ClientAppraisalState.maxAura()),
+                graphics.drawString(minecraft.font, Component.translatable("hud.dimensional_mana.target.battle_qi",
+                        ClientAppraisalState.battleQi(), ClientAppraisalState.maxBattleQi()),
                         x, y + 30, 0xFFFFCD59, true);
                 return;
             }
@@ -657,7 +924,7 @@ public final class ClientModEvents {
         }
     }
 
-    private static void drawAuraRing(GuiGraphics graphics, int centerX, int centerY, int radius,
+    private static void drawBattleQiRing(GuiGraphics graphics, int centerX, int centerY, int radius,
                                      double progress, int backgroundColor, int fillColor) {
         int steps = 96;
         int filledSteps = (int)Math.round(progress * steps);

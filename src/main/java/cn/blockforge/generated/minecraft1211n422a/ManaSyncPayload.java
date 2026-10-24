@@ -6,15 +6,15 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 
-public record ManaSyncPayload(double mana, double maxMana, int aura, int maxAura, boolean exhausted,
+public record ManaSyncPayload(double mana, double maxMana, int battleQi, int maxBattleQi, boolean exhausted,
                               double overchargeSafeRatio) implements CustomPacketPayload {
     public static final Type<ManaSyncPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "mana_sync"));
     public static final StreamCodec<RegistryFriendlyByteBuf, ManaSyncPayload> STREAM_CODEC = StreamCodec.of(
             (buf, payload) -> {
                 buf.writeDouble(payload.mana());
                 buf.writeDouble(payload.maxMana());
-                buf.writeVarInt(payload.aura());
-                buf.writeVarInt(payload.maxAura());
+                buf.writeVarInt(payload.battleQi());
+                buf.writeVarInt(payload.maxBattleQi());
                 buf.writeBoolean(payload.exhausted());
                 buf.writeDouble(payload.overchargeSafeRatio());
             },

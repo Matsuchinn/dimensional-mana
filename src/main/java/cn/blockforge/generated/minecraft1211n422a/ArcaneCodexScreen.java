@@ -473,8 +473,8 @@ public final class ArcaneCodexScreen extends Screen {
         drawStatusRow(graphics, leftX, y += 18, "gui.dimensional_mana.status.mana",
                 format(ClientManaState.mana()) + " / " + format(ClientManaState.maxMana()),
                 "gui.dimensional_mana.source.mana");
-        drawStatusRow(graphics, leftX, y += 18, "gui.dimensional_mana.status.aura",
-                ClientManaState.aura() + " / " + ClientManaState.maxAura(), "gui.dimensional_mana.source.aura");
+        drawStatusRow(graphics, leftX, y += 18, "gui.dimensional_mana.status.battle_qi",
+                ClientManaState.battleQi() + " / " + ClientManaState.maxBattleQi(), "gui.dimensional_mana.source.battle_qi");
         drawStatusRow(graphics, leftX, y += 18, "gui.dimensional_mana.status.affinity",
                 String.format("%.3f", ClientProgressState.affinity()), "gui.dimensional_mana.source.affinity");
         drawStatusRow(graphics, leftX, y += 18, "gui.dimensional_mana.status.concentration",

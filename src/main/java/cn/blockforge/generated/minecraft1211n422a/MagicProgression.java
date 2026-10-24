@@ -20,7 +20,7 @@ public final class MagicProgression {
 
     public enum Skill {
         MANA("mana", "gui.dimensional_mana.skill.mana"),
-        AURA("aura", "gui.dimensional_mana.skill.aura"),
+        BATTLE_QI("battle_qi", "gui.dimensional_mana.skill.battle_qi"),
         SPELL_RESISTANCE("spell_resistance", "gui.dimensional_mana.skill.spell_resistance"),
         SPELL_POWER("spell_power", "gui.dimensional_mana.skill.spell_power"),
         SPELL_HASTE("spell_haste", "gui.dimensional_mana.skill.spell_haste"),
@@ -286,8 +286,8 @@ public final class MagicProgression {
         return 1.0 + get(player).skill(Skill.MANA) * 0.02;
     }
 
-    public static double maxAuraMultiplier(Player player) {
-        return 1.0 + get(player).skill(Skill.AURA) * 0.02;
+    public static double maxBattleQiMultiplier(Player player) {
+        return 1.0 + get(player).skill(Skill.BATTLE_QI) * 0.02;
     }
 
     private static Snapshot getWithoutInit(Player player) {
@@ -323,7 +323,19 @@ public final class MagicProgression {
 
     private static CompoundTag tagRaw(Player player) {
         ManaData.init(player);
-        return player.getPersistentData().getCompound(ROOT);
+        CompoundTag root = player.getPersistentData().getCompound(ROOT);
+        migrateLegacySkillIds(root);
+        return root;
+    }
+
+    /** 旧存档把斗气技能存成 aura，改名 battle_qi 后原地搬家，已投入的技能点不会重置。 */
+    private static void migrateLegacySkillIds(CompoundTag root) {
+        if (!root.contains(SKILLS)) return;
+        CompoundTag skills = root.getCompound(SKILLS);
+        if (!skills.contains("aura")) return;
+        if (!skills.contains("battle_qi")) skills.putInt("battle_qi", skills.getInt("aura"));
+        skills.remove("aura");
+        root.put(SKILLS, skills);
     }
 
     private MagicProgression() {}

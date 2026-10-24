@@ -1,0 +1,135 @@
+{
+  "type": "minecraft:entity",
+  "random_sequence": "dimensional_mana:entities/goblin_warrior",
+  "pools": [
+    {
+      "rolls": {
+        "type": "minecraft:uniform",
+        "min": 1,
+        "max": 2
+      },
+      "bonus_rolls": 0,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:rough_cloth_helmet"
+        },
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:rough_cloth_chestplate"
+        },
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:rough_cloth_leggings"
+        },
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:rough_cloth_boots"
+        },
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:rough_iron_helmet"
+        },
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:rough_iron_chestplate"
+        },
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:rough_iron_leggings"
+        },
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:rough_iron_boots"
+        },
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:crude_iron_cleaver"
+        },
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:crude_iron_axe"
+        },
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:rough_buckler"
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "bonus_rolls": 0,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:goblin_cloth_scrap",
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 1,
+                "max": 2
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "bonus_rolls": 0,
+      "entries": [
+        {
+          "type": "minecraft:empty",
+          "weight": 55
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:iron_ingot",
+          "weight": 25,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 1,
+                "max": 2
+              }
+            }
+          ]
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:coal",
+          "weight": 20,
+          "functions": [
+            {
+              "function": "minecraft:set_count",
+              "count": {
+                "type": "minecraft:uniform",
+                "min": 1,
+                "max": 3
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "bonus_rolls": 0,
+      "entries": [
+        {
+          "type": "minecraft:empty",
+          "weight": 92
+        },
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:goblin_clan_crest",
+          "weight": 8
+        }
+      ]
+    }
+  ]
+}

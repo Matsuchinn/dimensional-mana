@@ -50,7 +50,13 @@ public record SpellActionPayload(String action, String spellId, int slot) implem
                 // 主手持魔法大师披风时按 Shift+O：切换“施法生成魔素凝聚球”功能。
                 case "toggle_orb" -> MagicCloakItem.toggleOrb(player);
                 // 静止时按住 Alt+Z：消耗魔素凝聚斗气（每 10 刻 1 点）
-                case "condense_aura" -> ManaData.condenseAura(player);
+                case "condense_battle_qi" -> ManaData.condenseBattleQi(player);
+                // 斗气招架：长按右键进入姿态、松开退出、姿态下按左键弹反。
+                case "parry_begin" -> BattleQiParry.begin(player);
+                case "parry_end" -> BattleQiParry.end(player);
+                case "parry_attempt" -> BattleQiParry.attempt(player);
+                // 佩戴专业鉴定眼镜时按 V：消耗魔素释放一次半径 32 格的魔力雷达扫描。
+                case "appraisal_scan" -> ProfessionalAppraisalSystem.scan(player);
                 default -> { }
             }
         }));

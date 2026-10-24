@@ -2,6 +2,9 @@
   "replace": false,
   "values": [
     "dimensional_mana:appraisal_glasses",
-    "dimensional_mana:arcane_codex"
+    "dimensional_mana:professional_appraisal_glasses",
+    "dimensional_mana:arcane_codex",
+    "dimensional_mana:seal_blindfold",
+    "dimensional_mana:angel_crown"
   ]
 }

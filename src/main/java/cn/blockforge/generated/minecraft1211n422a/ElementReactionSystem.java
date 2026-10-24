@@ -123,7 +123,11 @@ public final class ElementReactionSystem {
         float reactionDamage = 0.0F;
         switch (reaction) {
             case VAPORIZE -> { damage *= 2.0F; reactionDamage = damage; }
-            case MELT -> { damage *= 1.8F; reactionDamage = damage; }
+            case MELT -> {
+                // 铁傀儡的「融化反应易伤 25%」：在融化反应本身的倍率上再乘一次独立乘区。
+                damage *= (float)(1.8 * (1.0 + MobCombatSystem.reactionVulnerability(target, "melt")));
+                reactionDamage = damage;
+            }
             case OVERLOAD -> {
                 reactionDamage = damage * 2.5F;
                 PENDING_DAMAGE.add(new PendingAreaDamage(caster.getUUID(), target.getUUID(), server(target), reactionDamage, now + 1));
@@ -168,10 +172,13 @@ public final class ElementReactionSystem {
             }
             case MIRE -> {
                 reactionDamage = damage;
-                timedModifier(target, Attributes.MOVEMENT_SPEED, MIRE_SPEED, -0.60,
-                        AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, 100);
-                timedModifier(target, Attributes.JUMP_STRENGTH, MIRE_JUMP, -0.50,
-                        AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, 100);
+                // 雨靴：泥沼的减速与跳跃压制都挂不上，反应本身的伤害照常结算。
+                if (!RainBootsItem.worn(target)) {
+                    timedModifier(target, Attributes.MOVEMENT_SPEED, MIRE_SPEED, -0.60,
+                            AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, 100);
+                    timedModifier(target, Attributes.JUMP_STRENGTH, MIRE_JUMP, -0.50,
+                            AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, 100);
+                }
             }
             case SPREAD -> SPREADING.put(target.getUUID(), new TimedCasterState(caster.getUUID(), now + 60, now + 20, false));
             case SMELT -> {
@@ -573,8 +580,9 @@ public final class ElementReactionSystem {
 
     private static void attach(LivingEntity target, ElementType element, int ticks) {
         Holder<MobEffect> effect = GeneratedMod.elementEffect(element);
+        int adjusted = targetAttachmentTicks(target, element, ticks);
         MobEffectInstance old = target.getEffect(effect);
-        int duration = old == null ? ticks : Math.max(old.getDuration(), ticks);
+        int duration = old == null ? adjusted : Math.max(old.getDuration(), adjusted);
         target.addEffect(new MobEffectInstance(effect, duration, 0, false, true, true));
     }
 
@@ -582,7 +590,19 @@ public final class ElementReactionSystem {
     private static void replace(LivingEntity target, ElementType element, int ticks) {
         remove(target, element);
         Holder<MobEffect> effect = GeneratedMod.elementEffect(element);
-        target.addEffect(new MobEffectInstance(effect, Math.max(1, ticks), 0, false, true, true));
+        target.addEffect(new MobEffectInstance(effect,
+                Math.max(1, targetAttachmentTicks(target, element, ticks)), 0, false, true, true));
+    }
+
+    /**
+     * 附着真正落到目标身上时的时长。
+     *
+     * <p>{@link #attachmentTicks} 算的是「施法者」的加成（元素戒指），这里再算「目标」的减免：
+     * 穿着雨靴的玩家自己受到的水元素附着减半，别的元素、别的生物都不受影响。</p>
+     */
+    private static int targetAttachmentTicks(LivingEntity target, ElementType element, int ticks) {
+        float multiplier = RainBootsItem.attachmentMultiplier(target, element);
+        return multiplier == 1.0F ? ticks : Math.max(1, Math.round(ticks * multiplier));
     }
 
     private static void remove(LivingEntity target, ElementType element) {
@@ -747,6 +767,31 @@ public final class ElementReactionSystem {
         if (until <= 0 || now < until) return;
         for (AttributeInstance instance : target.getAttributes().getSyncableAttributes()) instance.removeModifier(id);
         target.getPersistentData().remove(key);
+    }
+
+    /**
+     * 雨靴：把身上已经挂着的泥沼减速摘掉。
+     *
+     * <p>包含两部分：水 + 土反应给的两条属性修正（移速 -60%、跳跃 -50%），
+     * 以及土泥沼法术留下的「土泥沼」效果（它自带 -50% 移速与跳跃压制）。
+     * 穿着雨靴时每刻调用一次，所以战斗中临时换上也能立刻生效。</p>
+     */
+    public static void stripMudSlow(LivingEntity living) {
+        if (living == null || living.level().isClientSide) return;
+        // 便宜的先判断：没挂过泥沼修正、身上也没有土泥沼效果就什么都不做，不用每刻遍历属性。
+        net.minecraft.nbt.CompoundTag data = living.getPersistentData();
+        boolean hasMire = data.contains(modifierKey(MIRE_SPEED)) || data.contains(modifierKey(MIRE_JUMP));
+        boolean hasMud = living.hasEffect(NewSpellContent.MUD);
+        if (!hasMire && !hasMud) return;
+        if (hasMire) {
+            for (AttributeInstance instance : living.getAttributes().getSyncableAttributes()) {
+                if (instance.getModifier(MIRE_SPEED) != null) instance.removeModifier(MIRE_SPEED);
+                if (instance.getModifier(MIRE_JUMP) != null) instance.removeModifier(MIRE_JUMP);
+            }
+            data.remove(modifierKey(MIRE_SPEED));
+            data.remove(modifierKey(MIRE_JUMP));
+        }
+        if (hasMud) living.removeEffect(NewSpellContent.MUD);
     }
 
     private static void reactionParticles(LivingEntity target, int color) {

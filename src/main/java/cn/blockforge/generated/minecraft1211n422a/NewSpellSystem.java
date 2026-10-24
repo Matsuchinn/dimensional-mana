@@ -284,11 +284,17 @@ public final class NewSpellSystem {
     }
     public static boolean cannotCast(LivingEntity target) {
         // 奥术沉默期间任何法术都放不出来，包括正在维持的持续法术。
+        // 反魔法区域（末影龙特殊龙息落点）内同样无法施法。
         return immobilized(target) || target.hasEffect(NewSpellContent.TINNITUS)
-                || target.hasEffect(NewSpellContent.ARCANE_SILENCE);
+                || target.hasEffect(NewSpellContent.ARCANE_SILENCE)
+                || MobCombatSystem.inAntiMagicZone(target);
     }
     public static void effect(LivingEntity entity, Holder<MobEffect> effect, int ticks) {
         entity.addEffect(new MobEffectInstance(effect, ticks, 0, false, true, true));
+    }
+    /** 带等级的版本：招架破绽会把「见切」的加成写进效果等级里。 */
+    public static void effect(LivingEntity entity, Holder<MobEffect> effect, int ticks, int amplifier) {
+        entity.addEffect(new MobEffectInstance(effect, ticks, Math.max(0, amplifier), false, true, true));
     }
     public static void control(LivingEntity caster, LivingEntity target, Holder<MobEffect> effect, int ticks) {
         effect(target, effect, ticks);
@@ -2151,8 +2157,10 @@ public final class NewSpellSystem {
                 SpellEnvironmentSystem.freezeNear(level, z.center);
             }
             for (LivingEntity victim : enemies(owner, z.center, z.radius)) {
-                if (z.spell == SpellDefinition.MUD_SWAMP) effect(victim, NewSpellContent.MUD, 7);
-                else if (z.spell == SpellDefinition.ICE_SLIDE) {
+                if (z.spell == SpellDefinition.MUD_SWAMP) {
+                    // 雨靴：泥沼减速免疫，连效果都不挂，省得每刻挂上又被摘掉。
+                    if (!RainBootsItem.worn(victim)) effect(victim, NewSpellContent.MUD, 7);
+                } else if (z.spell == SpellDefinition.ICE_SLIDE) {
                     if (victim.getY() >= z.center.y - 0.4 && victim.getY() <= z.center.y + 0.9) effect(victim, NewSpellContent.FROST, 7);
                 } else if (z.spell == SpellDefinition.PLAGUE) {
                     effect(victim, NewSpellContent.PLAGUE, 7);
@@ -2383,6 +2391,8 @@ public final class NewSpellSystem {
         }
         // 万剑归一：近战命中就直接召剑雨，不再依赖伤害事件，别的模组把伤害改成 0 也不会哑火。
         if (event.isCanceled()) return;
+        // 招架余势（完美招架后的下一击）：这一刻的伤害已经按满蓄力算完了，这里只是把它收回去。
+        if (event.getEntity() instanceof ServerPlayer attacker) BattleQiParry.consumeFullPower(attacker);
         if (event.getEntity() instanceof ServerPlayer player && event.getTarget() instanceof LivingEntity victim)
             MetalSpells.onMeleeHit(player, victim);
     }

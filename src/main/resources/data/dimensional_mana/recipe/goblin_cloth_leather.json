@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["SSS", "SSS", "SSS"],
+  "key": {
+    "S": {"item": "dimensional_mana:goblin_cloth_scrap"}
+  },
+  "result": {"id": "minecraft:leather", "count": 1}
+}

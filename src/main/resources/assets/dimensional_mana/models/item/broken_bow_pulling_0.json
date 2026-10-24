@@ -1,0 +1,6 @@
+{
+  "parent": "dimensional_mana:item/broken_bow_base",
+  "textures": {
+    "layer0": "dimensional_mana:item/broken_bow_pulling_0"
+  }
+}

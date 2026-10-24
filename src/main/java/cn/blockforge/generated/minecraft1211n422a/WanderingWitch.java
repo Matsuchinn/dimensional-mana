@@ -2,7 +2,6 @@ package cn.blockforge.generated.minecraft1211n422a;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.DifficultyInstance;
@@ -59,13 +58,14 @@ public final class WanderingWitch extends Witch {
     }
 
     /**
-     * 原版女巫会把带 witch_resistant_to 标签的魔法伤害压到 15%。游离女巫本身也是
-     * 施法生物，但不能因此近乎免疫本模组法术；仅跳过女巫特有减免，其余保护仍交给
-     * LivingEntity 的标准伤害流程处理。
+     * 和原版女巫一样：带 witch_resistant_to 标签的魔法伤害只吃 15%（减免 85%）。
+     *
+     * <p>游离女巫虽然自己也会施法，但它终究是女巫一系的守卫，玩家不该用一发火球
+     * 就把祭坛守卫秒掉。这里刻意不再绕过 {@link Witch} 的减免，让护甲、抗性、
+     * 斗气等其余标准减伤流程照常叠加。</p>
      */
     @Override
     protected float getDamageAfterMagicAbsorb(DamageSource source, float damage) {
-        if (source.is(DamageTypeTags.WITCH_RESISTANT_TO)) return damage;
         return super.getDamageAfterMagicAbsorb(source, damage);
     }
 

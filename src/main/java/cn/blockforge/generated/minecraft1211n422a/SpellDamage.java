@@ -138,7 +138,7 @@ public final class SpellDamage {
      */
     public static boolean hitSonic(Level level, LivingEntity caster, LivingEntity target, float amount) {
         if (target == null || target.level().isClientSide || amount <= 0.0F) return false;
-        SpellAttributes.SpellCriticalResult critical = SpellAttributes.rollSpellCritical(caster, amount);
+        SpellAttributes.SpellCriticalResult critical = SpellAttributes.rollSpellCritical(caster, target, amount);
         float finalAmount = MagicEtchingSystem.amplifySpellDamage(caster, critical.damage())
                 * (float)ResonanceCore.transparencyDamageMultiplier(caster);
         if (finalAmount <= 0.0F) return false;
@@ -190,7 +190,7 @@ public final class SpellDamage {
         if (target == null || target.level().isClientSide) return false;
         float total = Math.max(0.0F, spellAmount) + Math.max(0.0F, secondaryAmount);
         if (total <= 0.0F) return false;
-        SpellAttributes.SpellCriticalResult critical = SpellAttributes.rollSpellCritical(caster, total);
+        SpellAttributes.SpellCriticalResult critical = SpellAttributes.rollSpellCritical(caster, target, total);
         float resolved = MagicEtchingSystem.amplifySpellDamage(caster, critical.damage())
                 * (float)ResonanceCore.transparencyDamageMultiplier(caster);
         float scale = resolved / total;
@@ -220,7 +220,7 @@ public final class SpellDamage {
         float finalAmount = amount;
         if (caster != null && applyCasterModifiers) {
             // 暴击是一次额外伤害：本次伤害 = 原伤害 + 原伤害 * 暴击伤害倍率。
-            critical = SpellAttributes.rollSpellCritical(caster, finalAmount);
+            critical = SpellAttributes.rollSpellCritical(caster, target, finalAmount);
             finalAmount = MagicEtchingSystem.amplifySpellDamage(caster, critical.damage());
             // 共鸣核心的元素共鸣期间“魔力通透”：全部法术伤害再吃 15% 独立乘区。
             finalAmount *= (float)ResonanceCore.transparencyDamageMultiplier(caster);

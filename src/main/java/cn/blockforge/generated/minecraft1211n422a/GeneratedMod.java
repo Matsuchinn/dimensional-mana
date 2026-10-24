@@ -98,6 +98,11 @@ public final class GeneratedMod {
             net.minecraft.world.level.storage.loot.predicates.LootItemConditionType> ELEMENTAL_SLIME_LOOT_CHANCE =
             LOOT_CONDITIONS.register("elemental_slime_loot_chance", () -> new net.minecraft.world.level.storage.loot.predicates.LootItemConditionType(
                     ElementalSlimeLootChance.CODEC));
+    /** 沼泽群系结构宝箱的判定：剧毒指环只在这里开得出来。 */
+    public static final DeferredHolder<net.minecraft.world.level.storage.loot.predicates.LootItemConditionType,
+            net.minecraft.world.level.storage.loot.predicates.LootItemConditionType> SWAMP_BIOME_CONDITION =
+            LOOT_CONDITIONS.register("swamp_biome", () -> new net.minecraft.world.level.storage.loot.predicates.LootItemConditionType(
+                    SwampBiomeCondition.CODEC));
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MOD_ID);
     public static final DeferredRegister<Feature<?>> FEATURES = DeferredRegister.create(BuiltInRegistries.FEATURE, MOD_ID);
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES = DeferredRegister.create(Registries.ENTITY_TYPE, MOD_ID);
@@ -107,14 +112,24 @@ public final class GeneratedMod {
     public static final Map<String, DeferredBlock<Block>> MOD_BLOCKS = new LinkedHashMap<>();
     public static final Map<String, DeferredItem<? extends Item>> MOD_ITEMS = new LinkedHashMap<>();
     public static final List<String> MAGIC_ITEM_IDS = new ArrayList<>();
+    /** 「次元物语：自然」创造页的摆放顺序：刷怪蛋 → 粗糙装备 → 掉落物。 */
+    public static final List<String> NATURAL_ITEM_IDS = new ArrayList<>();
+    /** 「次元物语：斗气」创造页的摆放顺序：饰品 → 手册 → 技能书。 */
+    public static final List<String> QI_ITEM_IDS = new ArrayList<>();
     public static final List<String> FRAGMENT_GRADES = List.of("lesser", "medium", "advanced", "supreme", "special");
     public static final List<String> SCHOOL_IDS = List.of("destruction", "protection", "healing", "blessing", "curse",
             "control", "summon", "movement", "divination", "psychic", "time", "space", "chaos");
     private static final Map<ElementType, DeferredHolder<MobEffect, MobEffect>> ELEMENT_EFFECTS = new EnumMap<>(ElementType.class);
     private static final Map<ElementalSlimeVariant, DeferredHolder<EntityType<?>, EntityType<ElementalSlime>>> ELEMENTAL_SLIMES =
             new EnumMap<>(ElementalSlimeVariant.class);
+    private static final Map<GoblinVariant, DeferredHolder<EntityType<?>, EntityType<Goblin>>> GOBLINS =
+            new EnumMap<>(GoblinVariant.class);
 
     public static final DeferredHolder<MobEffect, MobEffect> MANA_EXHAUSTION = EFFECTS.register("mana_exhaustion", ManaExhaustionEffect::new);
+    public static final DeferredHolder<MobEffect, MobEffect> BATTLE_QI_COLLAPSE = EFFECTS.register("battle_qi_collapse", BattleQiCollapseEffect::new);
+    public static final DeferredHolder<MobEffect, MobEffect> MAGIC_RETORT = EFFECTS.register("magic_retort", MagicRetortEffect::new);
+    public static final DeferredHolder<MobEffect, MobEffect> WARDEN_MARK = EFFECTS.register("warden_mark", WardenMarkEffect::new);
+    public static final DeferredHolder<MobEffect, MobEffect> ANCIENT_CURSE = EFFECTS.register("ancient_curse", AncientCurseEffect::new);
     public static final DeferredHolder<MobEffect, MobEffect> ARCANE_SURGE = EFFECTS.register("arcane_surge", ArcaneSurgeEffect::new);
     public static final DeferredHolder<MobEffect, MobEffect> ARCANE_ATTACHMENT = EFFECTS.register("arcane_attachment",
             () -> new ArcaneReactionEffect(MobEffectCategory.NEUTRAL, 0xC85BFF));
@@ -199,6 +214,11 @@ public final class GeneratedMod {
     public static final DeferredHolder<StructurePieceType, StructurePieceType> ANCIENT_MAGIC_ALTAR_PIECE =
             STRUCTURE_PIECES.register("ancient_magic_altar", () -> (StructurePieceType.ContextlessType)AncientMagicAltarPiece::new);
 
+    public static final DeferredHolder<StructureType<?>, StructureType<GoblinCampStructure>> GOBLIN_CAMP_STRUCTURE_TYPE =
+            STRUCTURE_TYPES.register("goblin_camp", () -> () -> GoblinCampStructure.CODEC);
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> GOBLIN_CAMP_PIECE =
+            STRUCTURE_PIECES.register("goblin_camp", () -> (StructurePieceType.ContextlessType)GoblinCampPiece::new);
+
     public static final DeferredHolder<FluidType, FluidType> PURE_LIQUID_MANA_TYPE = FLUID_TYPES.register("pure_liquid_mana",
             () -> new FluidType(FluidType.Properties.create()
                     .descriptionId("fluid.dimensional_mana.pure_liquid_mana")
@@ -277,6 +297,9 @@ public final class GeneratedMod {
         MOD_ITEMS.put("appraisal_orb", ITEMS.register("appraisal_orb", () -> new AppraisalOrbItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE))));
         MOD_ITEMS.put("mana_detector", ITEMS.register("mana_detector", () -> new ManaDetectorItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE))));
         MOD_ITEMS.put("appraisal_glasses", ITEMS.register("appraisal_glasses", () -> new AppraisalGlassesItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE))));
+        // 专业鉴定眼镜：基础鉴定眼镜的升级版，装在同一个「首饰」栏位，靠魔素续航换取深层数据与雷达。
+        MOD_ITEMS.put("professional_appraisal_glasses", ITEMS.register("professional_appraisal_glasses",
+                () -> new ProfessionalAppraisalGlassesItem(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC))));
         MOD_ITEMS.put("arcane_codex", ITEMS.register("arcane_codex", () -> new ArcaneCodexItem(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC))));
         MOD_ITEMS.put("skill_repentance_stone", ITEMS.register("skill_repentance_stone", () -> new SkillRepentanceStoneItem(new Item.Properties().stacksTo(16).rarity(Rarity.EPIC))));
         simple("rough_magic_component", Rarity.RARE);
@@ -353,6 +376,32 @@ public final class GeneratedMod {
         // 元素强化戒指：由奥术元素结晶戒指在锻造台上升级而来，全元素通用加成。
         magicItem(MagicEquipment.ENHANCE_RING, ITEMS.register(MagicEquipment.ENHANCE_RING, () ->
                 new ElementEnhanceRingItem(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC))));
+        // 二十三类新饰品（按梯度 t3→t0 注册，创造页里也按这个顺序排）与三件合成材料。
+        for (Relics.Relic relic : Relics.ALL) {
+            magicItem(relic.id(), ITEMS.register(relic.id(), () -> new RelicAccessoryItem(
+                    relicProperties(relic), relic)));
+        }
+        // 雨靴：脚饰栏位，工作台用两个水元素结晶粉末 + 两个皮革合成。
+        magicItem(RainBootsItem.ITEM_ID, ITEMS.register(RainBootsItem.ITEM_ID,
+                () -> new RainBootsItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON))));
+        // 斗气系：手套与护符两件饰品、战斗手册一本、技能书三本（走自己的创造页）。
+        MOD_ITEMS.put(BattleQiGloveItem.ITEM_ID, ITEMS.register(BattleQiGloveItem.ITEM_ID,
+                () -> new BattleQiGloveItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON))));
+        MOD_ITEMS.put(SwordsmanCharmItem.ITEM_ID, ITEMS.register(SwordsmanCharmItem.ITEM_ID,
+                () -> new SwordsmanCharmItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE))));
+        MOD_ITEMS.put(CombatCodexItem.ITEM_ID, ITEMS.register(CombatCodexItem.ITEM_ID,
+                () -> new CombatCodexItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE))));
+        for (QiProgression.Ability ability : QiProgression.Ability.values()) {
+            MOD_ITEMS.put(ability.manualId(), ITEMS.register(ability.manualId(), () -> new QiSkillBookItem(
+                    new Item.Properties().stacksTo(1).rarity(Rarity.RARE), ability)));
+        }
+        QI_ITEM_IDS.add(BattleQiGloveItem.ITEM_ID);
+        QI_ITEM_IDS.add(SwordsmanCharmItem.ITEM_ID);
+        QI_ITEM_IDS.add(CombatCodexItem.ITEM_ID);
+        for (QiProgression.Ability ability : QiProgression.Ability.values()) QI_ITEM_IDS.add(ability.manualId());
+        simple("purification_core", Rarity.RARE);
+        simple("radiant_core", Rarity.EPIC);
+        simple("omniscient_page", Rarity.EPIC);
         // 两副施法手套：迅捷（速度/冷却）与大师（暴击/必定暴击）。
         for (CastingGloveItem.Kind kind : CastingGloveItem.Kind.values()) {
             magicItem(kind.itemId(), ITEMS.register(kind.itemId(), () -> new CastingGloveItem(
@@ -371,6 +420,7 @@ public final class GeneratedMod {
                 new DeferredSpawnEggItem(ADVENTURER, 0x3D536C, 0xC59A55,
                         new Item.Properties().rarity(Rarity.RARE))));
         registerElementalSlimes();
+        registerGoblins();
     }
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ManaFurnaceBlockEntity>> MANA_FORGE_BLOCK_ENTITY = BLOCK_ENTITIES.register(
@@ -388,7 +438,8 @@ public final class GeneratedMod {
             .title(Component.translatable("itemGroup.dimensional_mana.main"))
             .icon(() -> new ItemStack(MOD_ITEMS.get("special_mana_crystal").get()))
             .displayItems((parameters, output) -> MOD_ITEMS.forEach((id, item) -> {
-                if (!MAGIC_ITEM_IDS.contains(id)) output.accept(item.get());
+                if (!MAGIC_ITEM_IDS.contains(id) && !NATURAL_ITEM_IDS.contains(id)
+                        && !QI_ITEM_IDS.contains(id)) output.accept(item.get());
             })).build());
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> MAGIC_CREATIVE_TAB = CREATIVE_TABS.register("magic", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.dimensional_mana.magic"))
@@ -398,6 +449,29 @@ public final class GeneratedMod {
                 if (item != null) output.accept(item.get());
             }))
             .build());
+
+    /** 「次元物语：斗气」：物理 / 剑士路线的全部物品。 */
+    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> BATTLE_QI_CREATIVE_TAB = CREATIVE_TABS.register(
+            "battle_qi", () -> CreativeModeTab.builder()
+                    .title(Component.translatable("itemGroup.dimensional_mana.battle_qi"))
+                    .icon(() -> new ItemStack(MOD_ITEMS.get(CombatCodexItem.ITEM_ID).get()))
+                    .displayItems((parameters, output) -> {
+                        for (String id : QI_ITEM_IDS) {
+                            DeferredItem<? extends Item> item = MOD_ITEMS.get(id);
+                            if (item != null) output.accept(item.get());
+                        }
+                    }).build());
+
+    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> NATURAL_CREATIVE_TAB = CREATIVE_TABS.register(
+            "natural", () -> CreativeModeTab.builder()
+                    .title(Component.translatable("itemGroup.dimensional_mana.natural"))
+                    .icon(() -> new ItemStack(MOD_ITEMS.get(GoblinVariant.WARRIOR.spawnEggId()).get()))
+                    .displayItems((parameters, output) -> {
+                        for (String id : NATURAL_ITEM_IDS) {
+                            DeferredItem<? extends Item> item = MOD_ITEMS.get(id);
+                            if (item != null) output.accept(item.get());
+                        }
+                    }).build());
 
     /**
      * 魔法创造页的摆放顺序：先按大类分组——饰品 → 法杖 → 刷怪蛋 → 其余
@@ -416,8 +490,18 @@ public final class GeneratedMod {
         return ordered;
     }
 
+    /** 饰品的物品属性：t0/t1 带附魔光效，其余按梯度给普通稀有度。 */
+    private static Item.Properties relicProperties(Relics.Relic relic) {
+        Item.Properties properties = new Item.Properties().stacksTo(1).rarity(relic.tier().rarity());
+        return relic.tier().glint()
+                ? properties.component(net.minecraft.core.component.DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true)
+                : properties;
+    }
+
     /** 饰品的细分排序值；不是饰品就返回 -1。 */
     private static int accessoryRank(String id) {
+        for (Relics.Relic relic : Relics.ALL) if (relic.id().equals(id)) return 35;
+        if (RainBootsItem.ITEM_ID.equals(id)) return 36;
         if (id.endsWith("_element_ring")) return 10;
         if (MagicEquipment.ENHANCE_RING.equals(id)) return 20;
         if ("wisdom_ring".equals(id)) return 30;
@@ -437,6 +521,11 @@ public final class GeneratedMod {
 
     public static EntityType<ElementalSlime> elementalSlimeType(ElementalSlimeVariant variant) {
         return ELEMENTAL_SLIMES.get(variant).get();
+    }
+
+    public static EntityType<Goblin> goblinType(GoblinVariant variant) {
+        DeferredHolder<EntityType<?>, EntityType<Goblin>> holder = GOBLINS.get(variant);
+        return holder == null ? null : holder.get();
     }
 
     /** 变种 -> 音效事件。只有实体 tick 里会调用，那时枚举早已初始化。 */
@@ -472,10 +561,12 @@ public final class GeneratedMod {
         EFFECTS.register(modBus);
         POTIONS.register(modBus);
         SpellSounds.register();
+        GoblinSounds.register();
         SOUNDS.register(modBus);
         MENUS.register(modBus);
         BLOCK_ENTITIES.register(modBus);
         RECIPE_TYPES.register(modBus);
+        RoughEquipment.ARMOR_MATERIALS.register(modBus);
         RECIPE_SERIALIZERS.register(modBus);
         LOOT_CONDITIONS.register(modBus);
         CREATIVE_TABS.register(modBus);
@@ -485,9 +576,13 @@ public final class GeneratedMod {
         STRUCTURE_PIECES.register(modBus);
         SpellAttributes.ATTRIBUTES.register(modBus);
         modBus.addListener(this::createEntityAttributes);
+        modBus.addListener((net.neoforged.fml.event.config.ModConfigEvent.Reloading event) -> MobProfile.invalidate());
+        modBus.addListener((net.neoforged.fml.event.config.ModConfigEvent.Loading event) -> MobProfile.invalidate());
         modBus.addListener(SpellAttributes::attachToLivingEntities);
         modBus.addListener(ManaSyncPayload::register);
         modBus.addListener(AppraisalSyncPayload::register);
+        modBus.addListener(ProAppraisalPayload::register);
+        modBus.addListener(ManaRadarPayload::register);
         modBus.addListener(ProgressSyncPayload::register);
         modBus.addListener(UpgradeSkillPayload::register);
         modBus.addListener(OpenCodexGuidePayload::register);
@@ -503,6 +598,11 @@ public final class GeneratedMod {
         modBus.addListener(SteleResearchActionPayload::register);
         modBus.addListener(ResonanceCoreSyncPayload::register);
         modBus.addListener(MagicToggleSyncPayload::register);
+        modBus.addListener(ParryFeedbackPayload::register);
+        modBus.addListener(ParryStancePayload::register);
+        modBus.addListener(QiSyncPayload::register);
+        modBus.addListener(QiActionPayload::register);
+        modBus.addListener(OpenCombatCodexPayload::register);
         if (FMLEnvironment.dist == Dist.CLIENT) ClientModEvents.register(modBus);
         ManaEvents events = new ManaEvents();
         FragmentLootEvents fragmentLoot = new FragmentLootEvents();
@@ -510,6 +610,11 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(ManaCommands::register);
         NeoForge.EVENT_BUS.addListener(ManaFurnaceRecipeBridge::onServerStarted);
         NeoForge.EVENT_BUS.addListener(ManaFurnaceRecipeBridge::onDatapackSync);
+        // 末影龙复活：死亡拦截排在其它死亡处理之前，取消之后别人才看得到 isCanceled()。
+        NeoForge.EVENT_BUS.addListener(DragonRevival::onLivingDeath);
+        NeoForge.EVENT_BUS.addListener(DragonRevival::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(DragonRevival::onHeal);
+        NeoForge.EVENT_BUS.addListener(DragonRevival::onEntityTick);
         NeoForge.EVENT_BUS.addListener(events::onJoin);
         NeoForge.EVENT_BUS.addListener(events::onLogin);
         NeoForge.EVENT_BUS.addListener(events::onLogout);
@@ -518,13 +623,33 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(events::onClone);
         NeoForge.EVENT_BUS.addListener(events::onVanillaExperience);
         NeoForge.EVENT_BUS.addListener(events::onWake);
+        NeoForge.EVENT_BUS.addListener(CriticalSystem::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(events::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(RelicEffects::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(RelicEffects::onDamagePre);
+        NeoForge.EVENT_BUS.addListener(RelicEffects::onDamagePost);
+        NeoForge.EVENT_BUS.addListener(RelicEffects::onHeal);
+        NeoForge.EVENT_BUS.addListener(RelicEffects::onEffectApplicable);
+        NeoForge.EVENT_BUS.addListener(RelicEffects::onEffectAdded);
+        NeoForge.EVENT_BUS.addListener(RelicEffects::onLivingChangeTarget);
+        NeoForge.EVENT_BUS.addListener(RelicEffects::onVillagerInteract);
+        NeoForge.EVENT_BUS.addListener(RelicEffects::onItemEntityJoin);
+        NeoForge.EVENT_BUS.addListener(RelicEffects::onLevelTick);
+        NeoForge.EVENT_BUS.addListener(RelicLoot::addChestLoot);
+        NeoForge.EVENT_BUS.addListener(RelicLoot::addEntityDrops);
         NeoForge.EVENT_BUS.addListener(events::onDamagePre);
         NeoForge.EVENT_BUS.addListener(events::onStruckByLightning);
         NeoForge.EVENT_BUS.addListener(events::onBlockBreak);
         NeoForge.EVENT_BUS.addListener(events::onTick);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::tickLevel);
         NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::tickLevel);
+        NeoForge.EVENT_BUS.addListener(GoblinSpawning::tickLevel);
+        NeoForge.EVENT_BUS.addListener(GoblinSpawning::onChunkLoad);
+        NeoForge.EVENT_BUS.addListener(GoblinSpawning::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(GoblinSpawning::onLivingDeath);
+        NeoForge.EVENT_BUS.addListener(RoughGearEvents::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(RoughGearEvents::onShieldBlock);
+        NeoForge.EVENT_BUS.addListener(RoughGearEvents::onAnvilUpdate);
         NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::onExplosion);
         NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::onSound);
@@ -542,6 +667,11 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::useEntity);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::useEntitySpecific);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::breakBlock);
+        // 斗气招架：姿态下右键不再交互；左键弹反由客户端发动作包、服务端结算。
+        NeoForge.EVENT_BUS.addListener(BattleQiParry::onRightClickItem);
+        NeoForge.EVENT_BUS.addListener(BattleQiParry::onRightClickBlock);
+        NeoForge.EVENT_BUS.addListener(BattleQiParry::onEntityInteract);
+        NeoForge.EVENT_BUS.addListener(BattleQiParry::onEntityInteractSpecific);
         NeoForge.EVENT_BUS.addListener(WoodSpells::onExplode);
         NeoForge.EVENT_BUS.addListener(this::addTalentScrollChestLoot);
         NeoForge.EVENT_BUS.addListener(fragmentLoot::addChestLoot);
@@ -551,11 +681,20 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(accessoryLoot::onLootTableLoad);
         NeoForge.EVENT_BUS.addListener(accessoryLoot::onVillagerTrades);
         NeoForge.EVENT_BUS.addListener(events::onDamagePost);
+        NeoForge.EVENT_BUS.addListener(events::onDeath);
+        NeoForge.EVENT_BUS.addListener(events::onHeal);
+        NeoForge.EVENT_BUS.addListener(events::onEffectAdded);
+        NeoForge.EVENT_BUS.addListener(events::onMobEntityJoin);
+        NeoForge.EVENT_BUS.addListener(events::onExplosion);
+        NeoForge.EVENT_BUS.addListener(events::onLevelTick);
         NeoForge.EVENT_BUS.addListener(ElementPlating::onTooltip);
         NeoForge.EVENT_BUS.addListener(ElementPlating::onGrindstonePlace);
         NeoForge.EVENT_BUS.addListener(ElementPlating::onGrindstoneTake);
         NeoForge.EVENT_BUS.addListener(this::brewingRecipes);
         container.registerConfig(ModConfig.Type.COMMON, ManaConfig.SPEC, "dimensional_mana-common.toml");
+        container.registerConfig(ModConfig.Type.COMMON, MobCombatConfig.SPEC, "dimensional_mana-mobs.toml");
+        container.registerConfig(ModConfig.Type.COMMON, AppraisalConfig.SPEC, "dimensional_mana-appraisal.toml");
+        container.registerConfig(ModConfig.Type.COMMON, CriticalConfig.SPEC, "dimensional_mana-critical.toml");
         if (FMLEnvironment.dist == Dist.CLIENT) {
             container.registerConfig(ModConfig.Type.CLIENT, ClientManaConfig.SPEC, "dimensional_mana-client.toml");
         }
@@ -569,6 +708,8 @@ public final class GeneratedMod {
         event.put(NewSpellContent.VINE_SERVANT.get(), SpellSummon.attributes(10, 3, 0.18, 0, 0).build());
         event.put(NewSpellContent.FLYING_SWORD.get(), SpellSummon.attributes(20, 10, 0.05, 20, 8).build());
         event.put(NewSpellContent.POISON_TENTACLE.get(), SpellSummon.attributes(8, 4, 0, 0, 0).build());
+        for (GoblinVariant variant : GoblinVariant.values())
+            event.put(goblinType(variant), Goblin.createAttributes().build());
         // 寒冰傀儡：35 生命、与雪傀儡一致的 0.2 移速，本身不近战，只射冰锥。
         event.put(NewSpellContent.FROST_GOLEM.get(), SpellSummon.attributes(35, 0, 0.2, 0, 0).build());
     }
@@ -590,6 +731,46 @@ public final class GeneratedMod {
                     new DeferredSpawnEggItem(type, variant.color() & 0xFFFFFF,
                             (variant.color() ^ 0x6A4C7A) & 0xFFFFFF, new Item.Properties().rarity(Rarity.RARE))));
         }
+    }
+
+    /** 五种哥布林：实体、刷怪蛋，以及整套粗糙装备与掉落物。 */
+    private static void registerGoblins() {
+        for (GoblinVariant variant : GoblinVariant.values()) {
+            String entityId = variant.entityId();
+            DeferredHolder<EntityType<?>, EntityType<Goblin>> type = ENTITY_TYPES.register(entityId, () ->
+                    EntityType.Builder.<Goblin>of((entityType, level) -> new Goblin(entityType, level, variant),
+                                    MobCategory.MONSTER)
+                            .sized(variant.width(), variant.height()).clientTrackingRange(10)
+                            .build(MOD_ID + ":" + entityId));
+            GOBLINS.put(variant, type);
+            DeferredItem<Item> egg = ITEMS.register(variant.spawnEggId(), () -> new DeferredSpawnEggItem(type,
+                    spawnEggPrimary(variant), spawnEggSecondary(variant),
+                    new Item.Properties().rarity(Rarity.UNCOMMON)));
+            MOD_ITEMS.put(variant.spawnEggId(), egg);
+            NATURAL_ITEM_IDS.add(variant.spawnEggId());
+        }
+        RoughEquipment.register();
+        NATURAL_ITEM_IDS.addAll(RoughEquipment.ORDER);
+    }
+
+    private static int spawnEggPrimary(GoblinVariant variant) {
+        return switch (variant) {
+            case YOUNG -> 0x8FA659;
+            case WARRIOR -> 0x6E8C3A;
+            case ARCHER -> 0x7A9A46;
+            case SHAMAN -> 0x5C8C6E;
+            case CHIEF -> 0x3F5A24;
+        };
+    }
+
+    private static int spawnEggSecondary(GoblinVariant variant) {
+        return switch (variant) {
+            case YOUNG -> 0x3B4A12;
+            case WARRIOR -> 0x4B3A22;
+            case ARCHER -> 0x2F4F2F;
+            case SHAMAN -> 0x6A3FA0;
+            case CHIEF -> 0x8B1A1A;
+        };
     }
 
     private static void simple(String name, Rarity rarity) {

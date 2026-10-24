@@ -1,0 +1,11 @@
+{
+  "parent": "dimensional_mana:item/rough_buckler_base",
+  "overrides": [
+    {
+      "predicate": {
+        "blocking": 1
+      },
+      "model": "dimensional_mana:item/rough_buckler_blocking"
+    }
+  ]
+}

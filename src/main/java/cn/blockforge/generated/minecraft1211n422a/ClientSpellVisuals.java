@@ -28,6 +28,8 @@ public final class ClientSpellVisuals {
     private static ClientLevel currentLevel;
     /** 飞剑风声的节流时间戳，避免一轮十六把剑把音效叠成噪音。 */
     private static long swordSoundAt;
+    /** 结界射线每波射击只响一发的节流时间戳。 */
+    private static long barrierShotAt = Long.MIN_VALUE;
     private static final int MAX_EFFECTS = 96;
     /** 水柱每 2 刻收到一次新端点，客户端用同样长的时间插值过去，转向才顺滑。 */
     private static final int BEAM_SMOOTH_TICKS = 2;
@@ -335,7 +337,13 @@ public final class ClientSpellVisuals {
             return;
         }
         if (data.phase() == SpellVisualPayload.SHOT) {
-            // 每个法阵每三秒才开一次火，射击声留白，避免九个法阵把音效叠成噪音。
+            // 每一波射击都要有声音：九个法阵同一刻开火时只响一发，避免叠成噪音，
+            // 但下一波（三秒后）必须还能听见，所以按游戏刻节流而不是永久留白。
+            long shotAt = mc.level.getGameTime();
+            if (shotAt != barrierShotAt) {
+                barrierShotAt = shotAt;
+                play(mc.level, "spell_arcane_ray", data.start(), 0.45F, 1.45F);
+            }
             addVisual(data, spell, mc.level);
             return;
         }
@@ -438,7 +446,8 @@ public final class ClientSpellVisuals {
     private static boolean alive(Entity entity) { return entity != null && entity.isAlive(); }
     private static boolean finite(Vec3 v) { return Double.isFinite(v.x) && Double.isFinite(v.y) && Double.isFinite(v.z); }
     private static void resetLevel(ClientLevel level) {
-        if (currentLevel != level) { ACTIVE.clear(); SOUND_CUES.clear(); swordSoundAt = 0; currentLevel = level; }
+        if (currentLevel != level) { ACTIVE.clear(); SOUND_CUES.clear(); swordSoundAt = 0;
+            barrierShotAt = Long.MIN_VALUE; currentLevel = level; }
     }
 
     public static void render(RenderLevelStageEvent event) {

@@ -196,7 +196,10 @@ public enum SpellDefinition {
     }
 
     public int adjustedCastTicks(net.minecraft.world.entity.LivingEntity caster) {
-        return Math.max(1, (int)Math.ceil(castTicks / Math.max(0.05, SpellAttributes.hasteMultiplier(caster))));
+        double haste = Math.max(0.05, SpellAttributes.hasteMultiplier(caster));
+        // 侦探护符：预言学派的前摇 -50%。
+        double relic = RelicEffects.divinationCastMultiplier(caster, this);
+        return Math.max(1, (int)Math.ceil(castTicks / haste * relic));
     }
 
     public static SpellDefinition byId(String id) {

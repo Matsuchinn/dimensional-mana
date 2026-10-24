@@ -1,4 +1,5 @@
 {
   "replace": false,
-  "values": ["dimensional_mana:aura_coating", "dimensional_mana:aura_breaker"]
+  "values": ["dimensional_mana:aura_coating", "dimensional_mana:aura_breaker",
+    "dimensional_mana:goblin_slayer", "dimensional_mana:slime_slayer"]
 }

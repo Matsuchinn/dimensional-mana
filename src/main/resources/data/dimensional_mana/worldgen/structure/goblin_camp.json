@@ -1,0 +1,7 @@
+{
+  "type": "dimensional_mana:goblin_camp",
+  "biomes": "#dimensional_mana:has_structure/goblin_camp",
+  "step": "surface_structures",
+  "spawn_overrides": {},
+  "terrain_adaptation": "beard_thin"
+}

@@ -9,8 +9,8 @@ public final class ClientAppraisalState {
     private static double maxHealth;
     private static double mana;
     private static double maxMana;
-    private static int aura;
-    private static int maxAura;
+    private static int battleQi;
+    private static int maxBattleQi;
 
     public static void update(AppraisalSyncPayload payload) {
         glassesActive = payload.glassesActive();
@@ -21,8 +21,8 @@ public final class ClientAppraisalState {
         maxHealth = payload.maxHealth();
         mana = payload.mana();
         maxMana = payload.maxMana();
-        aura = payload.aura();
-        maxAura = payload.maxAura();
+        battleQi = payload.battleQi();
+        maxBattleQi = payload.maxBattleQi();
     }
 
     public static boolean glassesActive() { return glassesActive; }
@@ -33,8 +33,8 @@ public final class ClientAppraisalState {
     public static double maxHealth() { return maxHealth; }
     public static double mana() { return mana; }
     public static double maxMana() { return maxMana; }
-    public static int aura() { return aura; }
-    public static int maxAura() { return maxAura; }
+    public static int battleQi() { return battleQi; }
+    public static int maxBattleQi() { return maxBattleQi; }
 
     private ClientAppraisalState() {}
 }

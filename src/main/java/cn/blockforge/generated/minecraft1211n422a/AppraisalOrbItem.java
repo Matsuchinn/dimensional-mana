@@ -23,7 +23,7 @@ public final class AppraisalOrbItem extends Item {
             player.displayClientMessage(Component.literal(String.format("魔素：%.1f / %.1f", d.mana(), d.maxMana())).withStyle(ChatFormatting.AQUA), false);
             player.displayClientMessage(Component.literal(String.format("亲和：%.3f",
                     d.affinity() * MagicEquipment.affinityMultiplier(player))).withStyle(ChatFormatting.BLUE), false);
-            player.displayClientMessage(Component.literal("斗气：" + d.aura() + " / " + d.maxAura()).withStyle(ChatFormatting.GOLD), false);
+            player.displayClientMessage(Component.literal("斗气：" + d.battleQi() + " / " + d.maxBattleQi()).withStyle(ChatFormatting.GOLD), false);
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }

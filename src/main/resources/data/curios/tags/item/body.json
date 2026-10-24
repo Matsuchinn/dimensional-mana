@@ -1,8 +1,6 @@
 {
   "replace": false,
   "values": [
-    "dimensional_mana:magic_focus_cloak",
-    "dimensional_mana:damage_deflect_cloak",
-    "dimensional_mana:magic_master_cloak"
+    "dimensional_mana:bloodthirst_brooch"
   ]
 }

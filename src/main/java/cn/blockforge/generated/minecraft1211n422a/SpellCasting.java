@@ -163,10 +163,10 @@ public final class SpellCasting {
             return;
         }
         if (ManaCheats.manaCostEnabled(player)
-                && ManaData.get(player).mana() < SpellAttributes.reducedManaCost(player, spell.manaCost())) {
+                && ManaData.get(player).mana() < SpellAttributes.reducedManaCost(player, spell)) {
             // 不能只拦截施法：设定要求失败时耗尽剩余魔素并进入魔力枯竭。
             // spendMana 的失败分支会原子地完成清空与枯竭状态，避免目标法术绕过该机制。
-            ManaData.spendMana(player, spell.manaCost());
+            ManaData.spendMana(player, SpellAttributes.reducedManaCost(player, spell));
             failInsufficientMana(player, spell);
             return;
         }
@@ -305,7 +305,7 @@ public final class SpellCasting {
             }
         }
         // 必须先得到服务器扣费成功的结果，才能创建施法状态；失败绝不能进入读条或结算。
-        if (!ManaData.spendMana(player, spell.manaCost())) {
+        if (!ManaData.spendMana(player, SpellAttributes.reducedManaCost(player, spell))) {
             failInsufficientMana(player, spell);
             return;
         }
@@ -314,7 +314,8 @@ public final class SpellCasting {
         if (player.getRandom().nextFloat() < MagicEquipment.manaOrbChance(player)) ManaOrb.summon(player);
         // 大师施法手套：每 5 次施法为一个小循环，第 5 次的伤害必定暴击。
         CastingGloveItem.onCast(player);
-        int total = spell.adjustedCastTicks(player);
+        // 魔法抗拒：每层把施法前摇延长 1 秒，最多 10 层。
+        int total = spell.adjustedCastTicks(player) + MobSkills.retortStacks(player) * MagicRetortEffect.TICKS_PER_STACK;
         CASTS.put(player.getUUID(), new CastState(spell, List.copyOf(chosen), total, total));
         if (spell == SpellDefinition.MULTI_BARRIER_RAY)
             player.displayClientMessage(Component.translatable("message.dimensional_mana.barrier_charging"), true);
@@ -376,7 +377,7 @@ public final class SpellCasting {
         shatter(player, spell);
         player.displayClientMessage(Component.translatable("message.dimensional_mana.spell_no_mana",
                 Component.translatable(spell.translationKey()),
-                String.format(java.util.Locale.ROOT, "%.1f", SpellAttributes.reducedManaCost(player, spell.manaCost()))), true);
+                String.format(java.util.Locale.ROOT, "%.1f", SpellAttributes.reducedManaCost(player, spell))), true);
         syncMana(player);
         SpellSyncPayload.send(player);
     }
@@ -393,7 +394,7 @@ public final class SpellCasting {
     public static void syncMana(ServerPlayer player) {
         ManaData.Snapshot mana = ManaData.get(player);
         net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player,
-                new ManaSyncPayload(mana.mana(), mana.maxMana(), mana.aura(), mana.maxAura(),
+                new ManaSyncPayload(mana.mana(), mana.maxMana(), mana.battleQi(), mana.maxBattleQi(),
                         mana.exhaustionTicks() > 0, ManaConfig.OVERCHARGE_SAFE_RATIO.get()));
     }
 
@@ -917,6 +918,18 @@ public final class SpellCasting {
         return true;
     }
 
+    /** 无条件打断当前读条；反魔法区域与魔法抗拒用。 */
+    public static void interruptCast(LivingEntity caster) {
+        CastState interrupted = CASTS.remove(caster.getUUID());
+        if (interrupted == null) return;
+        if (caster instanceof ServerPlayer player) {
+            shatter(player, interrupted.spell());
+            player.displayClientMessage(Component.translatable("message.dimensional_mana.cast_interrupted",
+                    Component.translatable(interrupted.spell().translationKey())), true);
+            SpellSyncPayload.send(player);
+        }
+    }
+
     /** 退出、死亡和换维度时不允许旧读条在新世界继续结算。 */
     public static void clearTransientState(ServerPlayer player) {
         NewSpellSystem.clear(player);
@@ -939,6 +952,8 @@ public final class SpellCasting {
         ManaCheats.clear();
         NO_FALL.clear(); FLAME_BLESSED.clear(); THORNED.clear(); HEALS.clear(); SECONDARY_DAMAGE.clear();
         ElementReactionSystem.clearAll();
+        MobSkills.clearAll();
+        MobCombatSystem.clearAll();
         NewSpellSystem.clearAll();
         SpellEnvironmentSystem.clearAll();
     }
@@ -972,7 +987,8 @@ public final class SpellCasting {
         Map<SpellDefinition, Long> mine = COOLDOWNS.computeIfAbsent(player.getUUID(), ignored -> new HashMap<>());
         if (!ManaCheats.cooldownEnabled(player)) { mine.remove(spell); return; }
         // 迅捷施法手套：法术冷却 -15%（独立乘区，追加的石块延长同样一并减免）。
-        int adjusted = (int)Math.round(Math.max(0, ticks) * MagicEquipment.cooldownMultiplier(player));
+        int adjusted = (int)Math.round(Math.max(0, ticks) * MagicEquipment.cooldownMultiplier(player)
+                * RelicEffects.divinationCooldownMultiplier(player, spell));
         mine.put(spell, player.level().getGameTime() + Math.max(0, adjusted));
     }
 

@@ -37,8 +37,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
     private static final int PANEL_HEIGHT = 268;
     private static final int RECIPE_ENTRIES_PER_PAGE = 18;
     private static final List<GuidePage> PAGES = List.of(
-            page("basics", 8), page("crystals", 9), page("furnaces", 9), page("processor", 11),
-            page("grinding", 8), page("potions", 9), page("exploration", 8), page("enchantments", 8),
+            page("basics", 8), page("crystals", 9), page("furnaces", 9), page("processor", 12),
+            page("grinding", 8), page("potions", 9), page("exploration", 8), page("enchantments", 12),
             page("magic_equipment", 12), page("progression", 9), page("magic_system", 8), page("schools", 13),
             page("media", 8), page("element_talents", 5), page("element_talents_more", 5),
             page("implemented_spells", 6), page("implemented_spells_more", 6),
@@ -52,7 +52,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
             page("new_arcane_chaos", 9), page("new_nature_tree", 9), page("new_metal_ward_swords", 8),
             page("new_light_shelter_rift", 9), page("new_poison_pair", 9), page("new_sound_bells", 9),
             page("achievements", 9), page("adventurer_trade", 9), page("element_plating", 10),
-            page("furnace_link", 9)
+            page("furnace_link", 9), page("mob_combat", 11), page("relics", 18), page("battle_qi_parry", 8)
     );
     /**
      * 章节里按 id 引用页面，不再手写页码：页码一改就容易对不上，之前“元素镀层”那一页
@@ -74,9 +74,10 @@ public final class ArcaneCodexGuideScreen extends Screen {
             chapter("devices", Items.CRAFTING_TABLE, "furnaces", "processor", "furnace_link", "element_plating"),
             chapter("recipes", Items.KNOWLEDGE_BOOK),
             chapter("bestiary", Items.SLIME_BALL),
-            chapter("exploration", Items.SPYGLASS, "exploration", "living_casters", "adventurer_trade"),
+            chapter("exploration", Items.SPYGLASS, "exploration", "living_casters", "adventurer_trade",
+                    "mob_combat"),
             chapter("progression", Items.EXPERIENCE_BOTTLE, "enchantments", "magic_equipment", "progression",
-                    "insight", "achievements")
+                    "insight", "achievements", "relics", "battle_qi_parry")
     );
     private static final ResourceLocation ARCANE_ICON = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID,
             "textures/mob_effect/arcane_attachment.png");
@@ -559,6 +560,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
         if (id.equals("adventurer_trade")) return Items.EMERALD;
         if (id.equals("element_plating")) return Items.SHIELD;
         if (id.equals("furnace_link")) return Items.FURNACE;
+        if (id.equals("mob_combat")) return Items.WITHER_SKELETON_SKULL;
         return Items.ENCHANTED_BOOK;
     }
 
@@ -791,7 +793,10 @@ public final class ArcaneCodexGuideScreen extends Screen {
 
     private static void addProcessorRecipes(List<GuideRecipe> recipes) {
         // 直接使用真正的加工配方，不再手抄一份，以免新材料在机器里可做、书里却漏掉。
-        for (CrystalProcessorBlockEntity.ProcessRecipe process : CrystalProcessorBlockEntity.recipes()) {
+        // 附魔书升级按书里的等级动态判定，这里补上 5 条示意配方，方便在书里查到。
+        List<CrystalProcessorBlockEntity.ProcessRecipe> all = new ArrayList<>(CrystalProcessorBlockEntity.recipes());
+        all.addAll(EnchantBookUpgrade.previews());
+        for (CrystalProcessorBlockEntity.ProcessRecipe process : all) {
             if (process.outputs().isEmpty()) continue;
             boolean shaped = !process.pattern().isEmpty();
             List<GuideIngredient> ingredients = new ArrayList<>();
@@ -805,10 +810,11 @@ public final class ArcaneCodexGuideScreen extends Screen {
             int recipeWidth = shaped ? 3 : Math.min(3, Math.max(1, ingredients.size()));
             int recipeHeight = shaped ? 3 : Math.max(1, (ingredients.size() + recipeWidth - 1) / recipeWidth);
             CrystalProcessorBlockEntity.OutputStack output = process.outputs().getFirst();
-            ItemStack result = guideStack(output.itemId(), output.count());
+            ItemStack result = CrystalProcessorBlockEntity.stackOf(output, guideRegistries());
             if (result.isEmpty()) continue;
             List<ItemStack> byproducts = process.outputs().stream().skip(1)
-                    .map(extra -> guideStack(extra.itemId(), extra.count())).filter(stack -> !stack.isEmpty()).toList();
+                    .map(extra -> CrystalProcessorBlockEntity.stackOf(extra, guideRegistries()))
+                    .filter(stack -> !stack.isEmpty()).toList();
             String seconds = String.format(Locale.ROOT, "%g", process.processTicks() / 20.0);
             // 秒数保持简短，避免说明超出配方框。
             if (process.processTicks() % 20 == 0) seconds = Integer.toString(process.processTicks() / 20);
@@ -829,6 +835,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
         if (id.equals("#special_element_fragment")) return specialElementFragments(count);
         if (id.equals("#special_school_fragment")) return specialSchoolFragments(count);
         if (id.equals("#element_crystal")) return anyElementCrystal();
+        if (id.equals("#element_crystal_dust")) return anyElementCrystalDust(count);
+        if (id.equals(EnchantBookUpgrade.BOOK_PREVIEW)) return single(new ItemStack(Items.ENCHANTED_BOOK, count));
         if (id.equals("#enchanted_book_thorns_3")) return single(new ItemStack(Items.ENCHANTED_BOOK, count));
         // 以后再加新占位也不会崩溃：认不出来就当成“材料未知”的空格子。
         if (id.startsWith("#")) return new GuideIngredient(List.of());
@@ -871,6 +879,21 @@ public final class ArcaneCodexGuideScreen extends Screen {
         for (ElementType element : ElementType.values()) addChoice(choices, modStack(element.id() + "_element_crystal", 1));
         addChoice(choices, modStack(MagicEquipment.ARCANE + "_element_crystal", 1));
         return new GuideIngredient(List.copyOf(choices));
+    }
+
+    /** 任意一种元素结晶粉末（十二色，含奥术）。 */
+    private static GuideIngredient anyElementCrystalDust(int count) {
+        List<ItemStack> choices = new ArrayList<>();
+        for (ElementalSlimeVariant variant : ElementalSlimeVariant.values()) {
+            addChoice(choices, modStack(variant.powderId(), count));
+        }
+        return new GuideIngredient(List.copyOf(choices));
+    }
+
+    /** 图鉴里拼附魔书产物用；没有世界时返回 null，产物退化成普通附魔书，界面不会崩。 */
+    private static net.minecraft.core.HolderLookup.Provider guideRegistries() {
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        return minecraft == null || minecraft.level == null ? null : minecraft.level.registryAccess();
     }
 
     private static GuideIngredient anyElementOrSchoolFragment() {

@@ -4,7 +4,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
@@ -15,9 +17,11 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
+import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -99,6 +103,33 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
                 changed = true;
                 if (processor.processProgress >= plating.ticks()) {
                     processor.finishPlating(plating);
+                    if (!processor.isRemoved()) {
+                        level.playSound(null, pos, GeneratedMod.CRYSTAL_PROCESS_COMPLETE.get(), SoundSource.BLOCKS, 0.9F,
+                                0.92F + level.random.nextFloat() * 0.16F);
+                    }
+                }
+            } else if (processor.processProgress != 0) {
+                processor.processProgress = 0;
+                changed = true;
+            }
+            if (changed) processor.setChanged();
+            return;
+        }
+        // 附魔书升级：中心放附魔书、四周 8 格各 1 份同档魔晶粉，书里那一档的附魔 +1 级。
+        EnchantBookUpgrade.Job upgrade = EnchantBookUpgrade.findJob(processor.items);
+        if (upgrade != null) {
+            if (!processor.activeRecipe.equals(upgrade.recipeId())) {
+                processor.activeRecipe = upgrade.recipeId();
+                processor.processProgress = 0;
+                processor.processTotal = upgrade.ticks();
+                changed = true;
+            }
+            if (processor.mana >= upgrade.manaCost()) {
+                processor.processTotal = upgrade.ticks();
+                processor.processProgress++;
+                changed = true;
+                if (processor.processProgress >= upgrade.ticks()) {
+                    processor.finishBookUpgrade(upgrade);
                     if (!processor.isRemoved()) {
                         level.playSound(null, pos, GeneratedMod.CRYSTAL_PROCESS_COMPLETE.get(), SoundSource.BLOCKS, 0.9F,
                                 0.92F + level.random.nextFloat() * 0.16F);
@@ -227,7 +258,17 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
             ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
             return id.getNamespace().equals(GeneratedMod.MOD_ID) && stack.getItem() instanceof ElementCrystalItem;
         }
+        // 任意一种元素结晶粉末（含奥术），史莱姆杀手附魔书用。
+        if ("#element_crystal_dust".equals(ingredientId)) {
+            for (ElementalSlimeVariant variant : ElementalSlimeVariant.values()) {
+                var holder = GeneratedMod.MOD_ITEMS.get(variant.powderId());
+                if (holder != null && stack.is(holder.get())) return true;
+            }
+            return false;
+        }
         if ("#enchanted_book_thorns_3".equals(ingredientId)) return isThornsThreeBook(stack);
+        // 任意一本斗气技能书：剑士护符的配方材料。
+        if ("#qi_skill_book".equals(ingredientId)) return stack.getItem() instanceof QiSkillBookItem;
         Item item = ingredientItem(ingredientId);
         return item != null && stack.is(item);
     }
@@ -275,12 +316,32 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
         NonNullList<ItemStack> simulated = NonNullList.withSize(OUTPUT_END - OUTPUT_START, ItemStack.EMPTY);
         for (int i = OUTPUT_START; i < OUTPUT_END; i++) simulated.set(i - OUTPUT_START, items.get(i).copy());
         for (OutputStack output : recipe.outputs()) {
-            Item item = outputItem(output.itemId());
-            if (item == null || !insertInto(simulated, new ItemStack(item, output.count()))) {
+            ItemStack produced = stackOf(output, registries());
+            if (produced.isEmpty() || !insertInto(simulated, produced)) {
                 return false;
             }
         }
         return true;
+    }
+
+    /** 当前世界的数据包注册表；方块还没放进世界时返回 {@code null}。 */
+    private HolderLookup.Provider registries() {
+        return level == null ? null : level.registryAccess();
+    }
+
+    /**
+     * 把配方产物变成真实物品栈。附魔书会按 {@code enchantmentId} 写上 {@code stored_enchantments}，
+     * 这样加工台产出的就是货真价实的「哥布林杀手 I」书，而不是空白附魔书。
+     */
+    public static ItemStack stackOf(OutputStack output, HolderLookup.Provider registries) {
+        Item item = outputItem(output.itemId());
+        if (item == null) return ItemStack.EMPTY;
+        if (output.enchantmentId() == null || registries == null) return new ItemStack(item, output.count());
+        var holder = registries.lookupOrThrow(Registries.ENCHANTMENT)
+                .get(ResourceKey.create(Registries.ENCHANTMENT,
+                        ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, output.enchantmentId())));
+        if (holder.isEmpty()) return new ItemStack(item, output.count());
+        return EnchantedBookItem.createForEnchantment(new EnchantmentInstance(holder.get(), output.enchantmentLevel()));
     }
 
     private static boolean insertInto(NonNullList<ItemStack> outputs, ItemStack addition) {
@@ -313,8 +374,8 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
             for (IngredientStack ingredient : recipe.inputs()) consumeIngredient(ingredient.itemId(), ingredient.count());
         }
         for (OutputStack output : recipe.outputs()) {
-            Item item = outputItem(output.itemId());
-            if (item != null) insertOutput(new ItemStack(item, output.count()));
+            ItemStack produced = stackOf(output, registries());
+            if (!produced.isEmpty()) insertOutput(produced);
         }
         if ("special_mana_crystal".equals(recipe.primaryProduct()) && level != null && level.random.nextFloat() < 0.005F) {
             ElementType element = ElementType.values()[level.random.nextInt(ElementType.values().length)];
@@ -341,6 +402,21 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
             items.get(slot).shrink(1);
         }
         ElementPlating.addLayer(items.get(4), job.elementId());
+        mana = Math.max(0, mana - job.manaCost());
+        processProgress = 0;
+        activeRecipe = "";
+        setChanged();
+    }
+
+    /**
+     * 完成一次附魔书升级：中心那本书原地升 1 级，四周 8 份魔晶粉各消耗 1 份。
+     */
+    private void finishBookUpgrade(EnchantBookUpgrade.Job job) {
+        for (int slot = INPUT_START; slot < INPUT_END; slot++) {
+            if (slot == 4) continue;
+            items.get(slot).shrink(1);
+        }
+        EnchantBookUpgrade.apply(items.get(4), job);
         mana = Math.max(0, mana - job.manaCost());
         processProgress = 0;
         activeRecipe = "";
@@ -450,7 +526,31 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
         addElementRingRecipes(recipes);
         addEquipmentRecipes(recipes);
         addAncientMaterialRecipes(recipes);
+        addRelicRecipes(recipes);
+        addQiRecipes(recipes);
+        addEnchantBookRecipes(recipes);
         return List.copyOf(recipes);
+    }
+
+    /**
+     * 两种「杀手」附魔书的 1 级配方。
+     *
+     * <p>哥布林杀手 I：哥布林族徽 ×1 + 书 ×1，100 魔素 / 4 秒；
+     * 史莱姆杀手 I：任意元素结晶粉末 ×5 + 粘液球 ×1 + 书 ×1，100 魔素 / 4 秒。
+     * 书的升级不写进固定配方表，由 {@link EnchantBookUpgrade#findJob} 按中间那本书的等级动态判定。</p>
+     */
+    private static void addEnchantBookRecipes(List<ProcessRecipe> recipes) {
+        recipes.add(new ProcessRecipe("book_goblin_slayer",
+                List.of(new IngredientStack(RoughEquipment.CLAN_CREST, 1),
+                        new IngredientStack("minecraft:book", 1)), List.of(),
+                List.of(new OutputStack("minecraft:enchanted_book", 1, "goblin_slayer", 1)),
+                100, 80, "enchanted_book"));
+        recipes.add(new ProcessRecipe("book_slime_slayer",
+                List.of(new IngredientStack("#element_crystal_dust", 5),
+                        new IngredientStack("minecraft:slime_ball", 1),
+                        new IngredientStack("minecraft:book", 1)), List.of(),
+                List.of(new OutputStack("minecraft:enchanted_book", 1, "slime_slayer", 1)),
+                100, 80, "enchanted_book"));
     }
 
     /**
@@ -480,6 +580,74 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
                 MagicEquipment.MAGIC_SILK, "minecraft:netherite_ingot", MagicEquipment.MAGIC_SILK),
                 List.of(new OutputStack(ResonanceCore.ITEM_ID, 1)),
                 10_000, 3_000, ResonanceCore.ITEM_ID, false));
+    }
+
+    /**
+     * 六件需要合成的饰品与两件前置材料。
+     *
+     * <p>九宫格写到能体现配方「形状」的档位，物品数量多的走 counts 配方；
+     * 每件的魔素与耗时按需求原样写（秒 × 20 = 刻）。</p>
+     */
+    private static void addRelicRecipes(List<ProcessRecipe> recipes) {
+        // 万解手镯：3 个净化核心，200 魔素，15 秒。
+        recipes.add(new ProcessRecipe("relic_serene_bracelet",
+                List.of(new IngredientStack("purification_core", 3)), List.of(),
+                List.of(new OutputStack("serene_bracelet", 1)), 200, 300, "serene_bracelet"));
+        // 法师之喜：奥术元素结晶 ×1 + 特级魔晶粉 ×3 + 魔法绸缎 ×2，800 魔素，30 秒。
+        recipes.add(new ProcessRecipe("relic_mage_delight",
+                List.of(new IngredientStack(MagicEquipment.crystalId(MagicEquipment.ARCANE), 1),
+                        new IngredientStack("special_mana_crystal_dust", 3),
+                        new IngredientStack(MagicEquipment.MAGIC_SILK, 2)),
+                List.of(), List.of(new OutputStack("mage_delight", 1)), 800, 600, "mage_delight"));
+        // 万用腰带：特级魔晶 ×2 + 精致魔构件 ×1 + 魔法绸缎 ×4，5000 魔素，60 秒。
+        recipes.add(new ProcessRecipe("relic_universal_belt",
+                List.of(new IngredientStack("special_mana_crystal", 2),
+                        new IngredientStack("refined_magic_component", 1),
+                        new IngredientStack(MagicEquipment.MAGIC_SILK, 4)),
+                List.of(), List.of(new OutputStack("universal_belt", 1)), 5_000, 1_200, "universal_belt"));
+        // 赤灵护符：五种头颅各一个 + 龙首，3000 魔素，45 秒。
+        recipes.add(new ProcessRecipe("relic_scarlet_spirit_charm",
+                List.of(new IngredientStack("minecraft:skeleton_skull", 1),
+                        new IngredientStack("minecraft:zombie_head", 1),
+                        new IngredientStack("minecraft:creeper_head", 1),
+                        new IngredientStack("minecraft:wither_skeleton_skull", 1),
+                        new IngredientStack("minecraft:piglin_head", 1),
+                        new IngredientStack("minecraft:dragon_head", 1)),
+                List.of(), List.of(new OutputStack("scarlet_spirit_charm", 1)), 3_000, 900,
+                "scarlet_spirit_charm"));
+        // 天使王冠：光辉核心 ×1 + 附魔金苹果 ×1 + 金块 ×7，8000 魔素，90 秒。
+        recipes.add(new ProcessRecipe("relic_angel_crown",
+                List.of(new IngredientStack("radiant_core", 1),
+                        new IngredientStack("minecraft:enchanted_golden_apple", 1),
+                        new IngredientStack("minecraft:gold_block", 7)),
+                List.of(), List.of(new OutputStack("angel_crown", 1)), 8_000, 1_800, "angel_crown"));
+        // 全知全能残片：3 张全知残页，10000 魔素，120 秒。
+        recipes.add(new ProcessRecipe("relic_omniscient_shard",
+                List.of(new IngredientStack("omniscient_page", 3)), List.of(),
+                List.of(new OutputStack("omniscient_shard", 1)), 10_000, 2_400, "omniscient_shard"));
+    }
+
+    /**
+     * 斗气系的两件饰品。
+     *
+     * <p>斗气手套：魔力布匹 ×2 + 金锭 ×3 + 粗制魔构件 ×1 + 中级魔晶 ×1，600 魔素，20 秒。
+     * 剑士护符：金锭 ×2 + 铁块 ×2 + 任意一本斗气技能书，800 魔素，30 秒。
+     * 两者都按材料数量匹配，九宫格里怎么摆都行。</p>
+     */
+    private static void addQiRecipes(List<ProcessRecipe> recipes) {
+        recipes.add(new ProcessRecipe("qi_battle_gloves",
+                List.of(new IngredientStack(MagicEquipment.MAGIC_CLOTH, 2),
+                        new IngredientStack("minecraft:gold_ingot", 3),
+                        new IngredientStack("rough_magic_component", 1),
+                        new IngredientStack("medium_mana_crystal", 1)),
+                List.of(), List.of(new OutputStack(BattleQiGloveItem.ITEM_ID, 1)),
+                600, 400, BattleQiGloveItem.ITEM_ID));
+        recipes.add(new ProcessRecipe("qi_swordsman_charm",
+                List.of(new IngredientStack("minecraft:gold_ingot", 2),
+                        new IngredientStack("minecraft:iron_block", 2),
+                        new IngredientStack("#qi_skill_book", 1)),
+                List.of(), List.of(new OutputStack(SwordsmanCharmItem.ITEM_ID, 1)),
+                800, 600, SwordsmanCharmItem.ITEM_ID));
     }
 
     /**
@@ -572,6 +740,17 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
                 "minecraft:amethyst_shard", "supreme_mana_crystal", "minecraft:amethyst_shard"),
                 MagicEquipment.MANA_AMULET, 400, 200));
         addGloveRecipes(recipes);
+        // 专业鉴定眼镜：原版鉴定眼镜做基底，四角紫水晶碎片提供「透视 / 感知」，
+        // 四边超导魔晶粉末提供高频数据运算，下方通用魔构件把数据整合起来。
+        // 1500 魔素 / 30 秒（600 刻）；副产物返还 2 份紫水晶粉 + 1 份特级魔晶粉。
+        recipes.add(patternRecipe("professional_appraisal_glasses", List.of(
+                "minecraft:amethyst_shard", "superconducting_crystal_dust", "minecraft:amethyst_shard",
+                "superconducting_crystal_dust", "appraisal_glasses", "superconducting_crystal_dust",
+                "minecraft:amethyst_shard", MagicEquipment.UNIVERSAL_COMPONENT, "minecraft:amethyst_shard"),
+                List.of(new OutputStack(ProfessionalAppraisalGlassesItem.ITEM_ID, 1),
+                        new OutputStack("amethyst_dust", 2),
+                        new OutputStack("special_mana_crystal_dust", 1)),
+                1_500, 600, ProfessionalAppraisalGlassesItem.ITEM_ID, false));
     }
 
     /**
@@ -727,7 +906,15 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
     public static List<ProcessRecipe> recipes() { return RECIPES; }
 
     public record IngredientStack(String itemId, int count) { }
-    public record OutputStack(String itemId, int count) { }
+
+    /**
+     * 配方产物。{@code enchantmentId} 非空时产出的是一本带指定附魔的附魔书
+     * （哥布林杀手 / 史莱姆杀手就是这样发出来的）。
+     */
+    public record OutputStack(String itemId, int count, String enchantmentId, int enchantmentLevel) {
+        public OutputStack(String itemId, int count) { this(itemId, count, null, 0); }
+    }
+
     public record ProcessRecipe(String id, List<IngredientStack> inputs, List<String> pattern,
                                 List<OutputStack> outputs, int manaCost, int processTicks,
                                 String primaryProduct, boolean destroysProcessor) {

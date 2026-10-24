@@ -61,6 +61,8 @@ public final class ManaCrystalCaveFeature extends Feature<NoneFeatureConfigurati
         }
 
         decorateInterior(level, random, center, radiusX, radiusY, radiusZ);
+        // 大型洞穴：在纯态液态魔晶池底埋一口宝箱（元素吸收护符与中级魔晶粉的主要来源）。
+        if (large) placeRelicCache(level, random, center, radiusY);
         if (changed > 0) {
             // 这里还在区块生成阶段，不能直接改 ServerLevel 的实体和存档数据；
             // 先把洞穴位置排进队列，等服务器刻、区块加载后再补刷史莱姆。
@@ -68,6 +70,41 @@ public final class ManaCrystalCaveFeature extends Feature<NoneFeatureConfigurati
         }
         return changed > 0;
     }
+
+    /**
+     * 池底宝箱：往下找第一个纯态液态魔晶方块，把箱子放在池子的液面上。
+     *
+     * <p>液面不是一个固定高度——洞穴形状带随机毛边，所以从中心格往下逐格找，
+     * 中心附近找不到就往外挪一格再找。箱子的战利品表在生成阶段就写好，
+     * 第一次打开才确定内容（和原版结构宝箱一致）。</p>
+     */
+    private static void placeRelicCache(WorldGenLevel level, RandomSource random, BlockPos center, int radiusY) {
+        int[][] offsets = {{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {2, 0}, {-2, 0}, {0, 2}, {0, -2}};
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int[] offset : offsets) {
+            for (int depth = 0; depth <= radiusY; depth++) {
+                cursor.set(center.getX() + offset[0], center.getY() - depth, center.getZ() + offset[1]);
+                if (!level.getBlockState(cursor).is(GeneratedMod.PURE_LIQUID_MANA_BLOCK.get())) continue;
+                placeChest(level, random, cursor);
+                return;
+            }
+        }
+    }
+
+    private static void placeChest(WorldGenLevel level, RandomSource random, BlockPos pos) {
+        BlockState chest = Blocks.CHEST.defaultBlockState().setValue(
+                net.minecraft.world.level.block.ChestBlock.FACING,
+                net.minecraft.core.Direction.Plane.HORIZONTAL.getRandomDirection(random));
+        level.setBlock(pos.immutable(), chest, Block.UPDATE_CLIENTS);
+        if (level.getBlockEntity(pos) instanceof net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity container) {
+            container.setLootTable(CACHE_LOOT, random.nextLong());
+        }
+    }
+
+    private static final net.minecraft.resources.ResourceKey<net.minecraft.world.level.storage.loot.LootTable> CACHE_LOOT =
+            net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.LOOT_TABLE,
+                    net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+                            GeneratedMod.MOD_ID, "chests/mana_crystal_cave_cache"));
 
     private static BlockState innerWallState(RandomSource random) {
         int roll = random.nextInt(100);

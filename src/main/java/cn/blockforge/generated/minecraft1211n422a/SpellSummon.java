@@ -252,7 +252,7 @@ public final class SpellSummon extends PathfinderMob {
             summon.owner = player.getUUID(); summon.expiresAt = tentacle ? Long.MAX_VALUE : level.getGameTime() + 2400;
             summon.setHealth(summon.getMaxHealth());
             if (!level.addFreshEntity(summon)) continue;
-            ManaData.setAura(summon, 0);
+            ManaData.setBattleQi(summon, 0);
             if (!tentacle) {
                 CompoundTag roster = roster(player, keyName);
                 for (String key : SetCopy.keys(roster)) if (roster.getLong(key) <= level.getGameTime()) roster.remove(key);

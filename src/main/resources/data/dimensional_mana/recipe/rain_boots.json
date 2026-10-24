@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["P P", "L L"],
+  "key": {
+    "P": {"item": "dimensional_mana:water_element_crystal_dust"},
+    "L": {"item": "minecraft:leather"}
+  },
+  "result": {"id": "dimensional_mana:rain_boots", "count": 1}
+}

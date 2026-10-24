@@ -91,7 +91,7 @@ public final class DimensionalManaJeiCategories {
                 CrystalProcessorBlockEntity.OutputStack output = recipe.outputs().get(index);
                 builder.addOutputSlot(outputX[index], 22)
                         .setOutputSlotBackground()
-                        .addItemStack(outputStack(output.itemId(), output.count()));
+                        .addItemStack(CrystalProcessorBlockEntity.stackOf(output, registries()));
             }
         }
 
@@ -104,10 +104,12 @@ public final class DimensionalManaJeiCategories {
             builder.addText(Component.translatable("jei.dimensional_mana.mana_cost", recipe.manaCost()), 6, 68);
         }
 
-        private static ItemStack outputStack(String id, int count) {
-            return id.startsWith("minecraft:")
-                    ? new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(id)), count)
-                    : new ItemStack(GeneratedMod.MOD_ITEMS.get(id).get(), count);
+        /** 输出产物要能带附魔组件，这里借当前世界（或服务端）的注册表来拼附魔书。 */
+        private static net.minecraft.core.HolderLookup.Provider registries() {
+            net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+            if (minecraft != null && minecraft.level != null) return minecraft.level.registryAccess();
+            var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+            return server == null ? null : server.registryAccess();
         }
 
         private static List<ItemStack> ingredientStacks(String id, int count) {
@@ -155,8 +157,26 @@ public final class DimensionalManaJeiCategories {
                 stacks.add(modStack(MagicEquipment.ARCANE + "_element_crystal"));
                 return stacks;
             }
+            if ("#element_crystal_dust".equals(id)) {
+                List<ItemStack> stacks = new ArrayList<>();
+                for (ElementalSlimeVariant variant : ElementalSlimeVariant.values()) {
+                    var holder = GeneratedMod.MOD_ITEMS.get(variant.powderId());
+                    if (holder != null) stacks.add(new ItemStack(holder.get(), count));
+                }
+                return stacks;
+            }
+            if (EnchantBookUpgrade.BOOK_PREVIEW.equals(id)) {
+                return List.of(new ItemStack(net.minecraft.world.item.Items.ENCHANTED_BOOK, count));
+            }
             if ("#enchanted_book_thorns_3".equals(id)) {
                 return List.of(new ItemStack(net.minecraft.world.item.Items.ENCHANTED_BOOK, count));
+            }
+            if ("#qi_skill_book".equals(id)) {
+                List<ItemStack> stacks = new ArrayList<>();
+                for (QiProgression.Ability ability : QiProgression.Ability.values()) {
+                    stacks.add(modStack(ability.manualId()));
+                }
+                return stacks;
             }
             ItemStack stack = id.startsWith("minecraft:")
                     ? new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(id)), count)

@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/handheld",
+  "textures": {
+    "layer0": "dimensional_mana:item/crude_iron_cleaver"
+  }
+}

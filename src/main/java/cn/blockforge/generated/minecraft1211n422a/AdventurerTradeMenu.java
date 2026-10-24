@@ -110,8 +110,8 @@ public final class AdventurerTradeMenu extends AbstractContainerMenu {
         for (int index = 0; index < OFFER_COUNT; index++) {
             if (index < offers.size()) {
                 AdventurerTrades.Offer offer = offers.get(index);
-                setShown(index * PARTS, offer.cost(0));
-                setShown(index * PARTS + 1, offer.cost(1));
+                setShown(index * PARTS, AdventurerTrades.discounted(owner, offer.cost(0)));
+                setShown(index * PARTS + 1, AdventurerTrades.discounted(owner, offer.cost(1)));
                 setShown(index * PARTS + 2, offer.result());
                 data.set(index * PARTS, offer.remaining());
                 data.set(index * PARTS + 1, offer.maxUses());
@@ -209,7 +209,7 @@ public final class AdventurerTradeMenu extends AbstractContainerMenu {
             ItemStack cost = shownItem(index, part);
             if (!cost.isEmpty()) costs.add(cost);
         }
-        return !costs.isEmpty() && AdventurerTrades.hasCosts(player, costs);
+        return !costs.isEmpty() && AdventurerTrades.hasCosts(player, AdventurerTrades.discounted(player, costs));
     }
 
     /** 只做展示的格子：不能拿、不能放。 */

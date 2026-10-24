@@ -59,6 +59,8 @@ public final class NewSpellContent {
     public static final DeferredHolder<MobEffect, MobEffect> SONIC_BLAST = effect("sonic_blast", false, 0xE997FF);
     /** 魔力通透：共鸣核心触发元素共鸣期间的状态图标，数值加成由 {@link ResonanceCore} 结算。 */
     public static final DeferredHolder<MobEffect, MobEffect> MANA_TRANSPARENCY = effect("mana_transparency", true, 0x8FE6FF);
+    /** 招架破绽：被完美招架眩晕的 1 秒内受到的所有伤害 +75%，不叠加，重复完美招架只刷新时间。 */
+    public static final DeferredHolder<MobEffect, MobEffect> PARRY_VULNERABLE = effect("parry_vulnerable", false, 0xFF6B4A);
     public static final DeferredHolder<EntityType<?>, EntityType<SpellSummon>> VINE_SERVANT = summon("vine_servant", 0.45F, 0.975F);
     public static final DeferredHolder<EntityType<?>, EntityType<SpellSummon>> FLYING_SWORD = summon("flying_sword", 0.45F, 1.2F);
     public static final DeferredHolder<EntityType<?>, EntityType<SpellSummon>> POISON_TENTACLE = summon("poison_tentacle", 0.6F, 1.4F);

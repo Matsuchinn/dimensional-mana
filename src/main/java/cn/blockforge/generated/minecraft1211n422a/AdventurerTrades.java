@@ -421,6 +421,18 @@ public final class AdventurerTrades {
             if (draft == null || draft.costs().isEmpty() || draft.result().isEmpty()) continue;
             offers.add(new Offer(entry.tier(), draft.costs(), draft.result(), entry.tier().rollUses(random), 0));
         }
+        // 刷出稀有级别（T4）时，把其中一笔初级交易换成固定出售侦探护符的稀有交易：
+        // 售价 16 极品魔晶，一次只刷 1 个。
+        boolean rare = offers.stream().anyMatch(offer -> offer.tier() == Tier.T4);
+        if (rare) {
+            for (int index = 0; index < offers.size(); index++) {
+                if (offers.get(index).tier() != Tier.T1) continue;
+                offers.set(index, new Offer(Tier.T4,
+                        List.of(modItem("supreme_mana_crystal", 16)),
+                        modItem("detective_charm", 1), 1, 0));
+                break;
+            }
+        }
         return offers;
     }
 
@@ -485,6 +497,28 @@ public final class AdventurerTrades {
     }
 
     /** 服务端执行一笔交易：校验库存、扣材料、给成品、记次数。 */
+    /**
+     * 走私之戒的半价：把标价压到「原价一半向上取整、最少 1」，只改数量不改物品。
+     *
+     * <p>展示格、够不够判定、真正扣除都走这一个方法，所以界面上的价格和实际扣的一致。</p>
+     */
+    public static ItemStack discounted(Player player, ItemStack cost) {
+        if (cost == null || cost.isEmpty()) return ItemStack.EMPTY;
+        if (player == null || !RelicEffects.worn(player, RelicEffects.SMUGGLER_RING)) return cost;
+        ItemStack copy = cost.copy();
+        copy.setCount(Math.max(1, (int)Math.ceil(cost.getCount() * 0.5)));
+        return copy;
+    }
+
+    public static List<ItemStack> discounted(Player player, List<ItemStack> costs) {
+        List<ItemStack> result = new ArrayList<>(costs.size());
+        for (ItemStack cost : costs) {
+            if (cost.isEmpty()) continue;
+            result.add(discounted(player, cost));
+        }
+        return result;
+    }
+
     public static boolean execute(Adventurer adventurer, Player player, int index) {
         List<Offer> offers = adventurer.tradeOffers();
         if (player == null || index < 0 || index >= offers.size()) return false;
@@ -494,12 +528,13 @@ public final class AdventurerTrades {
             playDeny(player);
             return false;
         }
-        if (!hasCosts(player, offer.costs())) {
+        List<ItemStack> price = discounted(player, offer.costs());
+        if (!hasCosts(player, price)) {
             player.displayClientMessage(Component.translatable("message.dimensional_mana.trade_not_enough"), false);
             playDeny(player);
             return false;
         }
-        pay(player, offer.costs());
+        pay(player, price);
         offer.addUse();
         ItemStack result = offer.result().copy();
         player.getInventory().add(result);

@@ -1,7 +1,9 @@
 {
-  "order": 180,
+  "order": 240,
   "size": 2,
   "use_native_gui": true,
   "icon": "dimensional_mana:slot/empty_magic_accessory_slot",
-  "validators": ["curios:tag"]
+  "validators": [
+    "curios:tag"
+  ]
 }

@@ -63,7 +63,11 @@ public final class DimensionalManaJeiPlugin implements IModPlugin {
     @Override
     public void registerRecipes(IRecipeRegistration registration) {
         registration.addRecipes(GRINDER_TYPE, GrinderRecipes.all());
-        registration.addRecipes(CRYSTAL_PROCESSING_TYPE, CrystalProcessorBlockEntity.recipes());
+        // 附魔书升级是动态判定（按书里的等级），这里额外补上 5 条示意配方，让 JEI 里查得到。
+        List<CrystalProcessorBlockEntity.ProcessRecipe> processorRecipes =
+                new java.util.ArrayList<>(CrystalProcessorBlockEntity.recipes());
+        processorRecipes.addAll(EnchantBookUpgrade.previews());
+        registration.addRecipes(CRYSTAL_PROCESSING_TYPE, processorRecipes);
         registration.addRecipes(MANA_FORGE_TYPE,
                 ownCookingRecipes(GeneratedMod.MANA_FORGE_RECIPE_TYPE.get()));
         registration.addRecipes(PROFESSIONAL_TYPE,

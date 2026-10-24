@@ -1,0 +1,9 @@
+{
+  "order": 120,
+  "size": 2,
+  "use_native_gui": true,
+  "icon": "curios:slot/empty_bracelet_slot",
+  "validators": [
+    "curios:tag"
+  ]
+}

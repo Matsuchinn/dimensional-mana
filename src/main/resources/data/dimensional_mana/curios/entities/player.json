@@ -4,12 +4,18 @@
     "minecraft:player"
   ],
   "slots": [
-    "magic_accessory",
+    "curio",
+    "head",
+    "necklace",
     "back",
     "body",
-    "head",
+    "bracelet",
+    "hands",
     "ring",
+    "belt",
     "charm",
-    "hands"
+    "feet",
+    "magic_accessory",
+    "universal"
   ]
 }

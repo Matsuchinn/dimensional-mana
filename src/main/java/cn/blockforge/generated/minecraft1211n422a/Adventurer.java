@@ -156,6 +156,9 @@ public final class Adventurer extends PathfinderMob {
         targetSelector.addGoal(1, new HurtByTargetGoal(this, Adventurer.class));
         targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, 10, true, false,
                 target -> !(target instanceof Adventurer)));
+        // 哥布林不是原版 Monster，单独给它一条目标：冒险者会主动找上门去打。
+        targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Goblin.class, 10, true, false,
+                target -> target.isAlive() && !(target instanceof Adventurer)));
     }
 
     private boolean canAct() {
@@ -294,6 +297,7 @@ public final class Adventurer extends PathfinderMob {
             setAggressive(true);
             // 冒险者会主动迎战；同时让敌对生物真正把它作为攻击目标，而不是只挨打法术。
             if (target instanceof Monster monster && monster.getTarget() == null && monster.canAttack(this)) monster.setTarget(this);
+            else if (target instanceof Goblin goblin && goblin.getTarget() == null && goblin.canAttack(this)) goblin.setTarget(this);
             // 不依赖 MeleeAttackGoal 的启动节流：敌人进入两格后当刻中断施法、切剑并尝试挥砍。
             if (distance <= 4.0) {
                 if (chargeTicks > 0) cancelCharge();
@@ -366,7 +370,9 @@ public final class Adventurer extends PathfinderMob {
         if (target != null && target.isAlive()) return false;
         if (tickCount - Math.max(lastDamageTick, getLastHurtByMobTimestamp()) < 100) return false;
         return level.getEntitiesOfClass(Monster.class, getBoundingBox().inflate(12.0), monster ->
-                monster.isAlive() && monster.getTarget() == this && hasLineOfSight(monster)).isEmpty();
+                monster.isAlive() && monster.getTarget() == this && hasLineOfSight(monster)).isEmpty()
+                && level.getEntitiesOfClass(Goblin.class, getBoundingBox().inflate(12.0), goblin ->
+                goblin.isAlive() && goblin.getTarget() == this && hasLineOfSight(goblin)).isEmpty();
     }
 
     private boolean tickSupply(ServerLevel level) {

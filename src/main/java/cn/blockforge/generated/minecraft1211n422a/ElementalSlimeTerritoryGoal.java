@@ -43,7 +43,8 @@ public final class ElementalSlimeTerritoryGoal extends Goal {
     @Override
     public boolean canUse() {
         int tolerance = toleranceTicks(slime.variant());
-        if (tolerance <= 0 || slime.isTamed()) return false;
+        // 结盟个体只跟着哥布林的目标打，不自己圈地盘。
+        if (tolerance <= 0 || slime.isTamed() || slime.isGoblinAlly()) return false;
         AABB area = slime.getBoundingBox().inflate(RANGE);
         var nearby = slime.level().getEntitiesOfClass(LivingEntity.class, area, slime::validTerritoryTarget);
         exposureSince.keySet().removeIf(id -> nearby.stream().noneMatch(entity -> entity.getUUID().equals(id)));

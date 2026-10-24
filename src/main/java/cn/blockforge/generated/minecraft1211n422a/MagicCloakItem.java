@@ -19,7 +19,7 @@ import top.theillusivec4.curios.api.type.capability.ICurioItem;
 import java.util.List;
 
 /**
- * 三件魔法披风：可放入背饰槽，也可放入身体（胸甲位）槽。
+ * 三件魔法披风：只能放入背饰槽，胸饰（body）栏位不再接受披风。
  *
  * <p>魔素强度、施法速度、减耗、暴击率与暴击伤害都写成 Curios 真实属性修正，
  * 装备与卸下时状态页数值会自动同步；其余触发型效果由 {@link MagicEquipment} 处理。</p>

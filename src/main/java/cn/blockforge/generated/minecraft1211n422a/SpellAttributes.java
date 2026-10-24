@@ -75,6 +75,13 @@ public final class SpellAttributes {
         return value(caster, SPELL_HASTE, 1.0) + MagicStaffItem.heldStats(caster).spellHaste();
     }
 
+    /** 带法术上下文的减耗：侦探护符对预言学派的魔素消耗再打五折。 */
+    public static double reducedManaCost(LivingEntity caster, SpellDefinition spell) {
+        double cost = reducedManaCost(caster, spell == null ? 0.0 : spell.manaCost());
+        return "divination".equals(spell == null ? "" : spell.school())
+                && RelicEffects.worn(caster, RelicEffects.DETECTIVE_CHARM) ? cost * 0.5 : cost;
+    }
+
     public static double reducedManaCost(LivingEntity caster, double rawCost) {
         double reduction = value(caster, MANA_COST_REDUCTION, 0.0)
                 + MagicStaffItem.heldStats(caster).manaCostReduction();
@@ -133,7 +140,20 @@ public final class SpellAttributes {
         double finalDamage = damage + damage * multiplier;
         // 魔素增强护符：法术暴击时回复最大魔素的一部分，自带 2.2 秒触发冷却。
         MagicEquipment.onSpellCritical(caster);
+        MagicEquipment.onRelicSpellCritical(caster);
         return new SpellCriticalResult((float)Math.min(Float.MAX_VALUE, finalDamage), true);
+    }
+
+    /**
+     * 带目标的一次法术暴击判定：女巫这类「魔法暴击抗性 50%」的目标，
+     * 会在暴击成立后按概率把这次暴击降级为普通命中（伤害回到未暴击值）。
+     */
+    public static SpellCriticalResult rollSpellCritical(LivingEntity caster, LivingEntity target, float damage) {
+        SpellCriticalResult result = rollSpellCritical(caster, damage);
+        if (result.critical() && target != null && MobCombatSystem.cancelsSpellCritical(target)) {
+            return new SpellCriticalResult(damage, false);
+        }
+        return result;
     }
 
     /** 当前法术暴击率（0~1），已包含技能加点、法杖/饰品与作弊指令写入的修正。 */

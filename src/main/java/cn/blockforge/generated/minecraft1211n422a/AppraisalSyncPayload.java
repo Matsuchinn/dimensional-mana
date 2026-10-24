@@ -8,7 +8,7 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 
 public record AppraisalSyncPayload(boolean glassesActive, double concentration, int entityId, String targetName,
                                    double health, double maxHealth, double mana, double maxMana,
-                                   int aura, int maxAura) implements CustomPacketPayload {
+                                   int battleQi, int maxBattleQi) implements CustomPacketPayload {
     public static final Type<AppraisalSyncPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
             GeneratedMod.MOD_ID, "appraisal_sync"));
     public static final StreamCodec<RegistryFriendlyByteBuf, AppraisalSyncPayload> STREAM_CODEC = StreamCodec.of(
@@ -21,8 +21,8 @@ public record AppraisalSyncPayload(boolean glassesActive, double concentration, 
                 buf.writeDouble(payload.maxHealth());
                 buf.writeDouble(payload.mana());
                 buf.writeDouble(payload.maxMana());
-                buf.writeVarInt(payload.aura());
-                buf.writeVarInt(payload.maxAura());
+                buf.writeVarInt(payload.battleQi());
+                buf.writeVarInt(payload.maxBattleQi());
             },
             buf -> new AppraisalSyncPayload(buf.readBoolean(), buf.readDouble(), buf.readVarInt(), buf.readUtf(),
                     buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readDouble(),

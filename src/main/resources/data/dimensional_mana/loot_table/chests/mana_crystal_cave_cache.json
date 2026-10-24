@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:chest",
+  "random_sequence": "dimensional_mana:chests/mana_crystal_cave_cache",
+  "pools": [
+    {
+      "rolls": {"type": "minecraft:uniform", "min": 2, "max": 4},
+      "bonus_rolls": 0,
+      "entries": [
+        {"type": "minecraft:item", "name": "dimensional_mana:medium_mana_crystal_dust", "weight": 30, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 2, "max": 6}}]},
+        {"type": "minecraft:item", "name": "dimensional_mana:lesser_mana_potion", "weight": 14, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 3}}]},
+        {"type": "minecraft:item", "name": "dimensional_mana:medium_mana_potion", "weight": 14, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 3}}]},
+        {"type": "minecraft:item", "name": "dimensional_mana:advanced_mana_potion", "weight": 10, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 3}}]},
+        {"type": "minecraft:item", "name": "minecraft:amethyst_shard", "weight": 26, "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 3, "max": 8}}]},
+        {"type": "minecraft:item", "name": "dimensional_mana:medium_mana_crystal", "weight": 8},
+        {"type": "minecraft:item", "name": "dimensional_mana:advanced_mana_crystal", "weight": 4}
+      ]
+    },
+    {
+      "rolls": 1,
+      "bonus_rolls": 0,
+      "entries": [
+        {"type": "minecraft:empty", "weight": 97},
+        {"type": "minecraft:item", "name": "dimensional_mana:element_absorption_charm", "weight": 3}
+      ]
+    }
+  ]
+}

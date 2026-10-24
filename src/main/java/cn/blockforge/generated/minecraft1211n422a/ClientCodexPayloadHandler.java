@@ -9,5 +9,11 @@ public final class ClientCodexPayloadHandler {
                 ? new ArcaneCodexGuideScreen() : new ElementTalentScreen(true));
     }
 
+    /** 战斗手册：右键直接翻到斗气界面。 */
+    public static void openCombatCodex(OpenCombatCodexPayload payload) {
+        if (!payload.open()) return;
+        Minecraft.getInstance().setScreen(new CombatCodexScreen());
+    }
+
     private ClientCodexPayloadHandler() { }
 }

@@ -287,6 +287,8 @@ public final class ElementPlating {
      */
     public static void onIncomingDamage(LivingIncomingDamageEvent event) {
         if (event.isCanceled()) return;
+        // 必杀伤害不走盾牌侵蚀：伤害 ÷ 10 再强转 int 会直接整数溢出，把护盾耐久算成负数。
+        if (LethalDamage.isLethal(event.getSource(), event.getAmount())) return;
         if (!(event.getEntity() instanceof Player player) || player.level().isClientSide) return;
         if (!player.isBlocking() || event.getAmount() <= 0.0F) return;
         String elementId = damageElementOf(event.getSource());

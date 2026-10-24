@@ -24,8 +24,8 @@ public final class MagicEquipment {
     public static final String HANDS_SLOT = "hands";
     /** 本模组自带的“魔法饰品”栏位（两个格，只收标签里登记过的饰品）。 */
     public static final String MAGIC_ACCESSORY_SLOT = "magic_accessory";
-    /** 披风既能放背饰槽，也能放身体（胸甲位）槽。 */
-    public static final List<String> CLOAK_SLOTS = List.of("back", "body");
+    /** 披风只放背饰槽；胸饰（body）栏位留给嗜血胸针，不再和披风共用。 */
+    public static final List<String> CLOAK_SLOTS = List.of("back");
 
     public static final String MAGIC_CLOTH = "magic_cloth";
     public static final String MAGIC_SILK = "magic_silk";
@@ -119,8 +119,9 @@ public final class MagicEquipment {
     public static double spellDamageMultiplier(LivingEntity caster, String elementId) {
         int rings = ringCount(caster, elementId);
         int enhance = enhanceRingCount(caster);
-        if (rings == 0 && enhance == 0) return 1.0;
-        return (1.0 + rings * RING_SPELL_DAMAGE) * (1.0 + enhance * ENHANCE_SPELL_DAMAGE);
+        double relic = RelicEffects.elementDamageMultiplier(caster, elementId);
+        if (rings == 0 && enhance == 0) return relic;
+        return (1.0 + rings * RING_SPELL_DAMAGE) * (1.0 + enhance * ENHANCE_SPELL_DAMAGE) * relic;
     }
 
     /** 对应元素附着时长乘区。 */
@@ -150,7 +151,8 @@ public final class MagicEquipment {
         int master = cloakCount(player, MASTER_CLOAK);
         for (int i = 0; i < deflect; i++) multiplier *= 1.08;
         for (int i = 0; i < master; i++) multiplier *= 1.25;
-        return multiplier;
+        // 封魔眼罩：魔素上限 -50%，独立乘区。
+        return multiplier * RelicEffects.maxManaMultiplier(player);
     }
 
     /** 魔素增强护符提供的固定每秒回复。 */
@@ -188,6 +190,13 @@ public final class MagicEquipment {
         data.putLong(CRIT_HEAL_KEY, now + AMULET_CRIT_HEAL_COOLDOWN);
         double maxMana = ManaData.get(caster).maxMana();
         ManaData.restoreMana(caster, maxMana * AMULET_CRIT_HEAL_PERCENT + AMULET_CRIT_HEAL_FLAT, false);
+    }
+
+    /** 封魔眼罩：每次法术暴击额外回 0.5 点魔素（不受暴击回魔护符的冷却限制）。 */
+    public static void onRelicSpellCritical(LivingEntity caster) {
+        if (caster == null || caster.level().isClientSide) return;
+        if (!RelicEffects.worn(caster, RelicEffects.SEAL_BLINDFOLD)) return;
+        ManaData.restoreMana(caster, 0.5, false);
     }
 
     /** 伤害偏转披风的反伤：45% 伤害回到伤害者身上，2.3 秒冷却。 */
