@@ -33,6 +33,12 @@ public final class ElementalSlimeSpawning {
     /** 基础元素生物应当常见：每个玩家（包括旁观测试者）每 4 秒获得一次环境刷新机会。 */
     private static final int CHECK_INTERVAL = 80;
     private static final float ATTEMPT_CHANCE = 0.85F;
+    /**
+     * 水和木史莱姆的额外稀释概率：抽中这两种时，有两成五的几率这一次直接不刷。
+     * 它们分别是海洋 / 河流和森林 / 平原的默认元素，几乎走两步就能撞见；这里只降数量，
+     * 不改变群系对应关系（海边还是水史莱姆、森林还是木史莱姆，只是密度低一些）。
+     */
+    private static final float COMMON_SLIME_THIN_CHANCE = 0.25F;
     private static final int LOCAL_CAP = 16;
     private static final double LOCAL_RADIUS = 56.0;
     private static final int TRIES = 10;
@@ -56,9 +62,15 @@ public final class ElementalSlimeSpawning {
             if (localCount(level, player.position(), LOCAL_RADIUS) >= LOCAL_CAP) continue;
             SpawnPick pick = findPick(level, player, random);
             if (pick == null) continue;
+            if (isCommonVariant(pick.variant()) && random.nextFloat() < COMMON_SLIME_THIN_CHANCE) continue;
             spawn(level, pick.variant(), pick.pos(), pick.forcedTier(), 1 + random.nextInt(3),
                     false, pick.fluidSurface(), pick.airborne());
         }
+    }
+
+    /** 水和木史莱姆是最常见的两种地表元素，单独走一道数量稀释。 */
+    private static boolean isCommonVariant(ElementalSlimeVariant variant) {
+        return variant == ElementalSlimeVariant.WATER || variant == ElementalSlimeVariant.NATURE;
     }
 
     /** 普通洞穴固定 2～4 精英 + 1～3 其他；大型洞穴两项数量都翻倍。 */

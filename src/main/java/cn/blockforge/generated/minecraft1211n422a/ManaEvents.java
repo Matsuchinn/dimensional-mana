@@ -500,7 +500,10 @@ public final class ManaEvents {
             // 原版生物：按难度/专配恢复，魔素恢复受环境浓度影响。
             MobCombatSystem.tick(living, ManaData.get(living));
         } else if (exhaustion == 0 && d.mana() < d.maxMana()) {
-            double regen = ManaConfig.PLAYER_MANA_REGEN.get() + d.affinity() * MagicEquipment.affinityMultiplier(living);
+            // 魔力充盈（完全由蕾薇莉亚粉末酿出来的强化补魔剂提供）：亲和 ×2.5。
+            double affinity = d.affinity() * MagicEquipment.affinityMultiplier(living);
+            if (living.hasEffect(GeneratedMod.MANA_FULLNESS)) affinity *= PlantEffects.FULLNESS_AFFINITY;
+            double regen = ManaConfig.PLAYER_MANA_REGEN.get() + affinity;
             int wisdomRings = 0;
             if (living instanceof Player) {
                 MagicStaffItem.StaffStats staff = MagicStaffItem.heldStats(living);

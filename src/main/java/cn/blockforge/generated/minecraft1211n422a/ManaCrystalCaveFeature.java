@@ -39,6 +39,9 @@ public final class ManaCrystalCaveFeature extends Feature<NoneFeatureConfigurati
                     if (shapedDistance > 1.0) continue;
 
                     cursor.setWithOffset(center, x, y, z);
+                    // 大型洞穴的半径超过区块宽度，朝外那几格所在区块还没生成时，
+                    // 读它会把游戏崩掉（Requested chunk unavailable）。
+                    if (!WorldgenReads.chunkLoaded(level, cursor)) continue;
                     BlockState current = level.getBlockState(cursor);
                     if (!canReplace(current)) continue;
 
@@ -61,8 +64,9 @@ public final class ManaCrystalCaveFeature extends Feature<NoneFeatureConfigurati
         }
 
         decorateInterior(level, random, center, radiusX, radiusY, radiusZ);
-        // 大型洞穴：在纯态液态魔晶池底埋一口宝箱（元素吸收护符与中级魔晶粉的主要来源）。
-        if (large) placeRelicCache(level, random, center, radiusY);
+        // 每座魔晶洞穴都埋一口宝物箱：优先放在液态魔晶池边的干燥地面上，
+        // 池边实在找不到空位才退回“泡在池子里”的旧做法。
+        placeRelicCache(level, random, center, radiusX, radiusY, radiusZ);
         if (changed > 0) {
             // 这里还在区块生成阶段，不能直接改 ServerLevel 的实体和存档数据；
             // 先把洞穴位置排进队列，等服务器刻、区块加载后再补刷史莱姆。
@@ -72,29 +76,65 @@ public final class ManaCrystalCaveFeature extends Feature<NoneFeatureConfigurati
     }
 
     /**
-     * 池底宝箱：往下找第一个纯态液态魔晶方块，把箱子放在池子的液面上。
+     * 池边宝箱：先找到液态魔晶池的液面，再在池子周围的洞穴地面上找一块
+     * “脚下实心、头上两格空”的位置放箱子。
      *
-     * <p>液面不是一个固定高度——洞穴形状带随机毛边，所以从中心格往下逐格找，
-     * 中心附近找不到就往外挪一格再找。箱子的战利品表在生成阶段就写好，
-     * 第一次打开才确定内容（和原版结构宝箱一致）。</p>
+     * <p>旧版直接把箱子塞进液面那一格，箱子整个泡在不透明的液态魔晶里，玩家从池面上
+     * 几乎看不见，看起来就像“宝箱没生成”。现在优先放在池边的干燥地面上；只有池边
+     * 一点空地都没有时才退回液面方案。</p>
+     *
+     * <p>箱子位必须在当前区块内：世界生成阶段写到隔壁未生成区块的方块会被丢弃。</p>
      */
-    private static void placeRelicCache(WorldGenLevel level, RandomSource random, BlockPos center, int radiusY) {
+    private static void placeRelicCache(WorldGenLevel level, RandomSource random, BlockPos center,
+                                        int radiusX, int radiusY, int radiusZ) {
+        BlockPos liquid = findLiquidSurface(level, center, radiusY);
+        if (liquid == null) return;
+        for (int attempt = 0; attempt < 160; attempt++) {
+            int dx = random.nextInt(radiusX * 2 + 1) - radiusX;
+            int dz = random.nextInt(radiusZ * 2 + 1) - radiusZ;
+            // 离池子太近的地方还是液体，直接跳过。
+            if (dx * dx + dz * dz < 4) continue;
+            int x = center.getX() + dx;
+            int z = center.getZ() + dz;
+            if ((x >> 4) != (center.getX() >> 4) || (z >> 4) != (center.getZ() >> 4)) continue;
+            for (int dy = -8; dy <= 6; dy++) {
+                BlockPos pos = new BlockPos(x, liquid.getY() + dy, z);
+                BlockPos below = pos.below();
+                if (!level.getBlockState(below).isFaceSturdy(level, below, Direction.UP)) continue;
+                if (!level.getBlockState(pos).isAir() || !level.getBlockState(pos.above()).isAir()) continue;
+                placeChest(level, random, pos, facingTowards(dx, dz));
+                return;
+            }
+        }
+        // 池边没有干燥落脚点：把箱子放在液面最上一格，至少从池边能看到箱顶。
+        placeChest(level, random, liquid, Direction.Plane.HORIZONTAL.getRandomDirection(random));
+    }
+
+    /** 从洞穴中心往下找第一个纯态液态魔晶方块，也就是液面最上面那一格。 */
+    private static BlockPos findLiquidSurface(WorldGenLevel level, BlockPos center, int radiusY) {
         int[][] offsets = {{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {2, 0}, {-2, 0}, {0, 2}, {0, -2}};
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (int[] offset : offsets) {
             for (int depth = 0; depth <= radiusY; depth++) {
                 cursor.set(center.getX() + offset[0], center.getY() - depth, center.getZ() + offset[1]);
-                if (!level.getBlockState(cursor).is(GeneratedMod.PURE_LIQUID_MANA_BLOCK.get())) continue;
-                placeChest(level, random, cursor);
-                return;
+                if (!WorldgenReads.chunkLoaded(level, cursor)) continue;
+                if (level.getBlockState(cursor).is(GeneratedMod.PURE_LIQUID_MANA_BLOCK.get())) {
+                    return cursor.immutable();
+                }
             }
         }
+        return null;
     }
 
-    private static void placeChest(WorldGenLevel level, RandomSource random, BlockPos pos) {
-        BlockState chest = Blocks.CHEST.defaultBlockState().setValue(
-                net.minecraft.world.level.block.ChestBlock.FACING,
-                net.minecraft.core.Direction.Plane.HORIZONTAL.getRandomDirection(random));
+    /** 箱子正面朝向池子中心，玩家从池边过来时正好看到正面。 */
+    private static Direction facingTowards(int dx, int dz) {
+        if (Math.abs(dx) >= Math.abs(dz)) return dx > 0 ? Direction.WEST : Direction.EAST;
+        return dz > 0 ? Direction.NORTH : Direction.SOUTH;
+    }
+
+    private static void placeChest(WorldGenLevel level, RandomSource random, BlockPos pos, Direction facing) {
+        BlockState chest = Blocks.CHEST.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.ChestBlock.FACING, facing);
         level.setBlock(pos.immutable(), chest, Block.UPDATE_CLIENTS);
         if (level.getBlockEntity(pos) instanceof net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity container) {
             container.setLootTable(CACHE_LOOT, random.nextLong());
@@ -125,10 +165,12 @@ public final class ManaCrystalCaveFeature extends Feature<NoneFeatureConfigurati
                     random.nextInt(radiusY * 2 - 3) - radiusY + 2,
                     random.nextInt(radiusZ * 2 - 3) - radiusZ + 2
             );
+            if (!WorldgenReads.chunkLoaded(level, cavityPos)) continue;
             if (!level.getBlockState(cavityPos).isAir()) continue;
 
             Direction facing = Direction.getRandom(random);
             BlockPos supportPos = cavityPos.relative(facing.getOpposite());
+            if (!WorldgenReads.chunkLoaded(level, supportPos)) continue;
             BlockState support = level.getBlockState(supportPos);
             if (!support.isFaceSturdy(level, supportPos, facing)) continue;
 
@@ -162,10 +204,12 @@ public final class ManaCrystalCaveFeature extends Feature<NoneFeatureConfigurati
                     random.nextInt(radiusY * 2 - 3) - radiusY + 2,
                     random.nextInt(radiusZ * 2 - 3) - radiusZ + 2
             );
+            if (!WorldgenReads.chunkLoaded(level, cavityPos)) continue;
             if (!level.getBlockState(cavityPos).isAir()) continue;
 
             for (Direction facing : Direction.values()) {
                 BlockPos supportPos = cavityPos.relative(facing.getOpposite());
+                if (!WorldgenReads.chunkLoaded(level, supportPos)) continue;
                 BlockState support = level.getBlockState(supportPos);
                 if (!support.isFaceSturdy(level, supportPos, facing)) continue;
                 BlockState cluster = GeneratedMod.MOD_BLOCKS.get("special_mana_crystal_cluster").get()

@@ -1,0 +1,12 @@
+{
+  "type": "dimensional_mana:professional_smelting",
+  "category": "misc",
+  "ingredient": {
+    "item": "dimensional_mana:lumelia"
+  },
+  "result": {
+    "id": "dimensional_mana:lumelia_powder"
+  },
+  "experience": 0.5,
+  "cookingtime": 100
+}

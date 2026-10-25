@@ -77,6 +77,11 @@ public final class ElementalSlime extends Slime {
     private static final long SOUND_REWARD_COOLDOWN = 5 * 60 * 20L;
     /** 设计稿里所有「每秒回血 2.5%」都按最大生命百分比算，再乘难度恢复倍率。 */
     private static final float HEAL_FRACTION = 0.025F;
+    /**
+     * 初级法术的冷却倍率：2 表示施法间隔翻倍、攻击频率降到原来的一半。
+     * 只作用于元素史莱姆，玩家学会同一法术时的冷却不受影响。
+     */
+    private static final int SPELL_COOLDOWN_MULTIPLIER = 2;
 
     private final ElementalSlimeVariant variant;
     private long nextSpellTick;
@@ -471,6 +476,7 @@ public final class ElementalSlime extends Slime {
                     0.0, 0.01, 0.0);
         }
         if (level().isClientSide || !isAlive()) return;
+        tickTargetValidity();
         long now = level().getGameTime();
         if (!initialized) {
             setTier(tier(), false);
@@ -772,6 +778,26 @@ public final class ElementalSlime extends Slime {
         }
     }
 
+    /**
+     * 目标栏清理。原版 Mob 自己从不调用 setTarget(null)，靠 TargetGoal.stop() 在
+     * 「目标不可攻击」时顺手清掉；元素史莱姆全是自定义 Goal，没有这条路径，
+     * 于是一旦目标被法术打死（或玩家进创造、史莱姆被驯服），getTarget() 会永远
+     * 留着那个实体。而施法、追击、闲逛三个会动的 Goal 分别要求「目标可攻击」或
+     * 「没有目标」，全都不成立 —— 表现就是放完法术原地站着不动。这里每刻兜一次。
+     */
+    private void tickTargetValidity() {
+        LivingEntity target = getTarget();
+        // 判据用 canAttack，和施法 / 追击 Goal 的启动条件完全一致，避免出现
+        // 「Goal 认为不能打、但这里认为目标有效」的第三种状态。
+        if (target != null && !canAttack(target)) setTarget(null);
+    }
+
+    /** 闲逛 Goal 用：目标为空或者已经不可攻击，都算可以自由活动。 */
+    boolean hasAttackableTarget() {
+        LivingEntity target = getTarget();
+        return target != null && canAttack(target);
+    }
+
     public boolean isSpellReady() {
         LivingEntity target = getTarget();
         if (target == null || isTamed() || level().getGameTime() < nextSpellTick) return false;
@@ -781,6 +807,11 @@ public final class ElementalSlime extends Slime {
         return distanceToSqr(target) <= 16.0 * 16.0 && getSensing().hasLineOfSight(target);
     }
 
+    /** 元素史莱姆实际使用的施法间隔：法术冷却 × 2，频率为设计值的一半。 */
+    private int spellCooldownTicks() {
+        return variant.basicSpell().cooldownTicks() * SPELL_COOLDOWN_MULTIPLIER;
+    }
+
     public void castBasicSpell(LivingEntity target) {
         if (!isSpellReady() || target == null || !validCombatTarget(target)) return;
         float damage = variant.basicSpellDamage() * SPELL_DIFFICULTY[difficultyIndex()] * tier().damageScale();
@@ -788,7 +819,7 @@ public final class ElementalSlime extends Slime {
         // 左键窗口内还算完美招架。被弹掉时伤害和元素附着一起取消，只留碎裂特效。
         if (target instanceof ServerPlayer parryTarget
                 && BattleQiParry.parryInstantSpell(parryTarget, this, variant.damageElementId(), damage)) {
-            nextSpellTick = level().getGameTime() + variant.basicSpell().cooldownTicks();
+            nextSpellTick = level().getGameTime() + spellCooldownTicks();
             return;
         }
         if (variant == ElementalSlimeVariant.MANA) {
@@ -800,7 +831,9 @@ public final class ElementalSlime extends Slime {
         }
         SpellVisualPayload.send(this, variant.basicSpell(), SpellVisualPayload.RELEASE, target.getId(),
                 getEyePosition(), target.getEyePosition(), 10);
-        nextSpellTick = level().getGameTime() + variant.basicSpell().cooldownTicks();
+        nextSpellTick = level().getGameTime() + spellCooldownTicks();
+        // 这一发把目标打死了就当场放开，下一刻直接回闲逛，不用再等 tickTargetValidity 兜底。
+        if (!target.isAlive()) setTarget(null);
     }
 
     @Override

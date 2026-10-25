@@ -33,6 +33,8 @@ public final class ManaFurnaceBlockEntity extends AbstractFurnaceBlockEntity {
     private static final int FORGE_PLAIN_MANA = 1;
     private static final int PROFESSIONAL_PLAIN_MANA = 3;
     private static final int LINK_PARTICLE_COLOR = 0xAE69FF;
+    /** 卢梅莉亚粉末的联动充能：5000 点，远超任何魔晶，是这条产线的真正收益。 */
+    private static final int LUMELIA_POWDER_LINK_MANA = 5000;
 
     private final ManaCookingRecipe.FurnaceKind kind;
 
@@ -105,6 +107,11 @@ public final class ManaFurnaceBlockEntity extends AbstractFurnaceBlockEntity {
         boolean professional = kind == ManaCookingRecipe.FurnaceKind.PROFESSIONAL;
         int plain = professional ? PROFESSIONAL_PLAIN_MANA : FORGE_PLAIN_MANA;
         if (result.isEmpty()) return plain;
+        // 卢梅莉亚烧成粉末时，把一整株草的魔素全部榨进加工台：5000 点。
+        if (kind == ManaCookingRecipe.FurnaceKind.PROFESSIONAL
+                && result.is(GeneratedMod.MOD_ITEMS.get(ManaPlants.LUMELIA_POWDER).get())) {
+            return LUMELIA_POWDER_LINK_MANA;
+        }
         int tier = crystalTier(result);
         if (tier < 0) return plain;
         return (professional ? PROFESSIONAL_LINK_MANA : FORGE_LINK_MANA)[tier];

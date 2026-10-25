@@ -25,13 +25,30 @@ public final class ManaConcentration {
         return Math.max(0.0, value);
     }
 
+    /**
+     * 不含洞穴、紫水晶加成的“地表浓度”。
+     *
+     * <p>世界生成阶段还没法读洞穴数据，所以地形生成只能用这一版。它和 {@link #at} 用同一套噪声与群系偏移，
+     * 只少了“靠近洞穴至少 15”那一段加成，两块地算出的浓度因此不会互相打架，只是洞穴上方会偏低。</p>
+     */
+    public static double surfaceAt(long seed, ResourceKey<Level> dimension, Holder<Biome> biome, BlockPos pos) {
+        DimensionProfile profile = profile(dimension);
+        double smoothNoise = smoothValueNoise(seed ^ profile.salt, pos.getX() / 16.0, pos.getZ() / 16.0);
+        double biomeShift = biomeShift(biome, profile.variation);
+        return Math.max(0.0, profile.average * (1.0 + smoothNoise * profile.variation + biomeShift));
+    }
+
     public static double regenerationMultiplier(double concentration) {
         return Math.max(0.0, 1.0 + (concentration - 10.0) * 0.10);
     }
 
     private static DimensionProfile profile(ServerLevel level) {
-        if (level.dimension() == Level.NETHER) return new DimensionProfile(8.0, 0.35, 0x4E45544845524CL);
-        if (level.dimension() == Level.END) return new DimensionProfile(1.0, 0.05, 0x454E444D414E41L);
+        return profile(level.dimension());
+    }
+
+    private static DimensionProfile profile(ResourceKey<Level> dimension) {
+        if (dimension == Level.NETHER) return new DimensionProfile(8.0, 0.35, 0x4E45544845524CL);
+        if (dimension == Level.END) return new DimensionProfile(1.0, 0.05, 0x454E444D414E41L);
         return new DimensionProfile(10.0, 0.25, 0x4F564552574F52L);
     }
 

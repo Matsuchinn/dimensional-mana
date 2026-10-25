@@ -20,7 +20,6 @@ repositories {
         url = "https://api.modrinth.com/maven"
     }
 }
-
 dependencies {
     implementation "maven.modrinth:BaqCltvf:6UN1b1Vc"
     compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
@@ -41,7 +40,7 @@ processResources {
     filteringCharset = 'UTF-8'
     filesMatching('META-INF/neoforge.mods.toml') { expand props }
 }
-// 强制忽略打包时产生的重复文件
+// 强制忽略打包时产生的重复文件。
 tasks.withType(Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

@@ -13,6 +13,8 @@ public final class ManaConfig {
     public static final ModConfigSpec.DoubleValue BASE_BATTLE_QI_COST;
     public static final ModConfigSpec.IntValue MIN_BATTLE_QI_COST;
     public static final ModConfigSpec.DoubleValue OVERCAP_BATTLE_QI_DECAY;
+    /** 是否允许玩家之间互相招架弹反（PvP 弹刀）。 */
+    public static final ModConfigSpec.BooleanValue PVP_PARRY;
     public static final ModConfigSpec.DoubleValue PLAYER_INITIAL_MANA;
     public static final ModConfigSpec.DoubleValue GLOBAL_MANA_CAP;
     public static final ModConfigSpec.DoubleValue PLAYER_MANA_REGEN;
@@ -67,6 +69,9 @@ public final class ManaConfig {
         OVERCAP_BATTLE_QI_DECAY = b.comment("超限斗气每秒流失自身上限的比例")
                 .translation("config.dimensional_mana.common.overcap_decay")
                 .defineInRange("overcap_decay", 0.05, 0.0, 1.0);
+        PVP_PARRY = b.comment("允许玩家之间互相弹刀（招架弹反）；默认开启，多人联机时玩家互相挥刀也会弹反")
+                .translation("config.dimensional_mana.common.pvp_parry")
+                .define("pvp_parry", true);
         DIMENSION_WHITELIST = b.comment("允许常规生物生成斗气的维度；留空代表全部")
                 .translation("config.dimensional_mana.common.dimension_whitelist")
                 .defineListAllowEmpty("dimension_whitelist", List.of("minecraft:overworld", "minecraft:the_nether", "minecraft:the_end"), o -> o instanceof String);

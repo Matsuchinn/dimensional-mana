@@ -43,6 +43,13 @@ public final class ManaPotionItem extends Item {
         if (!level.isClientSide) {
             ManaData.Snapshot d = ManaData.get(entity);
             double amount = d.maxMana() * percentage + flat;
+            // 蕾薇莉亚粉末强化过的补魔剂：恢复量 +15%，并给 60 秒魔力充盈（亲和 ×2.5）。
+            Float boost = stack.get(GeneratedMod.POTION_BOOST.get());
+            if (boost != null) {
+                amount *= 1.0 + boost;
+                entity.addEffect(new MobEffectInstance(GeneratedMod.MANA_FULLNESS,
+                        PlantEffects.FULLNESS_TICKS, 0, false, true));
+            }
             ManaData.restoreMana(entity, amount, true);
             if (dangerous) entity.addEffect(new MobEffectInstance(MobEffects.WITHER, 3600, 0));
             entity.playSound(SoundEvents.GENERIC_DRINK, 0.8F, 1.15F);
@@ -69,6 +76,13 @@ public final class ManaPotionItem extends Item {
             tooltip.add(Component.translatable("tooltip.dimensional_mana.potion.restore", percent(percentage), flat)
                     .withStyle(ChatFormatting.AQUA));
             tooltip.add(Component.translatable("tooltip.dimensional_mana.potion.overcharge").withStyle(ChatFormatting.GRAY));
+        }
+        if (stack.has(GeneratedMod.POTION_BOOST)) {
+            tooltip.add(Component.translatable("tooltip.dimensional_mana.potion.fortified",
+                    String.format(java.util.Locale.ROOT, "%.0f%%",
+                            stack.get(GeneratedMod.POTION_BOOST.get()) * 100.0F))
+                    .withStyle(ChatFormatting.LIGHT_PURPLE));
+            tooltip.add(Component.translatable("tooltip.dimensional_mana.potion.fullness").withStyle(ChatFormatting.BLUE));
         }
         tooltip.add(Component.translatable("tooltip.dimensional_mana.potion.drink_time",
                         String.format(java.util.Locale.ROOT, "%.1f", useTicks / 20.0))

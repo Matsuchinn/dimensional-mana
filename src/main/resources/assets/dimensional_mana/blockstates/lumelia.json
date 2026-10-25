@@ -1,0 +1,22 @@
+{
+  "variants": {
+    "wall_mounted=false": {
+      "model": "dimensional_mana:block/lumelia"
+    },
+    "wall_mounted=true,facing=north": {
+      "model": "dimensional_mana:block/lumelia_wall"
+    },
+    "wall_mounted=true,facing=east": {
+      "model": "dimensional_mana:block/lumelia_wall",
+      "y": 90
+    },
+    "wall_mounted=true,facing=south": {
+      "model": "dimensional_mana:block/lumelia_wall",
+      "y": 180
+    },
+    "wall_mounted=true,facing=west": {
+      "model": "dimensional_mana:block/lumelia_wall",
+      "y": 270
+    }
+  }
+}

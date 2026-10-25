@@ -34,6 +34,11 @@ public final class GrinderRecipes {
                     new ItemStack(GeneratedMod.MOD_ITEMS.get(grade + "_mana_crystal").get()),
                     new ItemStack(GeneratedMod.MOD_ITEMS.get(grade + "_mana_crystal_dust").get(), 4)));
         }
+        // 植物粉末：三种植物的叶子在任意研磨器里都能磨成粉，木研磨器就够用。
+        recipes.add(new Recipe(0, new ItemStack(GeneratedMod.MOD_ITEMS.get(ManaPlants.Kind.RESTELIA.id()).get()),
+                new ItemStack(GeneratedMod.MOD_ITEMS.get(ManaPlants.RESTELIA_POWDER).get())));
+        recipes.add(new Recipe(0, new ItemStack(GeneratedMod.MOD_ITEMS.get(ManaPlants.Kind.LEVILIA.id()).get()),
+                new ItemStack(GeneratedMod.MOD_ITEMS.get(ManaPlants.LEVILIA_POWDER).get())));
         return List.copyOf(recipes);
     }
 

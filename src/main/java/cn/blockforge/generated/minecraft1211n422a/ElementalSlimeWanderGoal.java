@@ -21,7 +21,11 @@ public final class ElementalSlimeWanderGoal extends Goal {
     }
 
     @Override
-    public boolean canUse() { return slime.getTarget() == null && !slime.isVehicle(); }
+    public boolean canUse() {
+        // 目标死了 / 变成不可攻击时也要照常闲逛：只判断 getTarget() 是否为空的话，
+        // 残留的死亡目标会让闲逛、施法、追击三个 Goal 同时停摆，史莱姆就地发呆。
+        return !slime.hasAttackableTarget() && !slime.isVehicle();
+    }
 
     @Override
     public boolean canContinueToUse() { return canUse(); }

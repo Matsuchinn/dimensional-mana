@@ -72,6 +72,39 @@ public final class DimensionalManaJeiPlugin implements IModPlugin {
                 ownCookingRecipes(GeneratedMod.MANA_FORGE_RECIPE_TYPE.get()));
         registration.addRecipes(PROFESSIONAL_TYPE,
                 ownCookingRecipes(GeneratedMod.PROFESSIONAL_RECIPE_TYPE.get()));
+        // 酿造台：模组用的是 NeoForge 的自定义酿造配方，原版 JEI 不会自动收录，这里手工补上。
+        registration.addRecipes(RecipeTypes.BREWING, brewingRecipes(registration.getVanillaRecipeFactory()));
+    }
+
+    /** 本模组在酿造台里的全部配方，按“输入 + 材料 → 产物”摆给 JEI 看。 */
+    private static List<mezz.jei.api.recipe.vanilla.IJeiBrewingRecipe> brewingRecipes(
+            mezz.jei.api.recipe.vanilla.IVanillaRecipeFactory factory) {
+        List<mezz.jei.api.recipe.vanilla.IJeiBrewingRecipe> recipes = new java.util.ArrayList<>();
+        ItemStack harmonizer = item("mana_harmonizer");
+        // JEI 19 的 createBrewingRecipe 第一个参数是“上方材料”，第二个才是“下方药水输入”。
+        // 摆反了就会显示成药剂在上、粉末在下，和酿造台的实际用法对不上。
+        recipes.add(factory.createBrewingRecipe(List.of(item(ManaPlants.RESTELIA_POWDER)),
+                List.of(harmonizer), item(ManaPlants.HEALING_DRAUGHT)));
+        recipes.add(factory.createBrewingRecipe(List.of(item(ManaPlants.LUMELIA_POWDER)),
+                List.of(harmonizer), item(ManaPlants.FULL_HEALING_DRAUGHT)));
+        // 补魔剂 + 蕾薇莉亚粉末 → 同一瓶强化版；五档补魔剂各摆一条。
+        for (String potion : List.of("lesser_mana_potion", "medium_mana_potion", "advanced_mana_potion",
+                "special_mana_potion", "pure_liquid_mana")) {
+            ItemStack base = item(potion);
+            recipes.add(factory.createBrewingRecipe(List.of(item(ManaPlants.LEVILIA_POWDER)),
+                    List.of(base), PlantBrewing.fortifiedStack(base)));
+        }
+        // 魔素调和剂本身：粗制药水 + 下级魔晶粉。
+        recipes.add(factory.createBrewingRecipe(
+                List.of(item("lesser_mana_crystal_dust")),
+                List.of(net.minecraft.world.item.alchemy.PotionContents.createItemStack(
+                        net.minecraft.world.item.Items.POTION, net.minecraft.world.item.alchemy.Potions.THICK)),
+                harmonizer));
+        return recipes;
+    }
+
+    private static ItemStack item(String id) {
+        return new ItemStack(GeneratedMod.MOD_ITEMS.get(id).get());
     }
 
     @Override

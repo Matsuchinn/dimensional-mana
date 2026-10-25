@@ -257,6 +257,8 @@ public final class BattleQiParry {
         Entity direct = source.getDirectEntity();
         Entity attackerEntity = source.getEntity();
         if (!(attackerEntity instanceof LivingEntity attacker) || direct != attacker) return Outcome.NONE;
+        // 玩家之间不互相弹刀：默认关闭 PvP 弹反，避免多人联机时你弹我、我弹你，双方都被定身。
+        if (attacker instanceof Player && !ManaConfig.PVP_PARRY.get()) return Outcome.NONE;
         if (!NewSpellSystem.enemy(player, attacker)) return Outcome.NONE;
         if (!nearEnough(player, attacker)) return Outcome.NONE;
 
@@ -280,6 +282,8 @@ public final class BattleQiParry {
     public static boolean parryInstantSpell(ServerPlayer player, LivingEntity caster, String flavor, float amount) {
         State state = STATES.get(player.getUUID());
         if (state == null || !state.stance) return false;
+        // 玩家对玩家同样不弹刀。
+        if (caster instanceof Player && !ManaConfig.PVP_PARRY.get()) return false;
         if (!canParry(player) || !NewSpellSystem.enemy(player, caster)) return false;
         if (!spellNearEnough(player, caster)) return false;
         long now = player.level().getGameTime();
@@ -372,6 +376,8 @@ public final class BattleQiParry {
         if (projectile == null || !projectile.isAlive() || projectile.isRemoved()) return false;
         Entity owner = projectile.getOwner();
         if (owner == player) return false;
+        // 玩家射来的弹射物也不弹（默认关闭 PvP 弹刀）。
+        if (owner instanceof Player && !ManaConfig.PVP_PARRY.get()) return false;
         if (owner instanceof LivingEntity living) return NewSpellSystem.enemy(player, living);
         // 发射器打出来的箭没有主人，同样算敌对弹射物。
         return !(owner instanceof Player);

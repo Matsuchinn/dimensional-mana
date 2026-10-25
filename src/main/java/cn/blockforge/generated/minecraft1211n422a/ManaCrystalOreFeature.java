@@ -71,6 +71,15 @@ public final class ManaCrystalOreFeature extends Feature<NoneFeatureConfiguratio
 
     private boolean placeTier(WorldGenLevel level, FeaturePlaceContext<NoneFeatureConfiguration> context,
                               RandomSource random, BlockPos target, int tier) {
+        // 矿脉会在 target 周围长开，可能摸到两格外的区块；那块还没生成就先跳过，
+        // 否则 vanilla 读方块时会抛 “Requested chunk unavailable during world generation”。
+        int reach = MAX_VEIN_SIZE[tier];
+        if (!WorldgenReads.chunkLoaded(level, target.offset(reach, 0, reach))
+                || !WorldgenReads.chunkLoaded(level, target.offset(-reach, 0, reach))
+                || !WorldgenReads.chunkLoaded(level, target.offset(reach, 0, -reach))
+                || !WorldgenReads.chunkLoaded(level, target.offset(-reach, 0, -reach))) {
+            return false;
+        }
         BlockState ore = switch (tier) {
             case 0 -> GeneratedMod.MOD_BLOCKS.get("lesser_mana_crystal_ore").get().defaultBlockState();
             case 1 -> GeneratedMod.MOD_BLOCKS.get("medium_mana_crystal_ore").get().defaultBlockState();
@@ -92,11 +101,13 @@ public final class ManaCrystalOreFeature extends Feature<NoneFeatureConfiguratio
                     random.nextInt(13) - 6,
                     random.nextInt(13) - 6
             );
+            if (!WorldgenReads.chunkLoaded(level, supportPos)) continue;
             BlockState support = level.getBlockState(supportPos);
             if (!support.isSolid()) continue;
 
             Direction direction = Direction.getRandom(random);
             BlockPos clusterPos = supportPos.relative(direction);
+            if (!WorldgenReads.chunkLoaded(level, clusterPos)) continue;
             if (!level.getBlockState(clusterPos).isAir()
                     || !support.isFaceSturdy(level, supportPos, direction)) continue;
 
@@ -140,6 +151,7 @@ public final class ManaCrystalOreFeature extends Feature<NoneFeatureConfiguratio
             for (int y = -8; y <= 8; y += GEODE_STEP) {
                 for (int z = -8; z <= 8; z += GEODE_STEP) {
                     cursor.setWithOffset(center, x, y, z);
+                    if (!WorldgenReads.chunkLoaded(level, cursor)) continue;
                     BlockState state = level.getBlockState(cursor);
                     if (state.is(Blocks.AMETHYST_BLOCK) || state.is(Blocks.BUDDING_AMETHYST)) {
                         return true;

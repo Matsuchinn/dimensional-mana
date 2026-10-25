@@ -52,7 +52,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
             page("new_arcane_chaos", 9), page("new_nature_tree", 9), page("new_metal_ward_swords", 8),
             page("new_light_shelter_rift", 9), page("new_poison_pair", 9), page("new_sound_bells", 9),
             page("achievements", 9), page("adventurer_trade", 9), page("element_plating", 10),
-            page("furnace_link", 9), page("mob_combat", 11), page("relics", 18), page("battle_qi_parry", 8)
+            page("furnace_link", 9), page("mob_combat", 11), page("relics", 18), page("battle_qi_parry", 8),
+            page("plants", 18)
     );
     /**
      * 章节里按 id 引用页面，不再手写页码：页码一改就容易对不上，之前“元素镀层”那一页
@@ -72,6 +73,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
                     "new_poison_pair", "new_sound_bells"),
             chapter("crystals", Items.AMETHYST_CLUSTER, "crystals", "grinding"),
             chapter("devices", Items.CRAFTING_TABLE, "furnaces", "processor", "furnace_link", "element_plating"),
+            chapter("nature", Items.OAK_SAPLING, "plants"),
             chapter("recipes", Items.KNOWLEDGE_BOOK),
             chapter("bestiary", Items.SLIME_BALL),
             chapter("exploration", Items.SPYGLASS, "exploration", "living_casters", "adventurer_trade",
@@ -120,7 +122,9 @@ public final class ArcaneCodexGuideScreen extends Screen {
     private String selectedCategory = "materials";
     private String selectedKind = "crafting";
     private ItemStack selectedRecipeProduct = ItemStack.EMPTY;
-    private ElementalSlimeVariant selectedSlime = ElementalSlimeVariant.MANA;
+    private String selectedBestiaryId = "mana";
+    private double bestiaryScroll;
+    private int bestiaryScrollMax;
     private ItemStack hoveredStack = ItemStack.EMPTY;
     /** 配方只在打开本次图鉴时整理一次，避免每一帧重复遍历配方管理器和全部物品注册表。 */
     private List<GuideRecipe> guideRecipeCache;
@@ -284,22 +288,75 @@ public final class ArcaneCodexGuideScreen extends Screen {
         }
     }
 
+    /** 首页章节网格：导语在上、页脚在下，卡片只在这块区域里排，不会再顶出书页。 */
+    private static final int HOME_GRID_MARGIN = 16;
+    private static final int HOME_CARD_GAP = 9;
+    /** 卡片高度固定 38：刚好放得下名字加两行说明，行数排不下就多加一列。 */
+    private static final int HOME_CARD_MIN_HEIGHT = 38;
+    private static final int HOME_CARD_MAX_HEIGHT = 38;
+
+    private int homeGridTop() { return top + 60; }
+
+    private int homeGridBottom() { return top + PANEL_HEIGHT - 38; }
+
+    /**
+     * 章节一多，两列就排不下了：11 个章节两列要 6 行，最后一行会掉出书页下边框，
+     * 还压住页脚文字。所以先按可用高度算出最多能放几行，再决定分几列。
+     */
+    private int homeColumns() {
+        int available = Math.max(1, homeGridBottom() - homeGridTop());
+        int maxRows = Math.max(1, available / HOME_CARD_MIN_HEIGHT);
+        int columns = 2;
+        while (columns < CHAPTERS.size() && (CHAPTERS.size() + columns - 1) / columns > maxRows) columns++;
+        return columns;
+    }
+
+    private int homeRows() {
+        return Math.max(1, (CHAPTERS.size() + homeColumns() - 1) / homeColumns());
+    }
+
+    private int homeCardWidth() {
+        int columns = homeColumns();
+        return (PANEL_WIDTH - 2 * HOME_GRID_MARGIN - (columns - 1) * HOME_CARD_GAP) / columns;
+    }
+
+    private int homeCardHeight() {
+        int rowHeight = (homeGridBottom() - homeGridTop()) / homeRows();
+        return Math.min(HOME_CARD_MAX_HEIGHT, Math.max(HOME_CARD_MIN_HEIGHT, rowHeight - 4));
+    }
+
+    /** 点击判定和绘制共用这套坐标，避免看到的位置和点到的不一致。 */
+    private int homeCardX(int index) {
+        return left + HOME_GRID_MARGIN + (index % homeColumns()) * (homeCardWidth() + HOME_CARD_GAP);
+    }
+
+    private int homeCardY(int index) {
+        int rowHeight = (homeGridBottom() - homeGridTop()) / homeRows();
+        return homeGridTop() + (index / homeColumns()) * rowHeight;
+    }
+
     private void renderHome(GuiGraphics graphics, int mouseX, int mouseY) {
         graphics.drawWordWrap(font, Component.translatable("gui.dimensional_mana.guide.home_intro"),
-                left + 22, top + 30, PANEL_WIDTH - 44, 0xFF3B2A32);
+                left + 22, top + 28, PANEL_WIDTH - 44, 0xFF3B2A32);
+        int cardWidth = homeCardWidth();
+        int cardHeight = homeCardHeight();
+        int textWidth = cardWidth - 34;
         for (int i = 0; i < CHAPTERS.size(); i++) {
             Chapter chapter = CHAPTERS.get(i);
-            int x = left + 16 + (i % 2) * 205;
-            int y = top + 62 + (i / 2) * 36;
-            boolean hover = inside(mouseX, mouseY, x, y, 195, 32);
-            graphics.fill(x, y, x + 195, y + 32, hover ? 0x66A36BC1 : 0x33705063);
-            graphics.renderOutline(x, y, 195, 32, hover ? 0xFF8A3FA5 : 0xFF8A6A46);
+            int x = homeCardX(i);
+            int y = homeCardY(i);
+            boolean hover = inside(mouseX, mouseY, x, y, cardWidth, cardHeight);
+            graphics.fill(x, y, x + cardWidth, y + cardHeight, hover ? 0x66A36BC1 : 0x33705063);
+            graphics.renderOutline(x, y, cardWidth, cardHeight, hover ? 0xFF8A3FA5 : 0xFF8A6A46);
             ItemStack icon = new ItemStack(chapter.icon());
-            graphics.renderItem(icon, x + 7, y + 8);
+            graphics.renderItem(icon, x + 7, y + (cardHeight - 16) / 2);
             graphics.drawString(font, Component.translatable("gui.dimensional_mana.guide.chapter." + chapter.id()),
-                    x + 29, y + 4, 0xFF4A274E, false);
-            graphics.drawString(font, Component.translatable("gui.dimensional_mana.guide.chapter." + chapter.id() + ".hint"),
-                    x + 29, y + 17, 0xFF5E5144, false);
+                    x + 28, y + 5, 0xFF4A274E, false);
+            // 说明最多占两行，超长的用省略号截断，免得挤出卡片外。
+            String hint = Component.translatable("gui.dimensional_mana.guide.chapter." + chapter.id() + ".hint").getString();
+            int hintMaxWidth = textWidth * 2;
+            if (font.width(hint) > hintMaxWidth) hint = font.plainSubstrByWidth(hint, hintMaxWidth - font.width("…")) + "…";
+            graphics.drawWordWrap(font, Component.literal(hint), x + 28, y + 17, textWidth, 0xFF5E5144);
             if (hover) hoveredStack = icon;
         }
         graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.home_footer"),
@@ -311,29 +368,39 @@ public final class ArcaneCodexGuideScreen extends Screen {
                 width / 2, top + 31, 0xFF6A2B76);
         graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.bestiary.hint"),
                 width / 2, top + 46, 0xFF715D49);
-        ElementalSlimeVariant[] variants = ElementalSlimeVariant.values();
-        for (int i = 0; i < variants.length; i++) {
-            ElementalSlimeVariant variant = variants[i];
+        int viewTop = top + 62;
+        int viewBottom = top + PANEL_HEIGHT - 34;
+        int rows = (BESTIARY_SUBJECTS.size() + 3) / 4;
+        int contentBottom = top + 64 + (rows - 1) * 53 + 44;
+        bestiaryScrollMax = Math.max(0, contentBottom - viewBottom);
+        bestiaryScroll = Mth.clamp(bestiaryScroll, 0, bestiaryScrollMax);
+        graphics.enableScissor(left + 12, viewTop, left + PANEL_WIDTH - 12, viewBottom);
+        for (int i = 0; i < BESTIARY_SUBJECTS.size(); i++) {
+            BestiarySubject subject = BESTIARY_SUBJECTS.get(i);
             int x = left + 20 + (i % 4) * 102;
-            int y = top + 64 + (i / 4) * 53;
-            boolean hover = inside(mouseX, mouseY, x, y, 92, 44);
+            int y = top + 64 + (i / 4) * 53 - (int)Math.round(bestiaryScroll);
+            boolean hover = mouseY >= viewTop && mouseY < viewBottom && inside(mouseX, mouseY, x, y, 92, 44);
             graphics.fill(x, y, x + 92, y + 44, hover ? 0x667D4EA1 : 0x33FFFFFF);
-            graphics.renderOutline(x, y, 92, 44, hover ? variant.color() : 0xFF9A805E);
-            ItemStack icon = modStack(variant.spawnEggId(), 1);
+            graphics.renderOutline(x, y, 92, 44, hover ? subject.color() : 0xFF9A805E);
+            ItemStack icon = modStack(subject.eggId(), 1);
             graphics.renderItem(icon, x + 7, y + 14);
-            graphics.drawWordWrap(font, Component.translatable(variant.translationKey()),
+            graphics.drawWordWrap(font, Component.translatable(subject.nameKey()),
                     x + 29, y + 8, 57, 0xFF4A274E);
             if (hover) hoveredStack = icon;
         }
+        graphics.disableScissor();
+        if (bestiaryScrollMax > 0) renderScrollbar(graphics, viewTop, viewBottom, bestiaryScroll,
+                bestiaryScrollMax, left + PANEL_WIDTH - 13);
     }
 
     private void renderBestiaryDetail(GuiGraphics graphics) {
-        ElementalSlimeVariant variant = selectedSlime;
-        graphics.drawCenteredString(font, Component.translatable(variant.translationKey()),
-                width / 2, top + 29, variant.color());
-        ItemStack icon = modStack(variant.spawnEggId(), 1);
+        BestiarySubject subject = bestiarySubject(selectedBestiaryId);
+        if (subject == null) return;
+        graphics.drawCenteredString(font, Component.translatable(subject.nameKey()),
+                width / 2, top + 29, subject.color());
+        ItemStack icon = modStack(subject.eggId(), 1);
         graphics.renderItem(icon, left + 24, top + 47);
-        String base = "gui.dimensional_mana.bestiary." + variant.id() + ".";
+        String base = "gui.dimensional_mana.bestiary." + subject.id() + ".";
         String[] fields = {"element", "spawn", "stats", "mechanics", "drops", "resistance"};
         int y = top + 48;
         for (String field : fields) {
@@ -347,6 +414,38 @@ public final class ArcaneCodexGuideScreen extends Screen {
             graphics.drawWordWrap(font, value, valueX, y, Math.max(80, valueWidth), 0xFF3D343A);
             y += Math.max(25, font.split(value, Math.max(80, valueWidth)).size() * 10 + 7);
         }
+    }
+
+    /** 图鉴条目：十二种元素史莱姆 + 五种哥布林，id 同时决定详情页的语言键前缀。 */
+    private record BestiarySubject(String id, String nameKey, int color, String eggId) { }
+
+    private static final List<BestiarySubject> BESTIARY_SUBJECTS = bestiarySubjects();
+
+    private static List<BestiarySubject> bestiarySubjects() {
+        List<BestiarySubject> subjects = new ArrayList<>();
+        for (ElementalSlimeVariant variant : ElementalSlimeVariant.values()) {
+            subjects.add(new BestiarySubject(variant.id(), variant.translationKey(), variant.color(),
+                    variant.spawnEggId()));
+        }
+        for (GoblinVariant variant : GoblinVariant.values()) {
+            int color = switch (variant) {
+                case YOUNG -> 0xFF8FA64B;
+                case WARRIOR -> 0xFF6E8B3D;
+                case ARCHER -> 0xFF9C8B3A;
+                case SHAMAN -> 0xFF7E5BA6;
+                case CHIEF -> 0xFFC9A227;
+            };
+            subjects.add(new BestiarySubject("goblin_" + variant.id(),
+                    "entity.dimensional_mana." + variant.entityId(), color, variant.spawnEggId()));
+        }
+        return List.copyOf(subjects);
+    }
+
+    private static BestiarySubject bestiarySubject(String id) {
+        for (BestiarySubject subject : BESTIARY_SUBJECTS) {
+            if (subject.id().equals(id)) return subject;
+        }
+        return null;
     }
 
     private void renderChapterIndex(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -789,6 +888,13 @@ public final class ArcaneCodexGuideScreen extends Screen {
                     modStack(grade + "_mana_crystal_dust", 4), "grinding", "materials", "grinding",
                     Component.translatable("gui.dimensional_mana.guide.recipe.grinding_tier", tier + 1));
         }
+        // 植物粉末：瑞斯特莉亚、蕾薇莉亚在任何研磨器里都能磨成粉（卢梅莉亚粉末走专业锻造炉）。
+        addSynthetic(recipes, "grinding/restelia", modStack(ManaPlants.Kind.RESTELIA.id(), 1),
+                modStack(ManaPlants.RESTELIA_POWDER, 1), "grinding", "materials", "grinding",
+                Component.translatable("gui.dimensional_mana.guide.recipe.grinding_any"));
+        addSynthetic(recipes, "grinding/levilia", modStack(ManaPlants.Kind.LEVILIA.id(), 1),
+                modStack(ManaPlants.LEVILIA_POWDER, 1), "grinding", "materials", "grinding",
+                Component.translatable("gui.dimensional_mana.guide.recipe.grinding_any"));
     }
 
     private static void addProcessorRecipes(List<GuideRecipe> recipes) {
@@ -907,23 +1013,51 @@ public final class ArcaneCodexGuideScreen extends Screen {
     }
 
     private static void addBrewingRecipes(List<GuideRecipe> recipes) {
+        // 酿造统一摆成“材料在上、药水在下”的竖排，和酿造台的实际用法一致。
         // 剧毒Ⅱ药水 + 特级魔晶粉 → 剧毒Ⅲ药水（中毒 III，18 秒）。
         ItemStack strongPoison = PotionContents.createItemStack(Items.POTION, Potions.STRONG_POISON);
         ItemStack poisonIII = PotionContents.createItemStack(Items.POTION, GeneratedMod.POISON_III);
         ItemStack specialDust = modStack("special_mana_crystal_dust", 1);
         if (!poisonIII.isEmpty() && !specialDust.isEmpty()) {
-            recipes.add(new GuideRecipe(poisonIII, List.of(single(strongPoison), single(specialDust)),
-                    2, 1, "brewing", "alchemy", "brewing",
+            recipes.add(new GuideRecipe(poisonIII, List.of(single(specialDust), single(strongPoison)),
+                    1, 2, "brewing", "alchemy", "brewing",
                     Component.translatable("gui.dimensional_mana.guide.recipe.brewing_poison_iii_note"),
                     GeneratedMod.MOD_ID + ":manual/brewing/poison_iii"));
         }
         ItemStack thickPotion = PotionContents.createItemStack(Items.POTION, Potions.THICK);
-        List<GuideIngredient> ingredients = List.of(single(thickPotion), single(modStack("lesser_mana_crystal_dust", 1)));
+        List<GuideIngredient> harmonizerIngredients =
+                List.of(single(modStack("lesser_mana_crystal_dust", 1)), single(thickPotion));
         ItemStack harmonizer = modStack("mana_harmonizer", 1);
         if (harmonizer.isEmpty()) return;
-        recipes.add(new GuideRecipe(harmonizer, ingredients, 2, 1, "brewing", "alchemy", "brewing",
+        recipes.add(new GuideRecipe(harmonizer, harmonizerIngredients, 1, 2, "brewing", "alchemy", "brewing",
                 Component.translatable("gui.dimensional_mana.guide.recipe.brewing_note"),
                 GeneratedMod.MOD_ID + ":manual/brewing/mana_harmonizer"));
+        // 植物线：粉末在上，魔素调和剂在下。
+        addPlantBrewing(recipes, "restelia", ManaPlants.RESTELIA_POWDER, harmonizer,
+                ManaPlants.HEALING_DRAUGHT, "brewing_restelia_note");
+        addPlantBrewing(recipes, "lumelia", ManaPlants.LUMELIA_POWDER, harmonizer,
+                ManaPlants.FULL_HEALING_DRAUGHT, "brewing_lumelia_note");
+        // 蕾薇莉亚粉末 + 任意补魔剂 → 同一瓶强化版；图鉴里摆下级补魔剂作代表。
+        ItemStack lesserPotion = modStack("lesser_mana_potion", 1);
+        ItemStack leviliaPowder = modStack(ManaPlants.LEVILIA_POWDER, 1);
+        if (!lesserPotion.isEmpty() && !leviliaPowder.isEmpty()) {
+            recipes.add(new GuideRecipe(PlantBrewing.fortifiedStack(lesserPotion),
+                    List.of(single(leviliaPowder), single(lesserPotion)), 1, 2, "brewing", "alchemy", "brewing",
+                    Component.translatable("gui.dimensional_mana.guide.recipe.brewing_fortify_note"),
+                    GeneratedMod.MOD_ID + ":manual/brewing/levilia"));
+        }
+    }
+
+    /** 一条植物酿造配方：粉末放在上方材料槽，调和剂放在下方药水槽。 */
+    private static void addPlantBrewing(List<GuideRecipe> recipes, String id, String powderId,
+                                        ItemStack harmonizer, String draughtId, String noteKey) {
+        ItemStack powder = modStack(powderId, 1);
+        ItemStack draught = modStack(draughtId, 1);
+        if (powder.isEmpty() || draught.isEmpty() || harmonizer.isEmpty()) return;
+        recipes.add(new GuideRecipe(draught, List.of(single(powder), single(harmonizer)),
+                1, 2, "brewing", "alchemy", "brewing",
+                Component.translatable("gui.dimensional_mana.guide.recipe." + noteKey),
+                GeneratedMod.MOD_ID + ":manual/brewing/" + id));
     }
 
     private static void addSynthetic(List<GuideRecipe> recipes, String id, ItemStack input, ItemStack result,
@@ -1016,12 +1150,13 @@ public final class ArcaneCodexGuideScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (view == View.HOME && button == 0) {
+            int cardWidth = homeCardWidth();
+            int cardHeight = homeCardHeight();
             for (int i = 0; i < CHAPTERS.size(); i++) {
-                int x = left + 16 + (i % 2) * 205;
-                int y = top + 62 + (i / 2) * 36;
-                if (inside(mouseX, mouseY, x, y, 195, 32)) {
+                if (inside(mouseX, mouseY, homeCardX(i), homeCardY(i), cardWidth, cardHeight)) {
                     selectedChapter = i;
                     Chapter chapter = CHAPTERS.get(i);
+                    bestiaryScroll = 0;
                     view = chapter.id().equals("bestiary") ? View.BESTIARY_INDEX
                             : chapter.pages().isEmpty() ? View.RECIPE_CATEGORIES : View.CHAPTER_INDEX;
                     playTurn();
@@ -1031,16 +1166,19 @@ public final class ArcaneCodexGuideScreen extends Screen {
             }
         }
         if (view == View.BESTIARY_INDEX && button == 0) {
-            ElementalSlimeVariant[] variants = ElementalSlimeVariant.values();
-            for (int i = 0; i < variants.length; i++) {
-                int x = left + 20 + (i % 4) * 102;
-                int y = top + 64 + (i / 4) * 53;
-                if (inside(mouseX, mouseY, x, y, 92, 44)) {
-                    selectedSlime = variants[i];
-                    view = View.BESTIARY_DETAIL;
-                    playTurn();
-                    rebuildWidgets();
-                    return true;
+            int viewTop = top + 62;
+            int viewBottom = top + PANEL_HEIGHT - 34;
+            if (mouseY >= viewTop && mouseY < viewBottom) {
+                for (int i = 0; i < BESTIARY_SUBJECTS.size(); i++) {
+                    int x = left + 20 + (i % 4) * 102;
+                    int y = top + 64 + (i / 4) * 53 - (int)Math.round(bestiaryScroll);
+                    if (inside(mouseX, mouseY, x, y, 92, 44)) {
+                        selectedBestiaryId = BESTIARY_SUBJECTS.get(i).id();
+                        view = View.BESTIARY_DETAIL;
+                        playTurn();
+                        rebuildWidgets();
+                        return true;
+                    }
                 }
             }
         }
@@ -1124,6 +1262,10 @@ public final class ArcaneCodexGuideScreen extends Screen {
         }
         if (view == View.CHAPTER_INDEX && chapterIndexScrollMax > 0) {
             chapterIndexScroll = Mth.clamp(chapterIndexScroll - scrollY * 20.0, 0, chapterIndexScrollMax);
+            return true;
+        }
+        if (view == View.BESTIARY_INDEX && bestiaryScrollMax > 0) {
+            bestiaryScroll = Mth.clamp(bestiaryScroll - scrollY * 20.0, 0, bestiaryScrollMax);
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);

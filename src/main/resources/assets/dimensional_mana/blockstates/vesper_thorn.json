@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "blooming=false": {
+      "model": "dimensional_mana:block/vesper_thorn"
+    },
+    "blooming=true": {
+      "model": "dimensional_mana:block/vesper_thorn_bloom"
+    }
+  }
+}

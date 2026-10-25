@@ -35,6 +35,15 @@ import java.util.Set;
 public final class GoblinSpawning {
     private record PendingCamp(ServerLevel level, BlockPos center, GoblinCampPiece camp) {}
     private static final Set<PendingCamp> PENDING_CAMPS = new LinkedHashSet<>();
+    /**
+     * 野外巡逻的生成概率：白天 12%、夜晚 18%（旧版是 25% / 34%）。
+     * 旧数值大约每分钟就刷一队 2～5 只，新手前期还在砍树就会被成队哥布林围住；
+     * 现在大约两分钟一队，且队伍缩到 1～3 只。
+     */
+    private static final float PATROL_CHANCE_DAY = 0.12F;
+    private static final float PATROL_CHANCE_NIGHT = 0.18F;
+    /** 玩家 64 格内最多同时存在这么多只野生哥布林，防止几轮巡逻叠成一大群。 */
+    private static final int PATROL_LOCAL_CAP = 6;
 
     public static void tickLevel(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
@@ -43,20 +52,20 @@ public final class GoblinSpawning {
         for (ServerPlayer player:level.players()) {
             if(player.isSpectator()) continue;
             RandomSource random=player.getRandom();
-            if(random.nextFloat()>=(level.isDay()?.25F:.34F)) continue;
-            if(level.getEntitiesOfClass(Goblin.class,player.getBoundingBox().inflate(64),Goblin::isAlive).size()>=10) continue;
+            if(random.nextFloat()>=(level.isDay()?PATROL_CHANCE_DAY:PATROL_CHANCE_NIGHT)) continue;
+            if(level.getEntitiesOfClass(Goblin.class,player.getBoundingBox().inflate(64),Goblin::isAlive).size()>=PATROL_LOCAL_CAP) continue;
             spawnPatrol(level,player,random);
         }
     }
 
     private static void spawnPatrol(ServerLevel level,ServerPlayer player,RandomSource random) {
         for(int attempt=0;attempt<8;attempt++) {
-            double angle=random.nextDouble()*Math.PI*2,distance=24+random.nextDouble()*20;
+            double angle=random.nextDouble()*Math.PI*2,distance=30+random.nextDouble()*26;
             BlockPos probe=BlockPos.containing(player.getX()+Math.cos(angle)*distance,0,
                     player.getZ()+Math.sin(angle)*distance);
             BlockPos pos=level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,probe);
             if(!isGoblinBiome(level,pos)||!hasRoom(level,pos)) continue;
-            int count=2+random.nextInt(4);
+            int count=1+random.nextInt(3);
             for(int i=0;i<count;i++) {
                 BlockPos spot=pos.offset(random.nextInt(5)-2,0,random.nextInt(5)-2);
                 if(!hasRoom(level,spot)) spot=pos;

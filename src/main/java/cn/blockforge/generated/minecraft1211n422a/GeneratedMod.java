@@ -87,6 +87,8 @@ public final class GeneratedMod {
     public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, MOD_ID);
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MOD_ID);
     public static final DeferredRegister<RecipeType<?>> RECIPE_TYPES = DeferredRegister.create(Registries.RECIPE_TYPE, MOD_ID);
+    public static final DeferredRegister<net.minecraft.core.component.DataComponentType<?>> DATA_COMPONENTS =
+            DeferredRegister.create(Registries.DATA_COMPONENT_TYPE, MOD_ID);
     public static final DeferredRegister<RecipeSerializer<?>> RECIPE_SERIALIZERS = DeferredRegister.create(Registries.RECIPE_SERIALIZER, MOD_ID);
     public static final DeferredRegister<net.minecraft.world.level.storage.loot.predicates.LootItemConditionType> LOOT_CONDITIONS =
             DeferredRegister.create(Registries.LOOT_CONDITION_TYPE, MOD_ID);
@@ -130,6 +132,20 @@ public final class GeneratedMod {
     public static final DeferredHolder<MobEffect, MobEffect> MAGIC_RETORT = EFFECTS.register("magic_retort", MagicRetortEffect::new);
     public static final DeferredHolder<MobEffect, MobEffect> WARDEN_MARK = EFFECTS.register("warden_mark", WardenMarkEffect::new);
     public static final DeferredHolder<MobEffect, MobEffect> ANCIENT_CURSE = EFFECTS.register("ancient_curse", AncientCurseEffect::new);
+    /** 植物线：魔力充盈（亲和 ×2.5）、“？”与维斯珀德索恩诅咒。 */
+    public static final DeferredHolder<MobEffect, MobEffect> MANA_FULLNESS = EFFECTS.register("mana_fullness",
+            PlantEffects.Fullness::new);
+    public static final DeferredHolder<MobEffect, MobEffect> VESPER_UNKNOWN = EFFECTS.register("vesper_unknown",
+            PlantEffects.Unknown::new);
+    public static final DeferredHolder<MobEffect, MobEffect> VESPER_CURSE = EFFECTS.register("vesper_curse",
+            PlantEffects.Curse::new);
+    /** 强化补魔剂多回的那 15%：存在物品组件上，不需要为每一级补魔剂各开一个物品。 */
+    public static final DeferredHolder<net.minecraft.core.component.DataComponentType<?>,
+            net.minecraft.core.component.DataComponentType<Float>> POTION_BOOST = DATA_COMPONENTS.register("potion_boost",
+            () -> net.minecraft.core.component.DataComponentType.<Float>builder()
+                    .persistent(com.mojang.serialization.Codec.FLOAT)
+                    .networkSynchronized(net.minecraft.network.codec.ByteBufCodecs.FLOAT)
+                    .build());
     public static final DeferredHolder<MobEffect, MobEffect> ARCANE_SURGE = EFFECTS.register("arcane_surge", ArcaneSurgeEffect::new);
     public static final DeferredHolder<MobEffect, MobEffect> ARCANE_ATTACHMENT = EFFECTS.register("arcane_attachment",
             () -> new ArcaneReactionEffect(MobEffectCategory.NEUTRAL, 0xC85BFF));
@@ -190,6 +206,9 @@ public final class GeneratedMod {
                     (id, inventory, buffer) -> new AdventurerTradeMenu(id, inventory, buffer.readVarInt())));
     public static final DeferredHolder<RecipeType<?>, RecipeType<ManaCookingRecipe>> MANA_FORGE_RECIPE_TYPE = RECIPE_TYPES.register("mana_forge_smelting", RecipeType::simple);
     public static final DeferredHolder<RecipeType<?>, RecipeType<ManaCookingRecipe>> PROFESSIONAL_RECIPE_TYPE = RECIPE_TYPES.register("professional_smelting", RecipeType::simple);
+    /** 加料食物（卢梅莉亚粉末 + 任意食物）：产物要按食物现场生成，只能走特制配方。 */
+    public static final DeferredHolder<RecipeSerializer<?>, RecipeSerializer<PlantFood>> PLANT_FOOD_SERIALIZER =
+            RECIPE_SERIALIZERS.register("plant_food", PlantFood.Serializer::new);
     public static final DeferredHolder<RecipeSerializer<?>, RecipeSerializer<ManaCookingRecipe>> MANA_FORGE_RECIPE_SERIALIZER = RECIPE_SERIALIZERS.register(
             "mana_forge_smelting", () -> new SimpleCookingSerializer<>((group, category, ingredient, result, experience, cookingTime) ->
                     new ManaCookingRecipe(ManaCookingRecipe.FurnaceKind.MANA_FORGE, group, category, ingredient, result, experience, cookingTime), 200));
@@ -200,6 +219,9 @@ public final class GeneratedMod {
             "mana_crystal_ores", ManaCrystalOreFeature::new);
     public static final DeferredHolder<Feature<?>, Feature<NoneFeatureConfiguration>> MANA_CRYSTAL_CAVE = FEATURES.register(
             "mana_crystal_cave", ManaCrystalCaveFeature::new);
+    /** 五种魔法植物：区块生成时就按群系、高度与地表浓度种下。 */
+    public static final DeferredHolder<Feature<?>, Feature<NoneFeatureConfiguration>> MANA_PLANTS = FEATURES.register(
+            "mana_plants", ManaPlantFeature::new);
     public static final DeferredHolder<EntityType<?>, EntityType<WanderingWitch>> WANDERING_WITCH = ENTITY_TYPES.register(
             "wandering_witch", () -> EntityType.Builder.of(WanderingWitch::new, MobCategory.MONSTER)
                     .sized(0.6F, 1.95F).clientTrackingRange(8).build(MOD_ID + ":wandering_witch"));
@@ -419,6 +441,8 @@ public final class GeneratedMod {
         magicItem("adventurer_spawn_egg", ITEMS.register("adventurer_spawn_egg", () ->
                 new DeferredSpawnEggItem(ADVENTURER, 0x3D536C, 0xC59A55,
                         new Item.Properties().rarity(Rarity.RARE))));
+        // 「次元物语：自然」的主角：五种魔法植物、植物粉末与植物药剂，排在最前面。
+        ManaPlants.register();
         registerElementalSlimes();
         registerGoblins();
     }
@@ -568,6 +592,7 @@ public final class GeneratedMod {
         RECIPE_TYPES.register(modBus);
         RoughEquipment.ARMOR_MATERIALS.register(modBus);
         RECIPE_SERIALIZERS.register(modBus);
+        DATA_COMPONENTS.register(modBus);
         LOOT_CONDITIONS.register(modBus);
         CREATIVE_TABS.register(modBus);
         FEATURES.register(modBus);
@@ -687,6 +712,12 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(events::onMobEntityJoin);
         NeoForge.EVENT_BUS.addListener(events::onExplosion);
         NeoForge.EVENT_BUS.addListener(events::onLevelTick);
+        NeoForge.EVENT_BUS.addListener(ManaPlantSpawning::tickLevel);
+        NeoForge.EVENT_BUS.addListener(ManaPlantSpawning::onChunkLoad);
+        NeoForge.EVENT_BUS.addListener(ManaPlantSpawning::onJump);
+        NeoForge.EVENT_BUS.addListener(ManaPlantSpawning::onLivingDeath);
+        NeoForge.EVENT_BUS.addListener(PlantEvents::onEffectExpired);
+        NeoForge.EVENT_BUS.addListener(PlantEvents::onUseFinish);
         NeoForge.EVENT_BUS.addListener(ElementPlating::onTooltip);
         NeoForge.EVENT_BUS.addListener(ElementPlating::onGrindstonePlace);
         NeoForge.EVENT_BUS.addListener(ElementPlating::onGrindstoneTake);
@@ -858,6 +889,8 @@ public final class GeneratedMod {
                 Ingredient.of(MOD_ITEMS.get("lesser_mana_crystal_dust").get()),
                 new ItemStack(MOD_ITEMS.get("mana_harmonizer").get())
         );
+        // 植物线：魔素调和剂 + 粉末 → 植物药剂；补魔剂 + 蕾薇莉亚粉末 → 强化补魔剂。
+        PlantBrewing.register(event);
         // 剧毒Ⅱ药水 + 特级魔晶粉 → 剧毒Ⅲ药水（中毒 III，18 秒）。
         event.getBuilder().addMix(Potions.STRONG_POISON,
                 MOD_ITEMS.get("special_mana_crystal_dust").get(), POISON_III);
