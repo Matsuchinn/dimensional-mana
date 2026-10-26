@@ -66,8 +66,8 @@ public final class SpellRenderTypes extends RenderStateShard {
         SIGIL_FROST("sigil_frost", 128, 64, 64),
         /** 万剑归一的天空裂缝：横向并排 8 帧动画，每帧 128x64。 */
         SKY_RIFT("sky_rift", 1024, 64, 128, 64),
-        /** 完美招架时贴在怪物身上的闪光：横向并排 4 帧，每帧 16x16，共 8 刻播完。 */
-        PARRY_FLASH("parry_flash", 64, 16, 16);
+        /** 完美招架时贴在怪物身上的闪光：横向并排 4 帧，每帧 32x32，共 8 刻播完。 */
+        PARRY_FLASH("parry_flash", 128, 32, 32);
 
         public final RenderType type;
         public final int width, height, tile, tileWidth, tileHeight;

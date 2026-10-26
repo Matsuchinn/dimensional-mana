@@ -316,7 +316,7 @@ public final class BattleQiParry {
         ManaData.spendBattleQiQuiet(player, cost);
         if (flavor != null && player.level() instanceof ServerLevel level) spellBurst(level, at, flavor);
         if (perfect) perfectParry(player, attacker, cost, qi.maxBattleQi(), at);
-        else normalParry(player, at);
+        else normalParry(player, attacker, at);
         return true;
     }
 
@@ -441,29 +441,33 @@ public final class BattleQiParry {
 
     // ---------------------------------------------------------------- 近战弹反
 
-    private static void normalParry(ServerPlayer player, Vec3 at) {
+    private static void normalParry(ServerPlayer player, LivingEntity attacker, Vec3 at) {
         if (player.level() instanceof ServerLevel level) {
             level.sendParticles(ParticleTypes.CRIT, at.x, at.y, at.z, 22, 0.35, 0.3, 0.35, 0.25);
             level.sendParticles(ParticleTypes.ENCHANTED_HIT, at.x, at.y, at.z, 8, 0.25, 0.25, 0.25, 0.1);
             play(level, at, SoundEvents.ANVIL_PLACE, 0.55F, 1.45F);
             play(level, at, SoundEvents.PLAYER_ATTACK_CRIT, 0.9F, 0.9F);
         }
-        feedback(player, ParryFeedbackPayload.NORMAL, at);
+        // 普通格挡的屏幕反馈：准心白圈 + 被打的那只怪物身上一段小闪光（和完美格挡同一套画法，
+        // 只是小一号）。带上实体 id，闪光是跟着怪物走的，不是钉在一个坐标上。
+        ParryFeedbackPayload.sendFlash(player, ParryFeedbackPayload.NORMAL, at, attacker.getId());
     }
 
     private static void perfectParry(ServerPlayer player, LivingEntity attacker, int cost, int maxQi, Vec3 at) {
         if (player.level() instanceof ServerLevel level) {
             // 巨大的十字冲击波：三记横扫粒子交叉叠成十字，再补一圈金色冲击环。
             level.sendParticles(ParticleTypes.SWEEP_ATTACK, at.x, at.y, at.z, 3, 0.45, 0.45, 0.45, 0.0);
-            level.sendParticles(ParticleTypes.CRIT, at.x, at.y, at.z, 36, 0.5, 0.4, 0.5, 0.35);
+            // 火花往四面八方甩：速度给大一点，才是「迸开」；再补一层烟花火星，
+            // 就是那种细碎、会往下掉的橙色小点，和贴身闪光里的火星对得上。
+            level.sendParticles(ParticleTypes.CRIT, at.x, at.y, at.z, 30, 0.55, 0.45, 0.55, 0.62);
+            level.sendParticles(ParticleTypes.FIREWORK, at.x, at.y, at.z, 20, 0.50, 0.45, 0.50, 0.32);
             level.sendParticles(ParticleTypes.ENCHANT, at.x, at.y + 0.3, at.z, 16, 0.6, 0.5, 0.6, 0.45);
             level.sendParticles(ParticleTypes.FLASH, at.x, at.y, at.z, 1, 0.0, 0.0, 0.0, 0.0);
             ring(level, at, ParticleTypes.END_ROD, 24, 1.0);
-            // 「铛——！」高频金属回响，再补一记闷响表示怪物被震晕。
-            play(level, at, SoundEvents.BELL_BLOCK, 0.9F, 1.9F);
-            play(level, at, SoundEvents.ANVIL_LAND, 0.5F, 1.6F);
-            play(level, at, SoundEvents.PLAYER_ATTACK_CRIT, 1.0F, 1.3F);
-            play(level, at, SoundEvents.ANVIL_LAND, 0.85F, 0.55F);
+            // 再随机补一撮金色碎光：每次完美招架的画面也不完全一样。
+            extraFlourish(level, at);
+            // 「铛——！」六段剑鸣随机挑一段，再叠随机余韵、随机回响和落地闷响。
+            ParrySounds.perfect(level, at, level.getRandom());
             // 打断怪物当前动作并眩晕 1 秒；定身、停 AI 都在 NewSpellSystem 里统一处理。
             NewSpellSystem.control(player, attacker, NewSpellContent.STUN, STUN_TICKS);
             // 眩晕的这一秒同时是破绽窗口：期间对它打出的所有伤害都 +75%，「见切」每级再加 5%。
@@ -481,9 +485,9 @@ public final class BattleQiParry {
             level.sendParticles(ParticleTypes.HAPPY_VILLAGER, player.getX(), player.getY() + 1.2, player.getZ(),
                     10, 0.4, 0.4, 0.4, 0.05);
         }
-        feedback(player, ParryFeedbackPayload.PERFECT, at);
-        // 怪物身上再放一段 8 刻/4 帧的贴身闪光，让「这一下被弹开了」看得更明白。
-        ParryFeedbackPayload.sendFlash(player, at, attacker.getId());
+        // 屏幕反馈：准心金圈 + 白闪 + 金色光晕，怪物身上再贴一段 8 刻/4 帧的爆闪，
+        // 让「这一下被弹开了」看得更明白。带上实体 id，爆闪跟着那只怪物走。
+        ParryFeedbackPayload.sendFlash(player, ParryFeedbackPayload.PERFECT, at, attacker.getId());
         // 招架余势：下一次近战攻击不用等蓄力条，直接按满伤害打出去。
         grantFullPower(player);
         // 斗气经验 +20；戴着剑士护符再给 2 秒的 +25% 移速。
@@ -596,6 +600,21 @@ public final class BattleQiParry {
             }
         }
         ring(level, at, ParticleTypes.ENCHANTED_HIT, 16, 0.65);
+    }
+
+    /**
+     * 完美招架每次多撒一撮金粉，三种样式随机：
+     * 上升的星火、炸开的烟花、贴地扩散的光尘——画面和音效一起变化，才不容易腻。
+     */
+    private static void extraFlourish(ServerLevel level, Vec3 at) {
+        switch (level.getRandom().nextInt(3)) {
+            case 0 -> level.sendParticles(ParticleTypes.END_ROD, at.x, at.y + 0.2, at.z, 14, 0.3, 0.5, 0.3, 0.06);
+            case 1 -> level.sendParticles(ParticleTypes.FIREWORK, at.x, at.y + 0.2, at.z, 16, 0.35, 0.35, 0.35, 0.12);
+            default -> {
+                level.sendParticles(ParticleTypes.GLOW, at.x, at.y + 0.2, at.z, 18, 0.45, 0.35, 0.45, 0.08);
+                level.sendParticles(ParticleTypes.TOTEM_OF_UNDYING, at.x, at.y + 0.2, at.z, 6, 0.25, 0.3, 0.25, 0.15);
+            }
+        }
     }
 
     private static void ring(ServerLevel level, Vec3 center, SimpleParticleType particle, int count, double radius) {

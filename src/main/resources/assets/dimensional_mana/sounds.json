@@ -748,5 +748,16 @@
         "volume": 0.85
       }
     ]
+  },
+  "parry_perfect": {
+    "subtitle": "subtitles.dimensional_mana.parry_perfect",
+    "sounds": [
+      "dimensional_mana:parry/perfect_steel",
+      "dimensional_mana:parry/perfect_double",
+      "dimensional_mana:parry/perfect_ring",
+      "dimensional_mana:parry/perfect_heavy",
+      "dimensional_mana:parry/perfect_sharp",
+      "dimensional_mana:parry/perfect_spark"
+    ]
   }
 }

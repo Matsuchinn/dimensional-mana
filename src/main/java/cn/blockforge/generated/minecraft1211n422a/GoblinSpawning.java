@@ -48,6 +48,8 @@ public final class GoblinSpawning {
     public static void tickLevel(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         tickPendingCamps(level);
+        // 世界关了「生成生物」（或和平难度）时不再放巡逻队，野外就真的没有哥布林。
+        if (!SpawnControl.hostileSpawningAllowed(level)) return;
         if (level.dimension()!=Level.OVERWORLD || level.getGameTime()%200!=0) return;
         for (ServerPlayer player:level.players()) {
             if(player.isSpectator()) continue;
@@ -95,6 +97,8 @@ public final class GoblinSpawning {
                 &&level.isEmptyBlock(pos.above())&&level.isEmptyBlock(pos.above(2));
     }
     public static Goblin spawn(ServerLevel level,BlockPos pos,GoblinVariant variant,MobSpawnType reason) {
+        // 野外刷怪的统一闸门：关掉后巡逻队、营地居民、首领全都不生成。
+        if(!SpawnControl.hostileSpawningAllowed(level)) return null;
         EntityType<Goblin> type=GeneratedMod.goblinType(variant);
         if(type==null) return null;
         Goblin goblin=type.create(level);
@@ -118,7 +122,7 @@ public final class GoblinSpawning {
             if(start==null||!start.isValid()) return;
             for(var piece:start.getPieces()) if(piece instanceof GoblinCampPiece camp) {
                 BlockPos center=camp.campCenter();
-                if(!GoblinCampData.get(level).contains(center)) {
+                if(!GoblinCampData.get(level).contains(center) && PENDING_CAMPS.size()<512) {
                     PENDING_CAMPS.add(new PendingCamp(level,center,camp));
                 }
             }
@@ -127,6 +131,8 @@ public final class GoblinSpawning {
 
     private static void tickPendingCamps(ServerLevel level) {
         if(level.getGameTime()%20!=0) return;
+        // 关掉生物生成时营地先原样留在队列里（不标记已处理），以后重新打开开关还能补上居民。
+        if(!SpawnControl.hostileSpawningAllowed(level)) return;
         int budget=2;
         var iterator=PENDING_CAMPS.iterator();
         while(iterator.hasNext()&&budget>0) {
@@ -192,7 +198,7 @@ public final class GoblinSpawning {
 
     /** 哥布林萨满驯服的四种元素史莱姆：毒、木、风、水，在营地里帮哥布林打架。 */
     private static void spawnAllySlimes(ServerLevel level, GoblinCampPiece camp, RandomSource random) {
-        if (camp.isLegacy()) return;
+        if (camp.isLegacy() || !SpawnControl.hostileSpawningAllowed(level)) return;
         ElementalSlimeVariant[] pool = {ElementalSlimeVariant.POISON, ElementalSlimeVariant.NATURE,
                 ElementalSlimeVariant.WIND, ElementalSlimeVariant.WATER};
         int count = 1 + camp.sizeTier() + random.nextInt(2);
@@ -215,6 +221,7 @@ public final class GoblinSpawning {
 
     /** 地下牢笼里的俘虏：村民、铁傀儡，以及悦灵、狗、猫、鹦鹉和随机家畜。 */
     private static void spawnLairPrisoners(ServerLevel level, GoblinCampPiece camp, RandomSource random) {
+        if (!SpawnControl.mobSpawningAllowed(level)) return;
         var cells = camp.cagePositions();
         if (cells.isEmpty()) return;
         int count = Math.min(cells.size(), 2 + random.nextInt(2) + camp.sizeTier() / 2);

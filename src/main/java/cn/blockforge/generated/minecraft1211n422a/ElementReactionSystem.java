@@ -15,6 +15,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
@@ -59,7 +60,8 @@ public final class ElementReactionSystem {
     private record TimedCasterState(UUID caster, long expiresAt, long nextAt, boolean firstDamage) {
         TimedCasterState next(long time) { return new TimedCasterState(caster, expiresAt, time, false); }
     }
-    private record PendingAreaDamage(UUID caster, UUID center, ServerLevel level, float damage, long at) { }
+    private record PendingAreaDamage(UUID caster, UUID center, ServerLevel level, float damage, long at,
+                                     boolean protectPlayers) { }
     private record PendingEchoDamage(UUID caster, UUID target, ServerLevel level, float damage, long at) { }
     private record DeepFreeze(UUID caster, long expiresAt, long nextRefresh, int hitsLeft,
                               float damageBonus, float reactionBonus) {
@@ -68,9 +70,31 @@ public final class ElementReactionSystem {
     }
     private record Match(Reaction reaction, ElementType existing) { }
 
+    /** 一次元素伤害的结算结果：最终伤害，以及这一下实际触发的反应（没反应时为 {@code null}）。 */
+    public record ElementalHit(float damage, Reaction reaction) { }
+
     /** 计算直接元素伤害，并在真正 hurt 前完成附着和本次伤害的增幅反应。 */
     public static float elementalDamage(LivingEntity caster, LivingEntity target, ElementType incoming, float damage) {
-        if (incoming == null || !target.isAlive()) return damage;
+        return elementalHit(caster, target, incoming, damage, false, false).damage();
+    }
+
+    /**
+     * 同 {@link #elementalDamage}，但把「这一下反应了什么」也一起交回来。
+     *
+     * <p>法阵一次触发会把所有输出块挨个结算，同一刻就连着打好几发。正常的元素伤害共用
+     * 一条「同一目标 0.5 秒内只反应一次」的全局冷却，那样只有第一块能反应，后面几块都会
+     * 退化成普通附着。{@code ignoreReactionCooldown} 为 {@code true} 时不再看这条冷却，
+     * 每一发都重新按 {@link Reaction#priorityOrder()} 匹配：附着、消耗、反应本身照常结算。</p>
+     *
+     * <p>这时也不写回冷却——法阵让得开，也不能反过来把别的法术的反应时间占掉。</p>
+     *
+     * @param protectPlayers 连锁（感电、震荡）与超载的范围爆炸不波及玩家，用于法阵在 PvP
+     *                       关闭时「不伤及玩家」这条设定；普通法术传 {@code false}，行为不变
+     */
+    public static ElementalHit elementalHit(LivingEntity caster, LivingEntity target, ElementType incoming,
+                                            float damage, boolean ignoreReactionCooldown,
+                                            boolean protectPlayers) {
+        if (incoming == null || !target.isAlive()) return new ElementalHit(damage, null);
         long now = target.level().getGameTime();
         // 元素结晶戒指：对应元素的法术伤害 +14%（每枚独立叠加）。
         double ringDamage = MagicEquipment.spellDamageMultiplier(caster, incoming.id());
@@ -94,9 +118,9 @@ public final class ElementReactionSystem {
         if (incoming == ElementType.NATURE && damage > 0.0F) WoodSpells.stingOnWoodHit(target);
 
         Match match = findMatch(target, incoming);
-        if (match == null || reactionCoolingDown(target, now)) {
+        if (match == null || (!ignoreReactionCooldown && reactionCoolingDown(target, now))) {
             attach(target, incoming, attachmentTicks(caster, incoming));
-            return damage;
+            return new ElementalHit(damage, null);
         }
 
         Reaction reaction = match.reaction();
@@ -106,14 +130,14 @@ public final class ElementReactionSystem {
         //    否则会被冻在原地，根本没法执行「远离冰雪」。
         if (reaction == Reaction.FREEZE && !canFreezeByReaction(target, damage)) {
             attach(target, incoming, attachmentTicks(caster, incoming));
-            return damage;
+            return new ElementalHit(damage, null);
         }
         int existingTicks = remaining(target, match.existing());
         // 同元素重复施加应先刷新到较长时长，再作为本次反应的一方参与消耗。
         int incomingTicks = Math.max(remaining(target, incoming), attachmentTicks(caster, incoming));
         if (reaction == Reaction.CHARGE) charge(target, incoming, incomingTicks);
         else consume(target, match.existing(), existingTicks, incoming, incomingTicks);
-        LAST_REACTION.put(target.getUUID(), now);
+        if (!ignoreReactionCooldown) LAST_REACTION.put(target.getUUID(), now);
         announceReaction(caster, target, reaction);
         // 零下领域的深层冻结会额外放大元素反应伤害（与“受到伤害增加”分开乘算）。
         if (deepFrozen(target)) damage *= deepFreezeReactionMultiplier(target);
@@ -130,7 +154,8 @@ public final class ElementReactionSystem {
             }
             case OVERLOAD -> {
                 reactionDamage = damage * 2.5F;
-                PENDING_DAMAGE.add(new PendingAreaDamage(caster.getUUID(), target.getUUID(), server(target), reactionDamage, now + 1));
+                PENDING_DAMAGE.add(new PendingAreaDamage(caster.getUUID(), target.getUUID(), server(target),
+                        reactionDamage, now + 1, protectPlayers));
                 knockFrom(target.position(), target, 1.1);
             }
             case ELECTRO_CHARGED -> {
@@ -141,7 +166,8 @@ public final class ElementReactionSystem {
                     reactionDamage = 0.0F;
                 } else {
                     reactionDamage = damage * 0.24F;
-                    chain(caster, target, ElementType.WATER, ElementType.LIGHTNING, reactionDamage, 5, 8.0, 0.90F);
+                    chain(caster, target, ElementType.WATER, ElementType.LIGHTNING, reactionDamage, 5, 8.0, 0.90F,
+                            protectPlayers);
                 }
             }
             case SUPERCONDUCT -> {
@@ -191,7 +217,7 @@ public final class ElementReactionSystem {
             case PURIFY -> { damage = purify(target, damage); reactionDamage = damage; }
             case SHOCKWAVE -> {
                 reactionDamage = damage * 0.15F;
-                chain(caster, target, null, ElementType.SOUND, reactionDamage, 5, 8.0, 1.0F);
+                chain(caster, target, null, ElementType.SOUND, reactionDamage, 5, 8.0, 1.0F, protectPlayers);
             }
             case BLIND -> {
                 reactionDamage = damage;
@@ -212,7 +238,7 @@ public final class ElementReactionSystem {
         }
         // 植入寄生：每次元素反应都会额外触发一次强制激发（反应伤害 ×0.55 的木伤）。
         WoodSpells.parasiteReaction(caster, target, reactionDamage);
-        return damage;
+        return new ElementalHit(damage, reaction);
     }
 
     /** 奥术伤害留下 7 秒奥术附着；存在元素时按同一优先级触发充能。 */
@@ -624,7 +650,8 @@ public final class ElementReactionSystem {
     }
 
     private static void chain(LivingEntity caster, LivingEntity first, ElementType requiredAttachment,
-                              ElementType damageElement, float firstDamage, int maxTargets, double radius, float decay) {
+                              ElementType damageElement, float firstDamage, int maxTargets, double radius,
+                              float decay, boolean protectPlayers) {
         ServerLevel level = server(first);
         LivingEntity current = first;
         Set<UUID> hit = new HashSet<>();
@@ -634,6 +661,7 @@ public final class ElementReactionSystem {
             LivingEntity from = current;
             LivingEntity next = level.getEntitiesOfClass(LivingEntity.class, from.getBoundingBox().inflate(radius), entity ->
                     entity.isAlive() && entity != caster && !hit.contains(entity.getUUID())
+                            && (!protectPlayers || !(entity instanceof Player))
                             && (requiredAttachment == null || remaining(entity, requiredAttachment) > 0)).stream()
                     .min(Comparator.comparingDouble(entity -> entity.distanceToSqr(from))).orElse(null);
             if (next == null) break;
@@ -716,7 +744,8 @@ public final class ElementReactionSystem {
             if (caster == null || center == null) continue;
             Vec3 point = center.getBoundingBox().getCenter();
             level.getEntitiesOfClass(LivingEntity.class, new AABB(point, point).inflate(3),
-                    entity -> entity != caster && entity.isAlive()).forEach(entity -> {
+                    entity -> entity != caster && entity.isAlive()
+                            && (!pending.protectPlayers() || !(entity instanceof Player))).forEach(entity -> {
                 // 反应爆炸沿用触发时已算好的伤害，不再重复掷暴击或乘装备最终倍率。
                 SpellDamage.hitResolved(level, caster, entity, pending.damage());
                 knockFrom(point, entity, 1.4);

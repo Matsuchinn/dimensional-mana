@@ -12,6 +12,7 @@
 - 原始下载：https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip
 - 许可：**CC0 1.0**，https://creativecommons.org/publicdomain/zero/1.0/
 - 本版使用矿石、金属、木材、草地、玻璃、钟等拟音素材。感谢作者免费提供。
+- 完美招架只用了同一素材包里的金属撞击（`impactMetal_*`），并且只取起音后几十毫秒的金属接触声，作为六段剑鸣的真实接触层（`assets/dimensional_mana/sounds/parry/`），游戏里随机播放。
 
 ### Ice breaking/shattering
 - 作者：**IgnasD**。
@@ -47,6 +48,7 @@
 
 本版对声音进行了：按真实内容解码、转为单声道、裁去前导静音、剪辑、轻微变速、叠层混合、滤波、统一响度上限、淡入淡出，以及 OGG Vorbis 编码。
 每个成品的原文件名、作者对应素材包、延迟、增益、变速、时长和 SHA-256 校验值均列在 `SOUND_SOURCES.json`。
+完美招架音效由 `tools/generate_parry_audio.py` 生成：金属振动的频率、无谐波金属泛音层、刀刃摩擦噪声层与短促冲击层由脚本自行数学生成，不含任何外部采样；只有金属接触的那一下起音取自 CC0 的 Kenney Impact Sounds。因此这批成品仍按 CC0 1.0 提供，可自由使用。
 
 含 p0ss 素材的改编音效继续按 **CC BY-SA 3.0** 发布。可以从 JAR 的 `assets/dimensional_mana/sounds/spell/` 提取、修改和再分发这些音效，请保留 p0ss 的署名、原始来源、许可链接以及修改说明，并遵守相同方式共享条款。
 仅由 CC0 原料组成的本版音效也按 **CC0 1.0** 提供。

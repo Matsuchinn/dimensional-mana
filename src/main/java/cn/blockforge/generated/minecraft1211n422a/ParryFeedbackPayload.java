@@ -13,8 +13,9 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
  * 招架结果的屏幕反馈：普通 / 完美 / 法术弹反 / 斗气不足失败。
  * 粒子与音效由服务端按位置广播，这里只把「画在谁屏幕上」的那一层送到当事人客户端。
  *
- * <p>{@code entityId} 只在完美招架时有用：客户端拿它去追被弹开的那只怪物，在它身上贴一段
- * 4 帧闪光；实体已经消失就退回 {@code x/y/z} 坐标，闪光照样画在原地。</p>
+ * <p>{@code entityId} 只在对怪物的弹反里有用（普通 / 完美招架都带）：客户端拿它去追被弹开的
+ * 那只怪物，在它身上贴一段 4 帧闪光；实体已经消失就退回 {@code x/y/z} 坐标，闪光照样画在原地。
+ * 完美招架的闪光大一号，普通格挡的小一号，两套画面由客户端按 kind 分开。</p>
  */
 public record ParryFeedbackPayload(int kind, double x, double y, double z, int entityId)
         implements CustomPacketPayload {
@@ -40,9 +41,9 @@ public record ParryFeedbackPayload(int kind, double x, double y, double z, int e
         send(player, kind, at, -1);
     }
 
-    /** 完美招架专用：带上被打中那只怪物的实体 id，客户端好在它身上画闪光。 */
-    public static void sendFlash(ServerPlayer player, Vec3 at, int entityId) {
-        send(player, PERFECT, at, entityId);
+    /** 普通 / 完美招架共用：带上被打中那只怪物的实体 id，客户端好在它身上画贴身闪光。 */
+    public static void sendFlash(ServerPlayer player, int kind, Vec3 at, int entityId) {
+        send(player, kind, at, entityId);
     }
 
     private static void send(ServerPlayer player, int kind, Vec3 at, int entityId) {

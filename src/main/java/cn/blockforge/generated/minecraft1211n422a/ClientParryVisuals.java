@@ -40,6 +40,10 @@ import java.util.Set;
  * <p>粒子与音效由服务端广播，这里只负责只属于自己的那一层：准心白圈、完美招架的白闪与
  * 金色光晕、斗气不足时屏幕边缘泛红，以及进入姿态时视角略微下沉。</p>
  *
+ * <p>另有贴着被弹开那只怪物的 4 帧闪光，普通格挡和完美格挡各用一套画面：普通格挡是
+ * 「三色火星迸开」，完美格挡是「八臂爆闪」——中心长出米字、最后散成一圈余火。
+ * 两套都不旋转，角度写死在贴图里。</p>
+ *
  * <p>姿态下原版的挥刀动画会被按住零点几秒地「锁」住：右键按着不放时游戏每几刻就想再挥一次手，
  * 不锁的话剑会一直在身前抽动。按左键弹反的那一刀例外，留 7 刻让这一下看得见。</p>
  *
@@ -55,9 +59,6 @@ public final class ClientParryVisuals {
     private static final int PERFECT_FLASH_TICKS = 3;
     private static final int PERFECT_GOLD_TICKS = 10;
     private static final int FAIL_TICKS = 12;
-    /** 完美招架时贴在怪物身上的 4 帧闪光：8 刻播完，每帧 2 刻。 */
-    private static final int MONSTER_FLASH_TICKS = 8;
-    private static final int MONSTER_FLASH_FRAMES = 4;
     /** 按下左键那一下之后，这几刻内不锁挥刀，让玩家看得到自己这一刀。 */
     private static final int SWING_GRACE_TICKS = 7;
 
@@ -74,15 +75,33 @@ public final class ClientParryVisuals {
     /** 进入姿态时镜头下沉多少度，也跟着同一条曲线慢慢沉下去。 */
     private static final float CAMERA_DIP = 5.0F;
 
-    /** 4 帧闪光图集：横向 4 格，每格 16x16。 */
-    private static final ResourceLocation PARRY_FLASH_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-            GeneratedMod.MOD_ID, "textures/effect/casting/parry_flash.png");
-    private static final int FLASH_TEXTURE_WIDTH = 64;
-    private static final int FLASH_TEXTURE_HEIGHT = 16;
-    private static final int FLASH_FRAME_SIZE = 16;
-    /** 闪光在屏幕上至少/至多占多少像素：太远了也看得见，贴脸了也不会糊满整屏。 */
-    private static final int FLASH_MIN_PIXELS = 34;
-    private static final int FLASH_MAX_PIXELS = 380;
+    /**
+     * 贴身闪光的两套画面：普通格挡用「三色火星迸开」，完美格挡用「八臂爆闪」。
+     *
+     * <p>完美格挡那套就是 r180 之前用过的爆闪：从中心那颗亮核往八个方向长出米字臂，
+     * 最后一帧只剩一圈四散的余火。这次只把配色改成黄 / 橙 / 红三色、中心补了热核、
+     * 边缘压暗一档，骨架没动，也不旋转。</p>
+     *
+     * <p>两个参数是屏幕上最多 / 最少占多少像素：普通格挡只是「挡住了」，够看就行；
+     * 完美格挡是「弹开了」，放到接近两倍大，还一边炸一边胀。</p>
+     */
+    private static final FlashStyle NORMAL_BURST_STYLE = new FlashStyle(
+            ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID,
+                    "textures/effect/casting/parry_flash.png"),
+            128, 32, 32, 4, 8, 36, 170, 0.02F, 0.52F,
+            new SparkStyle(12, 6.0F, 19.0F, 1.4F, 3.4F, 4.0F, 8.5F, 0.45F,
+                    new int[]{0xFFD83A, 0xFF8A1E, 0xE8321A}));
+
+    private static final FlashStyle PERFECT_BURST_STYLE = new FlashStyle(
+            ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID,
+                    "textures/effect/casting/parry_flash_perfect.png"),
+            128, 32, 32, 4, 8, 64, 340, 0.07F, 0.55F,
+            new SparkStyle(26, 9.0F, 30.0F, 1.8F, 4.6F, 5.0F, 11.0F, 0.55F,
+                    new int[]{0xFFD83A, 0xFF8A1E, 0xE8321A}));
+
+    /** 两套画面各自的实时状态：播到第几刻、跟着哪只怪物、这一轮随机掷出的火星。 */
+    private static final FlashChannel NORMAL_BURST = new FlashChannel(NORMAL_BURST_STYLE);
+    private static final FlashChannel PERFECT_BURST = new FlashChannel(PERFECT_BURST_STYLE);
 
     /**
      * 第一人称：刀绕自己的位置反着转多少度。
@@ -111,10 +130,6 @@ public final class ClientParryVisuals {
      */
     private static float poseBlend;
     private static float oPoseBlend;
-    /** 怪物身上那段闪光的剩余刻数、目标实体与兜底坐标。 */
-    private static int monsterFlash;
-    private static int flashEntityId = -1;
-    private static double flashX, flashY, flashZ;
     /** 别人（联机时）正在招架的实体 id：服务端进出姿态时通知，这里只管照着摆姿势。 */
     private static final Set<Integer> REMOTE_STANCE = new HashSet<>();
     /** 上一次见到的是哪个世界：换了世界就把别人姿态的记录清空。 */
@@ -156,18 +171,18 @@ public final class ClientParryVisuals {
 
     public static void accept(ParryFeedbackPayload payload) {
         switch (payload.kind()) {
-            case ParryFeedbackPayload.NORMAL -> normalRing = NORMAL_RING_TICKS;
+            case ParryFeedbackPayload.NORMAL -> {
+                normalRing = NORMAL_RING_TICKS;
+                // 普通格挡也在这只怪物身上贴一段小闪光：挡下来那一下看得见，但比完美格挡收敛。
+                NORMAL_BURST.play(payload);
+            }
             case ParryFeedbackPayload.PROJECTILE -> projectileRing = PROJECTILE_RING_TICKS;
             case ParryFeedbackPayload.PERFECT -> {
                 perfectRing = PERFECT_RING_TICKS;
                 perfectFlash = PERFECT_FLASH_TICKS;
                 perfectGold = PERFECT_GOLD_TICKS;
-                // 服务端给了被打中那只怪物的 id：闪光跟着它走，找不到就画在反馈坐标上。
-                monsterFlash = MONSTER_FLASH_TICKS;
-                flashEntityId = payload.entityId();
-                flashX = payload.x();
-                flashY = payload.y();
-                flashZ = payload.z();
+                // 服务端给了被打中那只怪物的 id：爆闪跟着它走，找不到就画在反馈坐标上。
+                PERFECT_BURST.play(payload);
             }
             case ParryFeedbackPayload.FAIL -> fail = FAIL_TICKS;
             default -> { }
@@ -181,8 +196,8 @@ public final class ClientParryVisuals {
         swingGrace = 0;
         poseBlend = 0.0F;
         oPoseBlend = 0.0F;
-        monsterFlash = 0;
-        flashEntityId = -1;
+        NORMAL_BURST.clear();
+        PERFECT_BURST.clear();
         REMOTE_STANCE.clear();
         hasMatrix = false;
     }
@@ -194,8 +209,9 @@ public final class ClientParryVisuals {
         if (perfectFlash > 0) perfectFlash--;
         if (perfectGold > 0) perfectGold--;
         if (fail > 0) fail--;
-        if (monsterFlash > 0) monsterFlash--;
         if (swingGrace > 0) swingGrace--;
+        NORMAL_BURST.tick();
+        PERFECT_BURST.tick();
 
         Minecraft minecraft = Minecraft.getInstance();
         // 举起 / 放下都按刻推进，渲染时再按帧插值：原版一刀 6 刻，抬手也 6 刻。
@@ -366,18 +382,23 @@ public final class ClientParryVisuals {
     }
 
     /**
-     * 完美招架时贴在怪物身上的 4 帧闪光。
+     * 贴在怪物身上的 4 帧闪光，普通格挡和完美格挡共用这一套画法，只是画面参数不同。
      *
-     * <p>把怪物的位置换算成屏幕坐标，再在这上面贴一格 16x16 的图：跟着怪物的头肩走，
-     * 远处会小一点、近处会大一点，8 刻播完自动消失。</p>
+     * <p>把怪物的位置换算成屏幕坐标，再在这上面贴一格 32x32 的图：跟着怪物胸口走，
+     * 远处会小一点、近处会大一点，8 刻播完自动消失。贴图外面再撒一圈屏幕空间的火星，
+     * 往外甩、往下坠、各自熄灭，看着才像「迸开」。</p>
+     *
+     * <p>两套画面都不旋转：角度写死在贴图里，贴上去就是稳稳的一团，只随刻数胀大一点点。
+     * 以前每刻都在转，火光像风扇一样打圈，反而显得没力气。</p>
      */
-    private static void drawMonsterFlash(GuiGraphics graphics, Minecraft minecraft) {
-        if (monsterFlash <= 0 || !hasMatrix || minecraft.level == null) return;
+    private static void drawBurst(GuiGraphics graphics, Minecraft minecraft, FlashChannel channel) {
+        FlashStyle style = channel.style;
+        if (channel.remaining <= 0 || !hasMatrix || minecraft.level == null) return;
         ClientLevel level = minecraft.level;
-        Entity target = level.getEntity(flashEntityId);
+        Entity target = level.getEntity(channel.entityId);
         Vec3 origin = target != null
-                ? target.getPosition(partialTick).add(0.0, target.getBbHeight() * 0.55, 0.0)
-                : new Vec3(flashX, flashY, flashZ);
+                ? target.getPosition(partialTick).add(0.0, target.getBbHeight() * style.originFraction(), 0.0)
+                : new Vec3(channel.x, channel.y, channel.z);
         Vec3 camera = minecraft.gameRenderer.getMainCamera().getPosition();
         if (origin.distanceToSqr(camera) > 48.0 * 48.0) return;
         float[] center = new float[2];
@@ -392,30 +413,63 @@ public final class ClientParryVisuals {
         float centerY = (0.5F - center[1] * 0.5F) * guiHeight;
         float pixelHeight;
         if (hasTop) {
-            pixelHeight = Math.abs(center[1] - top[1]) * 0.5F * guiHeight * 1.9F;
+            // 1.0 倍：闪光大约从胸口到头顶那么高；再乘倍数就会整个放大，正好盖住脸
+            pixelHeight = Math.abs(center[1] - top[1]) * 0.5F * guiHeight;
         } else {
             double distance = Math.sqrt(origin.distanceToSqr(camera));
             pixelHeight = (float)(guiHeight * 0.9 * height / Math.max(1.5, distance));
         }
-        int size = Math.round(Mth.clamp(pixelHeight, FLASH_MIN_PIXELS, FLASH_MAX_PIXELS));
-        int elapsed = MONSTER_FLASH_TICKS - monsterFlash;
-        int frame = Math.min(MONSTER_FLASH_FRAMES - 1, elapsed * MONSTER_FLASH_FRAMES / MONSTER_FLASH_TICKS);
-        // 前 4 刻满格，后 4 刻淡出：够亮才看得出是「弹开了」。
-        float alpha = Mth.clamp((MONSTER_FLASH_TICKS - elapsed) / 4.0F, 0.0F, 1.0F);
-        float pulse = 1.0F + elapsed * 0.07F;
+        int size = Math.round(Mth.clamp(pixelHeight, style.minPixels(), style.maxPixels()));
+        int elapsed = style.ticks() - channel.remaining;
+        int frame = Math.min(style.frames() - 1, elapsed * style.frames() / style.ticks());
+        // 前半段满格，后半段淡出：够亮才看得出「挡下来了」。
+        float alpha = Mth.clamp((style.ticks() - elapsed) / (style.ticks() / 2.0F), 0.0F, 1.0F);
+        float pulse = 1.0F + elapsed * style.growth();
 
-        // 贴图只有 16x16 一格：按原尺寸贴上去，再靠缩放放大到怪物的个头，UV 才不会串到隔壁帧。
+        // 贴图一帧一格：按原尺寸贴上去，再靠缩放放大到怪物的个头，UV 才不会串到隔壁帧。
+        // 不旋转：角度在贴图里写死，贴上去就是稳稳的一团，只随时间轻微胀大一点点。
         PoseStack pose = graphics.pose();
         pose.pushPose();
         pose.translate(centerX, centerY, 0.0F);
-        float scale = size / (float)FLASH_FRAME_SIZE * pulse;
+        float scale = Mth.clamp(size / (float)style.frameSize() * pulse, 1.0F,
+                style.maxPixels() / (float)style.frameSize());
         pose.scale(scale, scale, 1.0F);
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, alpha);
-        graphics.blit(PARRY_FLASH_TEXTURE, -FLASH_FRAME_SIZE / 2, -FLASH_FRAME_SIZE / 2,
-                (float)(frame * FLASH_FRAME_SIZE), 0.0F,
-                FLASH_FRAME_SIZE, FLASH_FRAME_SIZE, FLASH_TEXTURE_WIDTH, FLASH_TEXTURE_HEIGHT);
+        graphics.blit(style.texture(), -style.frameSize() / 2, -style.frameSize() / 2,
+                (float)(frame * style.frameSize()), 0.0F,
+                style.frameSize(), style.frameSize(), style.textureWidth(), style.textureHeight());
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         pose.popPose();
+
+        drawSparks(graphics, channel, centerX, centerY, elapsed);
+    }
+
+    /**
+     * 贴图外面那圈四散的火星。
+     *
+     * <p>每一颗按「方向 × 已经飞了多久」算位置，再加一点下落；越接近寿命末尾越小越淡，
+     * 所以看着是溅出去、烧完，而不是一坨光慢慢散开。刻之间用插值刻数补平滑，
+     * 不然 20Hz 的位置更新在屏幕上是一跳一跳的。</p>
+     */
+    private static void drawSparks(GuiGraphics graphics, FlashChannel channel,
+                                   float centerX, float centerY, int elapsed) {
+        float age = elapsed + Mth.clamp(partialTick, 0.0F, 1.0F);
+        float gravity = channel.style.sparks().gravity();
+        for (int i = 0; i < channel.angle.length; i++) {
+            float life = channel.life[i];
+            if (age >= life) continue;
+            float fade = 1.0F - age / life;
+            int alpha = (int)Math.round(255.0 * fade * fade);
+            if (alpha <= 4) continue;
+            double radians = channel.angle[i];
+            // 飞出去 + 一点点重力：火星是往外甩一下就被拉下去，不是直线扩散
+            float x = centerX + (float)Math.cos(radians) * channel.speed[i] * age;
+            float y = centerY + (float)Math.sin(radians) * channel.speed[i] * age + age * age * gravity;
+            int pixel = Math.max(1, Math.round(channel.size[i] * (0.45F + 0.55F * fade)));
+            int x0 = Math.round(x);
+            int y0 = Math.round(y);
+            graphics.fill(x0, y0, x0 + pixel, y0 + pixel, (alpha << 24) | channel.tint[i]);
+        }
     }
 
     /** 世界坐标 → 归一化设备坐标；在相机背后或算不出数就返回 false。 */
@@ -442,10 +496,12 @@ public final class ClientParryVisuals {
         int centerX = width / 2;
         int centerY = height / 2;
 
-        // 怪物身上那段 4 帧闪光画在最底下，白闪和光晕盖在它上面。
-        drawMonsterFlash(graphics, minecraft);
+        // 贴身闪光画在最底下：普通格挡那团小火星先画，完美格挡的爆闪盖在上面，白闪和光晕再盖一层。
+        drawBurst(graphics, minecraft, NORMAL_BURST);
+        drawBurst(graphics, minecraft, PERFECT_BURST);
         if (perfectFlash > 0) {
-            int alpha = (int)Math.round(110.0 * perfectFlash / PERFECT_FLASH_TICKS);
+            // 压到 80：整屏白一下是为了「亮了」，太满反而把画面糊住
+            int alpha = (int)Math.round(80.0 * perfectFlash / PERFECT_FLASH_TICKS);
             graphics.fill(0, 0, width, height, (alpha << 24) | 0xFFFFFF);
         }
         if (perfectGold > 0) {
@@ -512,6 +568,77 @@ public final class ClientParryVisuals {
             int x = (int)Math.round(centerX + Math.cos(angle) * radius);
             int y = (int)Math.round(centerY + Math.sin(angle) * radius);
             graphics.fill(x - thickness, y - thickness, x + thickness + 1, y + thickness + 1, color);
+        }
+    }
+
+    // ---------------------------------------------------------------- 闪光数据
+
+    /** 一套贴身闪光的画面参数：贴图、帧数、播多久、放大到多大、旁边撒多少火星。 */
+    private record FlashStyle(ResourceLocation texture, int textureWidth, int textureHeight,
+                              int frameSize, int frames, int ticks, int minPixels, int maxPixels,
+                              float growth, float originFraction, SparkStyle sparks) { }
+
+    /**
+     * 一圈屏幕空间火星的参数：几颗、飞多快、多大、活多久、往下坠多少、三种颜色。
+     *
+     * <p>颜色是亮黄、亮橙、亮红三种，和贴图里的三种亮色对得上。</p>
+     */
+    private record SparkStyle(int count, float speedMin, float speedMax, float sizeMin, float sizeMax,
+                              float lifeMin, float lifeMax, float gravity, int[] colors) { }
+
+    /**
+     * 一个闪光通道的实时状态：还剩几刻、贴着哪只怪物、这一轮掷出的火星。
+     *
+     * <p>普通格挡和完美格挡各一个实例，所以两下几乎同时触发也不会互相覆盖参数。</p>
+     */
+    private static final class FlashChannel {
+        private final FlashStyle style;
+        private final float[] angle;
+        private final float[] speed;
+        private final float[] life;
+        private final float[] size;
+        private final int[] tint;
+        private int remaining;
+        private int entityId = -1;
+        private double x, y, z;
+
+        private FlashChannel(FlashStyle style) {
+            this.style = style;
+            SparkStyle spark = style.sparks();
+            int count = spark.count();
+            angle = new float[count];
+            speed = new float[count];
+            life = new float[count];
+            size = new float[count];
+            tint = new int[count];
+        }
+
+        /** 起一轮新闪光：记下跟随的实体与兜底坐标，再掷一遍这一轮的火星。 */
+        private void play(ParryFeedbackPayload payload) {
+            remaining = style.ticks();
+            entityId = payload.entityId();
+            x = payload.x();
+            y = payload.y();
+            z = payload.z();
+            SparkStyle spark = style.sparks();
+            java.util.Random rng = new java.util.Random();
+            for (int i = 0; i < angle.length; i++) {
+                // 角度先均匀铺开再抖一点，保证四面八方都有火星，不会全挤在一边
+                angle[i] = (float)((i + rng.nextFloat() * 0.7 - 0.35) * Math.PI * 2.0 / angle.length);
+                speed[i] = spark.speedMin() + rng.nextFloat() * (spark.speedMax() - spark.speedMin());
+                life[i] = spark.lifeMin() + rng.nextFloat() * (spark.lifeMax() - spark.lifeMin());
+                size[i] = spark.sizeMin() + rng.nextFloat() * (spark.sizeMax() - spark.sizeMin());
+                tint[i] = spark.colors()[rng.nextInt(spark.colors().length)];
+            }
+        }
+
+        private void tick() {
+            if (remaining > 0) remaining--;
+        }
+
+        private void clear() {
+            remaining = 0;
+            entityId = -1;
         }
     }
 

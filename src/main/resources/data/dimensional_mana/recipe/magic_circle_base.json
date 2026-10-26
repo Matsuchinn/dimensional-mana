@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": ["SSS", "SCS", "SSS"],
+  "key": {
+    "S": {"item": "minecraft:smooth_stone"},
+    "C": {"item": "dimensional_mana:carving_stone_blank"}
+  },
+  "result": {"id": "dimensional_mana:magic_circle_base", "count": 4}
+}

@@ -1,0 +1,40 @@
+{
+  "variants": {
+    "facing=up,sealed=false": {
+      "model": "dimensional_mana:block/magic_circle_projection_up"
+    },
+    "facing=up,sealed=true": {
+      "model": "dimensional_mana:block/magic_circle_etched_up"
+    },
+    "facing=down,sealed=false": {
+      "model": "dimensional_mana:block/magic_circle_projection_down"
+    },
+    "facing=down,sealed=true": {
+      "model": "dimensional_mana:block/magic_circle_etched_down"
+    },
+    "facing=north,sealed=false": {
+      "model": "dimensional_mana:block/magic_circle_projection_north"
+    },
+    "facing=north,sealed=true": {
+      "model": "dimensional_mana:block/magic_circle_etched_north"
+    },
+    "facing=south,sealed=false": {
+      "model": "dimensional_mana:block/magic_circle_projection_south"
+    },
+    "facing=south,sealed=true": {
+      "model": "dimensional_mana:block/magic_circle_etched_south"
+    },
+    "facing=east,sealed=false": {
+      "model": "dimensional_mana:block/magic_circle_projection_east"
+    },
+    "facing=east,sealed=true": {
+      "model": "dimensional_mana:block/magic_circle_etched_east"
+    },
+    "facing=west,sealed=false": {
+      "model": "dimensional_mana:block/magic_circle_projection_west"
+    },
+    "facing=west,sealed=true": {
+      "model": "dimensional_mana:block/magic_circle_etched_west"
+    }
+  }
+}

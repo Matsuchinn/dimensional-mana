@@ -56,6 +56,11 @@ public final class WorldgenSpawnQueue {
             if (!pending.dimension().equals(level.dimension())) continue;
             // 区块还没真正加载就先留着，等玩家靠近或出生点区块就绪后再补。
             if (!level.hasChunkAt(pending.pos())) continue;
+            // 世界里关了生物生成时，祭坛守卫和冒险者先留在队列里，等开关打开了再补，
+            // 免得结构在关着的期间白刷一次、以后永远空着。魔晶洞穴照常登记（洞穴数据要留），
+            // 只是里面的史莱姆由 ElementalSlimeSpawning 那边的闸门挡住。
+            if (pending.kind() == Kind.WANDERING_WITCH && !SpawnControl.hostileSpawningAllowed(level)) continue;
+            if (pending.kind() == Kind.ADVENTURER && !SpawnControl.mobSpawningAllowed(level)) continue;
             if (!PENDING.remove(pending)) continue;
             switch (pending.kind()) {
                 case MANA_CAVE -> {

@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.BlockPos;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.network.chat.Component;
@@ -65,9 +66,208 @@ public final class ManaCommands {
                 .then(debugPlayerCommand("unlock_elements", ManaCommands::unlockElements))
                 .then(debugPlayerCommand("max_skills", ManaCommands::maxSkills))
                 .then(debugPlayerCommand("unlock_all", ManaCommands::unlockAll))
+                .then(magicCircleCommand())
                 .then(cooldownCommand())
                 .then(manaCostCommand())
                 .then(spellCritCommand()));
+    }
+
+    // ------------------------------------------------------------ 魔法阵绘制台
+
+    /**
+     * /dimensional_mana magiccircle：在游戏里验证「阵盘注册」这条链路的兜底指令。
+     *
+     * <p>绘制台基座只有 3 像素厚，正常玩法是手持魔导调试棒右键它；万一视角没点中、
+     * 或者想确认注册到底写进了哪个阵盘，用这里的指令可以直接对着前后左右的基座操作。</p>
+     */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> magicCircleCommand() {
+        return Commands.literal("magiccircle")
+                .executes(context -> magicCircleHelp(context.getSource()))
+                .then(Commands.literal("help")
+                        .executes(context -> magicCircleHelp(context.getSource())))
+                .then(Commands.literal("register")
+                        .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                        .executes(context -> magicCircleAct(context.getSource(), true)))
+                .then(Commands.literal("status")
+                        .executes(context -> magicCircleAct(context.getSource(), false)))
+                .then(Commands.literal("list")
+                        .executes(context -> magicCircleList(context.getSource())))
+                .then(Commands.literal("unregister")
+                        .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                        .executes(context -> magicCircleUnregister(context.getSource())))
+                .then(Commands.literal("code")
+                        .executes(context -> magicCircleCodeExport(context.getSource()))
+                        .then(Commands.literal("export")
+                                .executes(context -> magicCircleCodeExport(context.getSource())))
+                        .then(Commands.literal("import")
+                                .then(Commands.argument("code", StringArgumentType.greedyString())
+                                        .executes(context -> magicCircleCodeImport(context.getSource(),
+                                                StringArgumentType.getString(context, "code"))))))
+                .then(Commands.literal("stopall")
+                        .executes(context -> magicCircleStopAll(context.getSource())))
+                .then(Commands.literal("limit")
+                        .executes(context -> magicCircleLimit(context.getSource())));
+    }
+
+    /** /dimensional_mana magiccircle code [export]：把手里的阵图导成法阵码，点聊天栏那行就能复制。 */
+    private static int magicCircleCodeExport(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.translatable("command.dimensional_mana.magiccircle.no_player"));
+            return 0;
+        }
+        var stack = player.getMainHandItem();
+        MagicCircleBlueprint blueprint = stack.getItem() instanceof EtchedSlateItem
+                ? EtchedSlateItem.blueprintOf(stack)
+                : MagicCircleBlueprint.of(stack);
+        if (blueprint == null) {
+            source.sendFailure(Component.translatable("command.dimensional_mana.magiccircle.code.no_blueprint"));
+            return 0;
+        }
+        MagicCircleProjectionEvents.exportCode(player, blueprint);
+        return 1;
+    }
+
+    /**
+     * /dimensional_mana magiccircle code import &lt;码&gt;：把手边的一张纸 / 布 / 绸换成一份导入的阵图。
+     *
+     * <p>只载入结构，不扣粉末；缺什么材料会在聊天栏列出来（设计文档 9.2 的「一键备料」前半段）。
+     * 注意原版聊天框最多只能敲 256 个字符，长码请用「潜行 + 右键空气」打开的导入面板粘贴。</p>
+     */
+    private static int magicCircleCodeImport(CommandSourceStack source, String code) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.translatable("command.dimensional_mana.magiccircle.no_player"));
+            return 0;
+        }
+        return MagicCircleCodeImport.apply(player, code) ? 1 : 0;
+    }
+
+    /** /dimensional_mana magiccircle stopall：一键停掉自己所有在跑的法阵。 */
+    private static int magicCircleStopAll(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.translatable("command.dimensional_mana.magiccircle.no_player"));
+            return 0;
+        }
+        MagicCircleRites.stopAllAndReport(player);
+        return 1;
+    }
+
+    /** /dimensional_mana magiccircle limit：我现在最多能同时开几个法阵、名额从哪来。 */
+    private static int magicCircleLimit(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.translatable("command.dimensional_mana.magiccircle.no_player"));
+            return 0;
+        }
+        source.sendSuccess(() -> MagicCircleRites.limitSummary(player).copy()
+                .withStyle(ChatFormatting.AQUA), false);
+        return 1;
+    }
+
+    private static int magicCircleHelp(CommandSourceStack source) {
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.magiccircle.help.title")
+                .withStyle(ChatFormatting.LIGHT_PURPLE), false);
+        for (String line : new String[]{
+                "/dimensional_mana magiccircle register",
+                "/dimensional_mana magiccircle status",
+                "/dimensional_mana magiccircle list",
+                "/dimensional_mana magiccircle unregister",
+                "/dimensional_mana magiccircle code [export]",
+                "/dimensional_mana magiccircle code import <码>",
+                "/dimensional_mana magiccircle stopall",
+                "/dimensional_mana magiccircle limit"}) {
+            source.sendSuccess(() -> Component.literal(line).withStyle(ChatFormatting.AQUA), false);
+        }
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.magiccircle.help.hint")
+                .withStyle(ChatFormatting.GRAY), false);
+        return 1;
+    }
+
+    /** 找到玩家正在看 / 站着 / 旁边的基座；注册或报状态都从它出发。 */
+    private static BlockPos magicCircleTarget(ServerPlayer player) {
+        ServerLevel level = (ServerLevel) player.level();
+        net.minecraft.world.phys.HitResult hit = player.pick(6.0, 0.0F, false);
+        if (hit instanceof net.minecraft.world.phys.BlockHitResult blockHit
+                && MagicCircleNetworks.isBase(level, blockHit.getBlockPos())) {
+            return blockHit.getBlockPos();
+        }
+        BlockPos under = MagicCircleNetworks.baseUnderPlayer(level, player);
+        if (under != null) return under;
+        return MagicCircleNetworks.nearestBase(level, player.blockPosition(), 6);
+    }
+
+    private static int magicCircleAct(CommandSourceStack source, boolean register) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.translatable("command.dimensional_mana.magiccircle.no_player"));
+            return 0;
+        }
+        BlockPos base = magicCircleTarget(player);
+        if (base == null) {
+            source.sendFailure(Component.translatable("command.dimensional_mana.magiccircle.no_base"));
+            return 0;
+        }
+        ServerLevel level = (ServerLevel) player.level();
+        if (register) {
+            if (MagicCircleNetworks.registerOrReport(level, base, player, true)) {
+                // 视角点不中基座的兜底：指令注册成功后直接把绘制台界面打开。
+                MagicCircleDrawing.open(level, base, player);
+            }
+        } else {
+            MagicCircleNetworks.reportStatus(level, base, player);
+        }
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.magiccircle.used",
+                base.getX(), base.getY(), base.getZ()).withStyle(ChatFormatting.DARK_GRAY), false);
+        return 1;
+    }
+
+    private static int magicCircleList(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.translatable("command.dimensional_mana.magiccircle.no_player"));
+            return 0;
+        }
+        java.util.List<MagicCircleNetwork> networks = MagicCircleNetworks.snapshot((ServerLevel) player.level());
+        if (networks.isEmpty()) {
+            source.sendSuccess(() -> Component.translatable("command.dimensional_mana.magiccircle.list_empty")
+                    .withStyle(ChatFormatting.GRAY), false);
+            return 1;
+        }
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.magiccircle.list_header",
+                networks.size()).withStyle(ChatFormatting.LIGHT_PURPLE), false);
+        int shown = 0;
+        for (MagicCircleNetwork network : networks) {
+            if (shown++ >= 12) break;
+            source.sendSuccess(() -> Component.translatable("command.dimensional_mana.magiccircle.list_entry",
+                    network.baseWidth(), network.baseHeight(),
+                    network.canvasWidth(), network.canvasHeight(),
+                    network.baseCount(), network.nodeCount()).withStyle(ChatFormatting.AQUA), false);
+        }
+        return 1;
+    }
+
+    private static int magicCircleUnregister(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.translatable("command.dimensional_mana.magiccircle.no_player"));
+            return 0;
+        }
+        BlockPos base = magicCircleTarget(player);
+        if (base == null) {
+            source.sendFailure(Component.translatable("command.dimensional_mana.magiccircle.no_base"));
+            return 0;
+        }
+        MagicCircleNetwork removed = MagicCircleNetworks.unregister((ServerLevel) player.level(), base);
+        if (removed == null) {
+            source.sendSuccess(() -> Component.translatable("command.dimensional_mana.magiccircle.unregister_none")
+                    .withStyle(ChatFormatting.GRAY), false);
+            return 1;
+        }
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.magiccircle.unregister",
+                removed.baseWidth(), removed.baseHeight()).withStyle(ChatFormatting.YELLOW), false);
+        return 1;
     }
 
     /** /dimensional_mana cooldown on|off|reset|status [玩家]：开关技能冷却。 */
@@ -149,6 +349,8 @@ public final class ManaCommands {
                 .withStyle(ChatFormatting.LIGHT_PURPLE), false);
         source.sendSuccess(() -> Component.literal("/dimensional_mana spell_crit set|clear|status [玩家] [百分比]")
                 .withStyle(ChatFormatting.RED), false);
+        source.sendSuccess(() -> Component.literal("/dimensional_mana magiccircle register|status|list|unregister")
+                .withStyle(ChatFormatting.LIGHT_PURPLE), false);
         source.sendSuccess(() -> Component.literal("/dimensional_mana combat [生物]")
                 .withStyle(ChatFormatting.GOLD), false);
         source.sendSuccess(() -> Component.literal("/dimensional_mana mob list|show|set|remove|reset|refresh")

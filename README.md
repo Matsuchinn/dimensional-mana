@@ -47,7 +47,7 @@
 
 ## 版本与授权
 
-- 当前版本：`1.2.5`
+- 当前版本：`1.3.0`
 - 作者：TakisueYuu, AutoMods
 - 授权：All Rights Reserved；模组内第三方音频素材遵循 CC0-1.0 / CC-BY-SA-3.0。
 - 语言：简体中文 / English

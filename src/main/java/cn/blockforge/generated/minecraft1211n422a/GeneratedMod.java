@@ -118,6 +118,8 @@ public final class GeneratedMod {
     public static final List<String> NATURAL_ITEM_IDS = new ArrayList<>();
     /** 「次元物语：斗气」创造页的摆放顺序：饰品 → 手册 → 技能书。 */
     public static final List<String> QI_ITEM_IDS = new ArrayList<>();
+    /** 「次元物语：魔导」创造页自己收着的新东西，主创造页不再重复放一遍。 */
+    public static final List<String> ARCANE_ITEM_IDS = new ArrayList<>();
     public static final List<String> FRAGMENT_GRADES = List.of("lesser", "medium", "advanced", "supreme", "special");
     public static final List<String> SCHOOL_IDS = List.of("destruction", "protection", "healing", "blessing", "curse",
             "control", "summon", "movement", "divination", "psychic", "time", "space", "chaos");
@@ -170,6 +172,12 @@ public final class GeneratedMod {
             () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "codex_page_turn")));
     public static final DeferredHolder<SoundEvent, SoundEvent> CODEX_SPACE_OPEN = SOUNDS.register("codex_space_open",
             () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "codex_space_open")));
+    /**
+     * 完美招架的剑鸣：sounds.json 里的 parry_perfect 挂了六段素材，播放时由原版随机挑一段。
+     * 必须和其他音效一样在注册阶段登记，不能在第一次弹刀时才注册（那会撞上注册表已冻结，直接崩游戏）。
+     */
+    public static final DeferredHolder<SoundEvent, SoundEvent> PARRY_PERFECT = SOUNDS.register("parry_perfect",
+            () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "parry_perfect")));
     /**
      * 十二种元素史莱姆各一套叫声：蹦跳、落地、受伤、死亡和随机环境音共用。
      * 音色在 sounds.json 里由「原版史莱姆软音 + 对应元素法术音」叠加，无需额外音频文件。
@@ -445,6 +453,58 @@ public final class GeneratedMod {
         ManaPlants.register();
         registerElementalSlimes();
         registerGoblins();
+        registerMagicCircle();
+    }
+
+    /**
+     * 「次元物语：魔导」第 1 阶段的内容：刻印石胚、魔法阵绘制台基座、魔导调试棒。
+     *
+     * <p>粉末（41 种）、魔力布匹、魔法绸缎、魔晶加工台都是现有体系里已经有的东西，
+     * 这一栏只负责把它们摆到一起，不再重复注册新物品。</p>
+     */
+    private static void registerMagicCircle() {
+        MOD_ITEMS.put("carving_stone_blank", ITEMS.register("carving_stone_blank", () ->
+                new LoreItem(new Item.Properties().rarity(Rarity.COMMON),
+                        "tooltip.dimensional_mana.carving_stone_blank")));
+        ARCANE_ITEM_IDS.add("carving_stone_blank");
+
+        device("magic_circle_base", () -> new MagicCircleBaseBlock(BlockBehaviour.Properties.of()
+                .strength(2.5F, 6.0F).requiresCorrectToolForDrops().sound(SoundType.STONE)
+                .noOcclusion().lightLevel(state -> 4)), Rarity.UNCOMMON);
+        ARCANE_ITEM_IDS.add("magic_circle_base");
+
+        MOD_ITEMS.put(MagicCircleWandItem.ITEM_ID, ITEMS.register(MagicCircleWandItem.ITEM_ID, () ->
+                new MagicCircleWandItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE))));
+        ARCANE_ITEM_IDS.add(MagicCircleWandItem.ITEM_ID);
+
+        // 第 3 阶段：贴面投影锚点。它不是「合成出来再摆」的方块，而是拿着蓝图右键方块表面生成，
+        // 所以不注册物品形态，只注册方块本体 + 方块实体。
+        DeferredBlock<Block> projection = BLOCKS.register(MagicCircleProjectionBlock.BLOCK_ID,
+                () -> new MagicCircleProjectionBlock(BlockBehaviour.Properties.of()
+                        .strength(0.6F).sound(SoundType.AMETHYST).noOcclusion().dynamicShape()
+                        .lightLevel(state -> 10)));
+        MOD_BLOCKS.put(MagicCircleProjectionBlock.BLOCK_ID, projection);
+
+        // 两张教学蓝图：创造物品栏就能拿，生存里靠箱子 / 交易（后续阶段接掉落表）。
+        MOD_ITEMS.put(MagicCircleBlueprints.FIREBALL_ITEM, ITEMS.register(MagicCircleBlueprints.FIREBALL_ITEM,
+                () -> new WornBlueprintItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON),
+                        MagicCircleBlueprints.FIREBALL_ITEM)));
+        ARCANE_ITEM_IDS.add(MagicCircleBlueprints.FIREBALL_ITEM);
+        MOD_ITEMS.put(MagicCircleBlueprints.HEALING_ITEM, ITEMS.register(MagicCircleBlueprints.HEALING_ITEM,
+                () -> new WornBlueprintItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON),
+                        MagicCircleBlueprints.HEALING_ITEM)));
+        ARCANE_ITEM_IDS.add(MagicCircleBlueprints.HEALING_ITEM);
+
+        // 第 4 阶段：刻印石板。刻印石胚 + 已抄录载体 + 超导粉在魔晶加工台里烧出来，
+        // 贴到方块表面就是能正式运行的实体法阵锚点。
+        MOD_ITEMS.put(EtchedSlateItem.ITEM_ID, ITEMS.register(EtchedSlateItem.ITEM_ID, () ->
+                new EtchedSlateItem(new Item.Properties().stacksTo(16).rarity(Rarity.RARE))));
+        ARCANE_ITEM_IDS.add(EtchedSlateItem.ITEM_ID);
+    }
+
+    /** 魔导调试棒的物品实例；方块交互时用来判断手里拿的是不是它。 */
+    public static Item arcaneDebugWandItem() {
+        return MOD_ITEMS.get(MagicCircleWandItem.ITEM_ID).get();
     }
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ManaFurnaceBlockEntity>> MANA_FORGE_BLOCK_ENTITY = BLOCK_ENTITIES.register(
@@ -458,12 +518,19 @@ public final class GeneratedMod {
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<CrystalProcessorBlockEntity>> CRYSTAL_PROCESSOR_BLOCK_ENTITY = BLOCK_ENTITIES.register(
             "crystal_processor", () -> BlockEntityType.Builder.of(CrystalProcessorBlockEntity::new,
                     MOD_BLOCKS.get("crystal_processor").get()).build(null));
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<MagicCircleBaseBlockEntity>> MAGIC_CIRCLE_BASE_BLOCK_ENTITY =
+            BLOCK_ENTITIES.register("magic_circle_base", () -> BlockEntityType.Builder.of(MagicCircleBaseBlockEntity::new,
+                    MOD_BLOCKS.get("magic_circle_base").get()).build(null));
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<MagicCircleProjectionBlockEntity>>
+            MAGIC_CIRCLE_PROJECTION_BLOCK_ENTITY = BLOCK_ENTITIES.register(MagicCircleProjectionBlock.BLOCK_ID,
+            () -> BlockEntityType.Builder.of(MagicCircleProjectionBlockEntity::new,
+                    MOD_BLOCKS.get(MagicCircleProjectionBlock.BLOCK_ID).get()).build(null));
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> MOD_CREATIVE_TAB = CREATIVE_TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.dimensional_mana.main"))
             .icon(() -> new ItemStack(MOD_ITEMS.get("special_mana_crystal").get()))
             .displayItems((parameters, output) -> MOD_ITEMS.forEach((id, item) -> {
                 if (!MAGIC_ITEM_IDS.contains(id) && !NATURAL_ITEM_IDS.contains(id)
-                        && !QI_ITEM_IDS.contains(id)) output.accept(item.get());
+                        && !QI_ITEM_IDS.contains(id) && !ARCANE_ITEM_IDS.contains(id)) output.accept(item.get());
             })).build());
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> MAGIC_CREATIVE_TAB = CREATIVE_TABS.register("magic", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.dimensional_mana.magic"))
@@ -495,6 +562,34 @@ public final class GeneratedMod {
                             DeferredItem<? extends Item> item = MOD_ITEMS.get(id);
                             if (item != null) output.accept(item.get());
                         }
+                    }).build());
+
+    /**
+     * 「次元物语：魔导」创造页：绘制台、调试棒、刻印石胚，以及魔法阵要用的 41 种粉末。
+     *
+     * <p>粉末顺序就是绘制台粉末盘四个标签页的顺序：原版粉 → 魔晶粉 → 元素粉 → 染料；
+     * 最后是三种蓝图载体（纸 = 草稿，魔力布匹 = 单层，魔法绸缎 = 多层）。</p>
+     */
+    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> ARCANE_CREATIVE_TAB = CREATIVE_TABS.register(
+            "arcane", () -> CreativeModeTab.builder()
+                    .title(Component.translatable("itemGroup.dimensional_mana.arcane"))
+                    .icon(() -> new ItemStack(MOD_ITEMS.get(MagicCircleWandItem.ITEM_ID).get()))
+                    .displayItems((parameters, output) -> {
+                        output.accept(MOD_ITEMS.get("magic_circle_base").get());
+                        output.accept(MOD_ITEMS.get(MagicCircleWandItem.ITEM_ID).get());
+                        output.accept(MOD_ITEMS.get("carving_stone_blank").get());
+                        output.accept(MOD_ITEMS.get(EtchedSlateItem.ITEM_ID).get());
+                        output.accept(MOD_ITEMS.get(MagicCircleBlueprints.FIREBALL_ITEM).get());
+                        output.accept(MOD_ITEMS.get(MagicCircleBlueprints.HEALING_ITEM).get());
+                        for (MagicCirclePowders.Category category : MagicCirclePowders.Category.values()) {
+                            for (MagicCirclePowders.Powder powder : MagicCirclePowders.byCategory(category)) {
+                                ItemStack stack = powder.stack();
+                                if (!stack.isEmpty()) output.accept(stack);
+                            }
+                        }
+                        output.accept(Items.PAPER);
+                        output.accept(MOD_ITEMS.get(MagicEquipment.MAGIC_CLOTH).get());
+                        output.accept(MOD_ITEMS.get(MagicEquipment.MAGIC_SILK).get());
                     }).build());
 
     /**
@@ -628,6 +723,11 @@ public final class GeneratedMod {
         modBus.addListener(QiSyncPayload::register);
         modBus.addListener(QiActionPayload::register);
         modBus.addListener(OpenCombatCodexPayload::register);
+        modBus.addListener(MagicCircleSyncPayload::register);
+        modBus.addListener(MagicCircleActionPayload::register);
+        modBus.addListener(MagicCircleNetActionPayload::register);
+        modBus.addListener(MagicCircleRemoteListPayload::register);
+        modBus.addListener(MagicCircleCodeResultPayload::register);
         if (FMLEnvironment.dist == Dist.CLIENT) ClientModEvents.register(modBus);
         ManaEvents events = new ManaEvents();
         FragmentLootEvents fragmentLoot = new FragmentLootEvents();
@@ -719,6 +819,11 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(PlantEvents::onEffectExpired);
         NeoForge.EVENT_BUS.addListener(PlantEvents::onUseFinish);
         NeoForge.EVENT_BUS.addListener(ElementPlating::onTooltip);
+        NeoForge.EVENT_BUS.addListener(MagicCircleProjectionEvents::onTooltip);
+        NeoForge.EVENT_BUS.addListener(MagicCircleProjectionEvents::onRightClickBlock);
+        NeoForge.EVENT_BUS.addListener(MagicCircleProjectionEvents::onRightClickItem);
+        // 法阵召唤物的生命周期：到期自动消散（文档 14.2 第 4 条）。
+        NeoForge.EVENT_BUS.addListener(MagicCircleRites::onEntityTick);
         NeoForge.EVENT_BUS.addListener(ElementPlating::onGrindstonePlace);
         NeoForge.EVENT_BUS.addListener(ElementPlating::onGrindstoneTake);
         NeoForge.EVENT_BUS.addListener(this::brewingRecipes);
@@ -726,6 +831,8 @@ public final class GeneratedMod {
         container.registerConfig(ModConfig.Type.COMMON, MobCombatConfig.SPEC, "dimensional_mana-mobs.toml");
         container.registerConfig(ModConfig.Type.COMMON, AppraisalConfig.SPEC, "dimensional_mana-appraisal.toml");
         container.registerConfig(ModConfig.Type.COMMON, CriticalConfig.SPEC, "dimensional_mana-critical.toml");
+        container.registerConfig(ModConfig.Type.COMMON, MagicCircleConfig.SPEC, "dimensional_mana-magiccircle.toml");
+        container.registerConfig(ModConfig.Type.COMMON, SpawnConfig.SPEC, "dimensional_mana-spawns.toml");
         if (FMLEnvironment.dist == Dist.CLIENT) {
             container.registerConfig(ModConfig.Type.CLIENT, ClientManaConfig.SPEC, "dimensional_mana-client.toml");
         }

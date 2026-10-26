@@ -56,6 +56,22 @@ public final class ClientModEvents {
     /** 专业鉴定眼镜的主动扫描：手持任意物品或空手都能按（V 键可改绑）。 */
     private static final KeyMapping APPRAISAL_SCAN = new KeyMapping("key.dimensional_mana.appraisal_scan",
             InputConstants.Type.KEYSYM, InputConstants.KEY_V, "key.categories.dimensional_mana");
+    /**
+     * 一键停机：把正在跑的法阵全部关掉（X 键可改绑，原版没用 X，也不和本模组其它键冲突）。
+     *
+     * <p>属于「拍急停按钮」性质：不用对着阵、不用拿调试棒，按一下就全停，
+     * 召唤物、维持费、红石 / 计时触发一起停下。具体关哪几个由服务端按登记的主人算。</p>
+     */
+    private static final KeyMapping STOP_ALL_CIRCLES = new KeyMapping("key.dimensional_mana.stop_all_circles",
+            InputConstants.Type.KEYSYM, InputConstants.KEY_X, "key.categories.dimensional_mana");
+    /**
+     * 法阵码导入面板：随时按一下就能开，不必先摸出一张空白载体（P 键可改绑）。
+     *
+     * <p>之前只有「空白载体 + 潜行右键空气」这一个入口，对不准空气、手里拿错东西就开不出来，
+     * 玩家会以为导入坏了。现在给一个固定键位，另外右键方块时也能开。</p>
+     */
+    private static final KeyMapping CODE_PANEL = new KeyMapping("key.dimensional_mana.code_panel",
+            InputConstants.Type.KEYSYM, InputConstants.KEY_P, "key.categories.dimensional_mana");
     private static final ResourceLocation APPRAISAL_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "appraisal_hud");
     private static final ResourceLocation PRO_APPRAISAL_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "pro_appraisal_hud");
     private static final ResourceLocation REACTION_TEXT_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "reaction_text");
@@ -114,6 +130,7 @@ public final class ClientModEvents {
             // 退出世界时把鉴定 HUD 的数据清干净，免得下次进服先闪一帧上一个存档的目标。
             ClientProAppraisalState.clear();
             ClientQiState.clear();
+            ClientMagicCirclePayloadHandler.clearPendingRemote();
             qiCastHeld = false;
             qiCastSuppressed = false;
         });
@@ -189,6 +206,8 @@ public final class ClientModEvents {
         event.register(APPRAISAL_SCAN);
         event.register(QI_WHEEL);
         event.register(QI_CAST);
+        event.register(STOP_ALL_CIRCLES);
+        event.register(CODE_PANEL);
     }
 
     /** 使用当前玩家配置的按键判断，而不是写死左 Alt。 */
@@ -285,6 +304,18 @@ public final class ClientModEvents {
         while (APPRAISAL_SCAN.consumeClick()) {
             if (minecraft.player != null && minecraft.screen == null) {
                 PacketDistributor.sendToServer(new SpellActionPayload("appraisal_scan", "", 0));
+            }
+        }
+        // X 键一键停机：不用对着阵、不用拿调试棒，服务端按「登记在这个玩家名下的运行中锚点」全关。
+        while (STOP_ALL_CIRCLES.consumeClick()) {
+            if (minecraft.player != null && minecraft.screen == null) {
+                PacketDistributor.sendToServer(MagicCircleNetActionPayload.stopAll());
+            }
+        }
+        // P 键：随时打开法阵码导入面板（面板本身是纯客户端的，服务端只负责校验和发物品）。
+        while (CODE_PANEL.consumeClick()) {
+            if (minecraft.player != null && minecraft.screen == null) {
+                ClientMagicCircleScreens.openCodeImport();
             }
         }
     }
@@ -531,6 +562,9 @@ public final class ClientModEvents {
         event.registerEntityRenderer(NewSpellContent.BLAZING_SUN.get(), BlazingSunRenderer::new);
         event.registerEntityRenderer(NewSpellContent.METEOR_STONE.get(), MeteorStoneRenderer::new);
         event.registerEntityRenderer(GeneratedMod.MANA_ORB.get(), ManaOrbRenderer::new);
+        // 第 3 阶段：贴面投影锚点上的光点 / 连线 / 呼吸脉冲。
+        event.registerBlockEntityRenderer(GeneratedMod.MAGIC_CIRCLE_PROJECTION_BLOCK_ENTITY.get(),
+                MagicCircleProjectionRenderer::new);
     }
 
     /** 元素结晶戒指共用一张底图：第二层宝石按元素染色，所以十二枚外观一致、颜色不同。 */

@@ -432,6 +432,8 @@ public final class ElementalSlimeSpawning {
     private static void spawn(ServerLevel level, ElementalSlimeVariant variant, BlockPos pos,
                               ElementalSlimeTier forcedTier, int count, boolean persistent,
                               boolean fluidSurface, boolean airborne) {
+        // 野外刷怪的统一闸门：环境刷新、音乐/雷击/魔晶洞穴补刷全都从这里过。
+        if (!SpawnControl.hostileSpawningAllowed(level)) return;
         for (int i = 0; i < count; i++) {
             ElementalSlime slime = GeneratedMod.elementalSlimeType(variant).create(level);
             if (slime == null) continue;

@@ -521,6 +521,21 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
                 "minecraft:netherite_scrap", "refined_magic_component", "minecraft:netherite_scrap",
                 "special_mana_crystal_dust", "minecraft:netherite_scrap", "special_mana_crystal_dust"),
                 "greater_magic_etching", 8_000, 2_000));
+        // 「次元物语：魔导」的刻印石胚：3 平滑石 + 2 紫水晶 + 1 青金石，100 魔素 / 8 秒（160 刻），一次 6 个。
+        recipes.add(patternRecipe("carving_stone_blank", List.of(
+                "minecraft:smooth_stone", "minecraft:smooth_stone", "minecraft:smooth_stone",
+                "minecraft:amethyst_shard", "minecraft:lapis_lazuli", "minecraft:amethyst_shard",
+                "", "", ""),
+                List.of(new OutputStack("carving_stone_blank", 6)), 100, 160, "carving_stone_blank", false));
+
+        // 第 4 阶段的刻印石板：刻印石胚 1 + 紫水晶块 2 + 超导魔晶粉 2，300 魔素 / 15 秒（300 刻）。
+        // 出来的是「空白石板」，拿着它右键蓝图投影锚点就把那份阵图刻成能正式运行的实体阵
+        // ——这样蓝图数据一路跟着物品走，不会在加工台里被配方吃掉。
+        recipes.add(patternRecipe("etched_slate", List.of(
+                "", "superconducting_crystal_dust", "",
+                "minecraft:amethyst_block", "carving_stone_blank", "minecraft:amethyst_block",
+                "", "superconducting_crystal_dust", ""),
+                "etched_slate", 300, 300));
 
         addElementCrystalRecipes(recipes);
         addElementRingRecipes(recipes);

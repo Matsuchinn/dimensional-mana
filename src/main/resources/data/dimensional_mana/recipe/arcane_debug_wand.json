@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    {"item": "minecraft:stick"},
+    {"item": "minecraft:gold_ingot"},
+    {"item": "minecraft:amethyst_shard"},
+    {"item": "dimensional_mana:lapis_dust"}
+  ],
+  "result": {"id": "dimensional_mana:arcane_debug_wand", "count": 1}
+}

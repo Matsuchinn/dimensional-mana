@@ -1,4 +1,7 @@
 {
   "replace": false,
-  "values": ["dimensional_mana:medium_mana_crystal_ore"]
+  "values": [
+    "dimensional_mana:medium_mana_crystal_ore",
+    "dimensional_mana:magic_circle_base"
+  ]
 }
