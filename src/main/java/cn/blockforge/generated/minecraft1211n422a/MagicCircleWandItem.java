@@ -96,7 +96,7 @@ public final class MagicCircleWandItem extends Item {
 
     /**
      * 右键空气：站在基座上（3 像素厚的板没有碰撞箱，脚下这一格就是基座）时也能注册；
-     * <b>潜行</b>右键空气（脚下没有基座）则打开远程法阵轮盘，站着不动就能开关附近的阵。
+     * <b>潜行</b>右键空气（脚下没有基座）则打开远程法阵面板，站着不动就能开关附近的阵。
      */
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
@@ -107,7 +107,7 @@ public final class MagicCircleWandItem extends Item {
             if (base != null) {
                 MagicCircleNetworks.handleWandUse(serverLevel, base, serverPlayer, player.isShiftKeyDown());
             } else if (player.isShiftKeyDown()) {
-                // 轮盘也走客户端的开法：服务端只负责清单（客户端会自己发 remote_refresh）。
+                // 面板也走客户端的开法：服务端只负责清单（客户端会自己发 remote_refresh）。
                 serverPlayer.displayClientMessage(Component.translatable(
                         "message.dimensional_mana.magiccircle.remote.opening").withStyle(ChatFormatting.GRAY), false);
             } else {

@@ -1065,8 +1065,13 @@ public final class Goblin extends PathfinderMob {
                 && weaponDamage(stack) > weaponDamage(getMainHandItem()))) {
             ItemStack old = getMainHandItem();
             setItemSlot(EquipmentSlot.MAINHAND, stack.copyWithCount(1));
+            stack.shrink(1);
             if (!old.isEmpty() && !backpackFull()) backpack.add(old);
-            if (stack.getCount() > 1 && !backpackFull()) backpack.add(stack.copyWithCount(stack.getCount() - 1));
+            // 多余的握数整组收进背包，地上的原件必须清零（r212 修翻倍）。
+            if (!stack.isEmpty() && !backpackFull()) {
+                backpack.add(stack.copy());
+                stack.shrink(stack.getCount());
+            }
             return;
         }
         if (backpackFull()) return;
@@ -1079,7 +1084,10 @@ public final class Goblin extends PathfinderMob {
                 return;
             }
         }
+        // r212 修翻倍：整组搬进背包后要把地上的原件清空，
+        // 否则击杀后背包掉一份、地上还留一份，数量翻倍。
         backpack.add(stack.copy());
+        stack.shrink(stack.getCount());
     }
 
     private static boolean isWeapon(ItemStack stack) {

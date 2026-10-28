@@ -81,24 +81,57 @@ public final class MagicCircleNetwork {
         return new int[]{pos.getX() - minX, pos.getZ() - minZ};
     }
 
-    /** 一个功能块：图案识别后的产物，带最多四个粉末槽。 */
+    /**
+     * 一个功能块：图案识别后的产物，带最多四个粉末槽。
+     *
+     * <p>{@code declare} 是 v2.2 条件节点「声明模式」的参数串（{@link MagicCircleDecl#encode}），
+     * 其他类型的块恒为空串。</p>
+     *
+     * <p>{@code gate} 是门控规范 v2.4 给条件节点加的两字符状态：第 1 位模式
+     * （{@code G}=门控 / {@code D}=声明），第 2 位比较符（{@code L}=≤ / {@code R}=≥）。
+     * <b>数据层绝不存「是否反转」布尔</b>——⇌ 按钮点下去直接翻转这里的枚举位。
+     * 空串 = r208 及更早的存档：模式按「放了原版语义粉 = 声明」推断、比较符取语义域默认。</p>
+     */
     public record Node(MagicCircleBlockType type, int x, int y,
                        String element, String semantic, String power, String dye,
-                       String variant, boolean handDrawn) {
+                       String variant, boolean handDrawn, String declare, String gate) {
         public Node {
             element = element == null ? "" : element;
             semantic = semantic == null ? "" : semantic;
             power = power == null ? "" : power;
             dye = dye == null ? "" : dye;
             variant = variant == null ? "" : variant;
+            declare = declare == null ? "" : declare;
+            gate = gate == null ? "" : gate;
         }
 
         public Node(MagicCircleBlockType type, int x, int y, String element, String semantic, String power) {
-            this(type, x, y, element, semantic, power, "", "", false);
+            this(type, x, y, element, semantic, power, "", "", false, "", "");
+        }
+
+        /** 老九参构造（存档 / 蓝图 / 法阵码在没带声明串时走这里）。 */
+        public Node(MagicCircleBlockType type, int x, int y, String element, String semantic, String power,
+                    String dye, String variant, boolean handDrawn) {
+            this(type, x, y, element, semantic, power, dye, variant, handDrawn, "", "");
+        }
+
+        /** r208~r216 的十参构造：门控串按空走旧规则推断。 */
+        public Node(MagicCircleBlockType type, int x, int y, String element, String semantic, String power,
+                    String dye, String variant, boolean handDrawn, String declare) {
+            this(type, x, y, element, semantic, power, dye, variant, handDrawn, declare, "");
         }
 
         public Node withHandDrawn(boolean handDrawn) {
-            return new Node(type, x, y, element, semantic, power, dye, variant, handDrawn);
+            return new Node(type, x, y, element, semantic, power, dye, variant, handDrawn, declare, gate);
+        }
+
+        public Node withDeclare(String declare) {
+            return new Node(type, x, y, element, semantic, power, dye, variant, handDrawn, declare, gate);
+        }
+
+        /** 门控模式 / 比较符的整串替换（⇌ 与模式切换按钮走这里，服务端已复核格式）。 */
+        public Node withGate(String gate) {
+            return new Node(type, x, y, element, semantic, power, dye, variant, handDrawn, declare, gate);
         }
 
         CompoundTag toTag() {
@@ -112,6 +145,8 @@ public final class MagicCircleNetwork {
             tag.putString("D", dye);
             tag.putString("V", variant);
             tag.putBoolean("H", handDrawn);
+            if (!declare.isEmpty()) tag.putString("C", declare);
+            if (!gate.isEmpty()) tag.putString("O", gate);
             return tag;
         }
 
@@ -120,7 +155,7 @@ public final class MagicCircleNetwork {
             if (type == null) return null;
             return new Node(type, tag.getInt("X"), tag.getInt("Y"),
                     tag.getString("E"), tag.getString("S"), tag.getString("P"), tag.getString("D"),
-                    tag.getString("V"), tag.getBoolean("H"));
+                    tag.getString("V"), tag.getBoolean("H"), tag.getString("C"), tag.getString("O"));
         }
     }
 
@@ -142,9 +177,21 @@ public final class MagicCircleNetwork {
     public static final class Layer {
         private final List<Node> nodes = new ArrayList<>();
         private final List<Link> links = new ArrayList<>();
+        /**
+         * r211 蓝图修改模式：这一层是谁「拿蓝图上台」的临时草样。
+         * 非空表示粉末还没付、东西还不算阵盘的——界面一关 / 蓝图一打包就整层抹掉；
+         * 按「复制」付了粉末才清空这个标记，草样转成正式样本留在台上。
+         */
+        private UUID scratchOwner;
 
         public List<Node> nodes() { return Collections.unmodifiableList(nodes); }
         public List<Link> links() { return Collections.unmodifiableList(links); }
+
+        public UUID scratchOwner() { return scratchOwner; }
+
+        public boolean isScratch() { return scratchOwner != null; }
+
+        public void setScratchOwner(UUID owner) { this.scratchOwner = owner; }
 
         public Node add(Node node) {
             nodes.add(node);
@@ -234,6 +281,7 @@ public final class MagicCircleNetwork {
             ListTag linkList = new ListTag();
             for (Link link : links) linkList.add(link.toTag());
             tag.put("L", linkList);
+            if (scratchOwner != null) tag.putUUID("SO", scratchOwner);
             return tag;
         }
 
@@ -246,6 +294,7 @@ public final class MagicCircleNetwork {
             }
             ListTag linkList = tag.getList("L", Tag.TAG_COMPOUND);
             for (int i = 0; i < linkList.size(); i++) layer.links.add(Link.fromTag(linkList.getCompound(i)));
+            if (tag.hasUUID("SO")) layer.scratchOwner = tag.getUUID("SO");
             return layer;
         }
     }

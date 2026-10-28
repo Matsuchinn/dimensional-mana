@@ -181,10 +181,12 @@ public final class ElementReactionSystem {
             case CATALYZE -> { damage *= 1.4F; reactionDamage = damage; }
             case FREEZE -> {
                 reactionDamage = damage;
-                FROZEN.put(target.getUUID(), now + FREEZE_TICKS);
+                // 雨衣：受到的冻结时长减半（定身、减速与冰壳外观一起缩短）。
+                int frozenTicks = RainCoatItem.freezeTicks(target, FREEZE_TICKS);
+                FROZEN.put(target.getUUID(), now + frozenTicks);
                 freezeSolid(target);
-                target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, FREEZE_TICKS, 9, false, true, true));
-                target.addEffect(new MobEffectInstance(MobEffects.DIG_SLOWDOWN, FREEZE_TICKS, 9, false, false, true));
+                target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, frozenTicks, 9, false, true, true));
+                target.addEffect(new MobEffectInstance(MobEffects.DIG_SLOWDOWN, frozenTicks, 9, false, false, true));
             }
             case CHARGE -> target.addEffect(new MobEffectInstance(GeneratedMod.ARCANE_ECHO, ECHO_TICKS, 0, false, true, true));
             case BURNING -> BURNING.put(target.getUUID(), new TimedCasterState(caster.getUUID(), now + 120, now + 20, true));
@@ -392,7 +394,7 @@ public final class ElementReactionSystem {
         // 冰史莱姆这类「冻结免疫」生物连着深冻也不吃，不然冰系大招照样把它冻成冰块。
         if (!target.canFreeze()) return;
         long now = target.level().getGameTime();
-        int duration = Math.max(20, ticks);
+        int duration = Math.max(20, RainCoatItem.freezeTicks(target, ticks));
         DEEP_FROZEN.put(target.getUUID(), new DeepFreeze(caster.getUUID(), now + duration, now,
                 DEEP_FREEZE_HITS, damageBonus, reactionBonus));
         target.addEffect(new MobEffectInstance(NewSpellContent.DEEP_FREEZE, duration, 0, false, false, true));
@@ -508,7 +510,9 @@ public final class ElementReactionSystem {
         return null;
     }
 
-    private static Reaction reactionFor(ElementType a, ElementType b) {
+    /** 两种元素相撞会得到哪个反应；没有反应返回 {@code null}（同元素也不算）。 */
+    public static Reaction reactionFor(ElementType a, ElementType b) {
+        if (a == null || b == null || a == b) return null;
         if (pair(a, b, ElementType.FIRE, ElementType.WATER)) return Reaction.VAPORIZE;
         if (pair(a, b, ElementType.FIRE, ElementType.ICE)) return Reaction.MELT;
         if (pair(a, b, ElementType.FIRE, ElementType.LIGHTNING)) return Reaction.OVERLOAD;
@@ -561,6 +565,10 @@ public final class ElementReactionSystem {
         awardReactionAdvancements(caster, reaction);
         ReactionVisualPayload.send(target, reaction);
         reactionParticles(target, reaction.color());
+        // 法阵的「元素反应检测」触发块要记得这里刚在哪个位置发生过什么反应。
+        if (!target.level().isClientSide) {
+            MagicCircleTriggers.recordReaction(target.blockPosition(), reaction, target.level().getGameTime());
+        }
     }
 
     private static void consume(LivingEntity target, ElementType existing, int existingTicks,
@@ -604,7 +612,8 @@ public final class ElementReactionSystem {
         return Math.max(1, (int)(ticks * factor));
     }
 
-    private static void attach(LivingEntity target, ElementType element, int ticks) {
+    /** 给目标挂上元素附着（已有附着时取更长时长）；法阵触发块的元素槽也走这里。 */
+    public static void attach(LivingEntity target, ElementType element, int ticks) {
         Holder<MobEffect> effect = GeneratedMod.elementEffect(element);
         int adjusted = targetAttachmentTicks(target, element, ticks);
         MobEffectInstance old = target.getEffect(effect);
@@ -624,10 +633,12 @@ public final class ElementReactionSystem {
      * 附着真正落到目标身上时的时长。
      *
      * <p>{@link #attachmentTicks} 算的是「施法者」的加成（元素戒指），这里再算「目标」的减免：
-     * 穿着雨靴的玩家自己受到的水元素附着减半，别的元素、别的生物都不受影响。</p>
+     * 穿着雨靴的玩家自己受到的水元素附着减半，穿着雨衣的玩家受到的冰、水附着只剩一成，
+     * 别的元素、别的生物都不受影响。</p>
      */
     private static int targetAttachmentTicks(LivingEntity target, ElementType element, int ticks) {
-        float multiplier = RainBootsItem.attachmentMultiplier(target, element);
+        float multiplier = RainBootsItem.attachmentMultiplier(target, element)
+                * RainCoatItem.attachmentMultiplier(target, element);
         return multiplier == 1.0F ? ticks : Math.max(1, Math.round(ticks * multiplier));
     }
 

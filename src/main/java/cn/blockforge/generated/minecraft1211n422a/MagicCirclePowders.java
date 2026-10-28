@@ -25,6 +25,35 @@ import java.util.Map;
  */
 public final class MagicCirclePowders {
 
+    /** 奥术粉的物品 id；它没有 {@link ElementType} 对应项，法阵里按「高级媒介」单独处理。 */
+    public static final String ARCANE_ITEM = "dimensional_mana:mana_element_crystal_dust";
+
+    public static boolean isArcane(String itemId) {
+        return ARCANE_ITEM.equals(itemId);
+    }
+
+    /**
+     * 功率槽提供的效率（设计规范 v2.1）：下级 +1%、中级 +2%、高级 +4%、极品 +6%、特级 +8%、超导 +12%。
+     * 每点效率让该节点的魔素消耗降低 1%；不是魔晶粉或空槽返回 0。
+     */
+    public static double powerEfficiency(String itemId) {
+        if (itemId == null || itemId.isEmpty()) return 0.0;
+        return switch (itemId) {
+            case "dimensional_mana:lesser_mana_crystal_dust" -> 0.01;
+            case "dimensional_mana:medium_mana_crystal_dust" -> 0.02;
+            case "dimensional_mana:advanced_mana_crystal_dust" -> 0.04;
+            case "dimensional_mana:supreme_mana_crystal_dust" -> 0.06;
+            case "dimensional_mana:special_mana_crystal_dust" -> 0.08;
+            case "dimensional_mana:superconducting_crystal_dust" -> 0.12;
+            default -> 0.0;
+        };
+    }
+
+    /** 功能块「功率槽效率」的判定：任何魔晶粉都算，界面统计超导数量时用。 */
+    public static boolean isSuperconductor(String itemId) {
+        return "dimensional_mana:superconducting_crystal_dust".equals(itemId);
+    }
+
     /** 粉末盘的四个标签页，顺序就是界面里的排列顺序。 */
     public enum Category {
         VANILLA("vanilla", "原版粉"),

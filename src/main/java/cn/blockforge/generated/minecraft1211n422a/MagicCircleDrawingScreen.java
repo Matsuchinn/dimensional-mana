@@ -56,8 +56,9 @@ public final class MagicCircleDrawingScreen extends Screen {
     private static final int POWDER_CELL_HEIGHT = 24;
     private static final int POWDER_COLUMNS = 4;
     private static final int NODE_ROW_HEIGHT = 13;
-    private static final int MAX_VISIBLE_NODES = 4;
     private static final int SIDE_BUTTON_HEIGHT = 17;
+    /** r214：右列顶部常驻的「节点详情」区高度（标题 + 四行内容）。 */
+    private static final int DETAIL_H = 56;
     private static final int TOOLBAR_HEIGHT = 18;
     private static final int TOOLBAR_BUTTON_WIDTH = 40;
     private static final int MENU_WIDTH = 118;
@@ -97,6 +98,8 @@ public final class MagicCircleDrawingScreen extends Screen {
     private int paletteX, paletteY, paletteW, paletteH;
     private int canvasAreaX, canvasAreaY, canvasAreaW, canvasAreaH;
     private int sideX, sideY, sideW, sideH;
+    /** r212：右侧一列改成滚动列表，这是当前滚动位置（像素）。 */
+    private int sideScroll;
     private int footerY;
 
     /** 画布能被 Ctrl+滚轮缩到多小 / 放多大。上限给到 8 倍：大阵（64×64 格）放大了才看得清一格。 */
@@ -109,6 +112,13 @@ public final class MagicCircleDrawingScreen extends Screen {
 
     private int categoryIndex;
     private boolean commonOnly;
+    /**
+     * r218：三块边栏的<b>临时收起</b>开关（纯客户端显示状态，不动任何数据）。
+     * 面板外沿各有一颗小箭头钮，点一下收起来、再点一下放回去，方便玩家干净地看整张图。
+     */
+    private boolean hidePalette;
+    private boolean hideSide;
+    private boolean hideFooter;
     private int brush = 1;
     private double zoom = 1.0;
     private int panX, panY;
@@ -174,13 +184,26 @@ public final class MagicCircleDrawingScreen extends Screen {
     private boolean editorOpen;
     private int editorNode = -1;
     private MagicCirclePowders.Slot editorSlot = MagicCirclePowders.Slot.ELEMENT;
+    /** v2.2：编辑器当前页 —— 0 = 选粉末，1 = 边界声明（条件节点声明模式才有第 2 页）。 */
+    private int editorDeclPage;
+    /** v2.2：声明页每行按钮的命中区，渲染时收集、点击时消费。 */
+    private final List<DeclHit> declHits = new ArrayList<>();
+    /** 本层客户端图分析（终端 / 前置角标用），状态同步时重算。 */
+    private MagicCircleGraph.Analysis clientAnalysis;
+
+    /** 声明页一个可点控件：矩形 + 目标边界组 + 动作码 + 附加参数。 */
+    private record DeclHit(int x, int y, int w, int h, MagicCircleDecl.Group group, String action, int arg) {
+        boolean contains(double mx, double my) {
+            return mx >= x && mx < x + w && my >= y && my < y + h;
+        }
+    }
     /** 最近一次渲染时的鼠标位置：Ctrl+V 之类没有鼠标事件的快捷键要靠它定粘贴位置。 */
     private int pointerX, pointerY;
 
     private final Deque<String> recentPowders = new ArrayDeque<>();
     private final List<Component> hoverPowder = new ArrayList<>();
-    /** 悬停功能块时显示的四槽粉末明细；优先级高于粉末盘提示。 */
-    private final List<Component> hoverNode = new ArrayList<>();
+    /** r214：鼠标正压在哪个功能块上，明细钉在右列顶部的常驻区，不再跟着鼠标飘。-1 = 没有。 */
+    private int detailHover = -1;
     private int hoveredPowder = -1;
     private Component hint = Component.translatable("gui.dimensional_mana.magiccircle.hint.draw");
 
@@ -229,6 +252,33 @@ public final class MagicCircleDrawingScreen extends Screen {
         clearArmed = false;
         flow = null;
         flowState = null;
+        clientAnalysis = computeClientAnalysis(payload);
+    }
+
+    /**
+     * 把同步状态里的功能块拼成一个内层网络，交给图分析器认脸：
+     * 只为画布上「终端 / 前置 / 声明 / 门」角标服务，出错就退回无角标，不影响编辑。
+     */
+    private MagicCircleGraph.Analysis computeClientAnalysis(MagicCircleSyncPayload payload) {
+        if (payload.nodes().isEmpty()) return null;
+        try {
+            MagicCircleNetwork.Layer layer = new MagicCircleNetwork.Layer();
+            boolean coreSugar = false;
+            for (MagicCircleSyncPayload.NodeView view : payload.nodes()) {
+                MagicCircleBlockType type = MagicCircleBlockType.byId(view.type());
+                if (type == null) continue;
+                layer.add(new MagicCircleNetwork.Node(type, view.x(), view.y(), view.element(),
+                        view.semantic(), view.power(), view.dye(), view.variant(), view.handDrawn(),
+                        view.declare(), view.gate()));
+                if (type.isCore() && "minecraft:sugar".equals(view.semantic())) coreSugar = true;
+            }
+            for (MagicCircleSyncPayload.LinkView link : payload.links()) {
+                layer.addLink(link.from(), link.to());
+            }
+            return MagicCircleGraph.analyze(layer, MagicCircleConfig.DECLARE_MODE_ENABLED.get(), coreSugar);
+        } catch (RuntimeException invalid) {
+            return null;
+        }
     }
 
     @Override
@@ -237,26 +287,64 @@ public final class MagicCircleDrawingScreen extends Screen {
         panelH = Math.max(220, Math.min(PANEL_MAX_HEIGHT, height - 16));
         left = (width - panelW) / 2;
         top = (height - panelH) / 2;
+        // r218：收起的边栏宽度 / 高度直接归零，画布吃掉腾出来的地方。
         int contentTop = top + HEADER_HEIGHT;
-        int footerTop = top + panelH - FOOTER_HEIGHT;
+        int footerTop = top + panelH - (hideFooter ? 0 : FOOTER_HEIGHT);
         int contentHeight = Math.max(120, footerTop - contentTop);
-        paletteW = Mth.clamp(panelW * 28 / 100, 112, 158);
-        int sideWidth = Mth.clamp(panelW * 24 / 100, 100, 152);
-        paletteX = left + GAP;
+        paletteW = hidePalette ? 0 : Mth.clamp(panelW * 28 / 100, 112, 158);
+        int sideWidth = hideSide ? 0 : Mth.clamp(panelW * 24 / 100, 100, 152);
+        paletteX = left + (hidePalette ? 0 : GAP);
         paletteY = contentTop;
         paletteH = contentHeight;
-        sideX = left + panelW - GAP - sideWidth;
+        sideX = left + panelW - (hideSide ? 0 : GAP + sideWidth);
         sideY = contentTop;
         sideW = sideWidth;
         sideH = contentHeight;
-        canvasAreaX = paletteX + paletteW + GAP;
+        canvasAreaX = paletteX + paletteW + (hidePalette ? 0 : GAP);
         toolbarY = contentTop;
         canvasAreaY = contentTop + TOOLBAR_HEIGHT;
-        canvasAreaW = Math.max(60, sideX - GAP - canvasAreaX);
+        canvasAreaW = Math.max(60, sideX - (hideSide ? 0 : GAP) - canvasAreaX);
         canvasAreaH = Math.max(60, contentHeight - TOOLBAR_HEIGHT);
         footerY = footerTop;
         // 窗口大小变了（F11 / 拖动窗口）时，正开着的命名框要跟着挪，输入的字不丢。
         if (naming) layoutNameBox();
+    }
+
+    /** 左列粉盘外沿的收起 / 展开小钮（r218）。 */
+    private Rect paletteToggleRect() {
+        return new Rect(left - 1, top + panelH / 2 - 12, 12, 24);
+    }
+
+    /** 右列外沿的收起 / 展开小钮。 */
+    private Rect sideToggleRect() {
+        return new Rect(left + panelW - 11, top + panelH / 2 - 12, 12, 24);
+    }
+
+    /** 底栏上沿正中的收起 / 展开小钮。 */
+    private Rect footerToggleRect() {
+        return new Rect(left + panelW / 2 - 14, top + panelH - (hideFooter ? 12 : FOOTER_HEIGHT + 2), 28, 12);
+    }
+
+    /** 画三颗收起小钮：压在面板边线上，收起后仍在原地，点回去就展开。 */
+    private void renderPanelToggles(GuiGraphics graphics, int mouseX, int mouseY) {
+        toggleButton(graphics, paletteToggleRect(), hidePalette ? "▶" : "◀",
+                "gui.dimensional_mana.magiccircle.toggle.palette", mouseX, mouseY);
+        toggleButton(graphics, sideToggleRect(), hideSide ? "◀" : "▶",
+                "gui.dimensional_mana.magiccircle.toggle.side", mouseX, mouseY);
+        toggleButton(graphics, footerToggleRect(), hideFooter ? "▲" : "▼",
+                "gui.dimensional_mana.magiccircle.toggle.footer", mouseX, mouseY);
+    }
+
+    private void toggleButton(GuiGraphics graphics, Rect rect, String arrow, String tipKey,
+                              int mouseX, int mouseY) {
+        boolean hover = rect.contains(mouseX, mouseY);
+        graphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, hover ? 0xE6432C63 : 0xC01A1428);
+        graphics.renderOutline(rect.x, rect.y, rect.w, rect.h, hover ? 0xFFFFD86B : 0xFF5A4770);
+        graphics.drawString(font, arrow, rect.x + (rect.w - font.width(arrow)) / 2,
+                rect.y + (rect.h - font.lineHeight) / 2 + 1, hover ? 0xFFFFE4A8 : COLOR_TEXT, false);
+        if (hover) {
+            hoverPowder.add(Component.translatable(tipKey).withStyle(net.minecraft.ChatFormatting.GRAY));
+        }
     }
 
     // ------------------------------------------------------------------ 绘制
@@ -278,19 +366,18 @@ public final class MagicCircleDrawingScreen extends Screen {
         pointerY = mouseY;
         hoveredPowder = -1;
         hoverPowder.clear();
-        hoverNode.clear();
+        detailHover = -1;
         renderHeader(graphics, mouseX, mouseY);
         renderToolbar(graphics, mouseX, mouseY);
         renderCanvas(graphics, mouseX, mouseY);
-        renderPalette(graphics, mouseX, mouseY);
-        renderSide(graphics, mouseX, mouseY);
-        renderFooter(graphics);
+        if (!hidePalette) renderPalette(graphics, mouseX, mouseY);
+        if (!hideSide) renderSide(graphics, mouseX, mouseY);
+        if (!hideFooter) renderFooter(graphics);
+        renderPanelToggles(graphics, mouseX, mouseY);
         renderOverlays(graphics, mouseX, mouseY);
-        // 弹框盖住整块面板时，底下的粉末 / 功能块提示就别再冒头了。
+        // 弹框盖住整块面板时，底下的粉末提示就别再冒头了。
         if (naming) return;
-        if (!hoverNode.isEmpty()) {
-            graphics.renderComponentTooltip(font, hoverNode, mouseX, mouseY);
-        } else if (!hoverPowder.isEmpty()) {
+        if (!hoverPowder.isEmpty()) {
             graphics.renderComponentTooltip(font, hoverPowder, mouseX, mouseY);
         }
     }
@@ -300,15 +387,17 @@ public final class MagicCircleDrawingScreen extends Screen {
         String subtitle = Component.translatable("gui.dimensional_mana.magiccircle.subtitle",
                 state.baseW(), state.baseH(), state.canvasW(), state.canvasH(), state.layer() + 1).getString();
         graphics.drawString(font, subtitle, left + GAP + 2, top + 15, COLOR_DIM, false);
+        // r218：右列收起后 sideX 贴到面板右沿，这两行要让开右上角的关闭钮（面板右沿 -24）。
+        int headerRight = hideSide ? left + panelW - 24 : sideX - 4;
         String level = Component.translatable(state.freePowder()
                         ? "gui.dimensional_mana.magiccircle.level.creative"
                         : "gui.dimensional_mana.magiccircle.level",
                 state.magicLevel(), state.unlockedPowders(), state.totalPowders()).getString();
-        graphics.drawString(font, level, sideX - 4 - font.width(level), top + 4,
+        graphics.drawString(font, level, headerRight - font.width(level), top + 4,
                 state.freePowder() ? COLOR_GOLD : COLOR_AQUA, false);
         String owner = Component.translatable("gui.dimensional_mana.magiccircle.owner",
                 state.ownerName().isEmpty() ? "-" : state.ownerName()).getString();
-        graphics.drawString(font, owner, sideX - 4 - font.width(owner), top + 15, COLOR_DIM, false);
+        graphics.drawString(font, owner, headerRight - font.width(owner), top + 15, COLOR_DIM, false);
         Rect close = closeRect();
         boolean hover = close.contains(mouseX, mouseY);
         graphics.fill(close.x, close.y, close.x + close.w, close.y + close.h, hover ? 0xFF5A2340 : 0x662A1B3F);
@@ -452,13 +541,22 @@ public final class MagicCircleDrawingScreen extends Screen {
                 String label = type.fallbackName().substring(0, 1);
                 graphics.drawCenteredString(font, label, cx, cy - 4, color);
             }
-            // 鼠标压在功能块上：把这格四个粉槽都列出来（元素 / 语义 / 功率 / 染料）。
+            // v2.2 角色角标：终端=黄、前置=青、声明=紫、门=灰，标在块的右下角。
+            String roleMark = roleMark(i, type);
+            if (roleMark != null && size >= 12) {
+                graphics.drawString(font, roleMark, cx + size / 2 - 8, cy + size / 2 - 8,
+                        roleMarkColor(i), false);
+            }
+            // 图分析报了问题的块：左上角打红点，跟页脚红字对得上号。
+            if (clientAnalysis != null && clientAnalysis.flagged.contains(i)) {
+                drawIssueBadge(graphics, cx - size / 2 + 3, cy - size / 2 + 3);
+            }
+            // 鼠标压在功能块上：明细交给右列顶部的常驻「节点详情」区（r214，不再飘 tooltip）。
             if (!typeMenuOpen && !drawing && !manualMode && !editorOpen && !contextMenu && !draggingNode
                     && !moveMode
                     && mouseX >= cx - size / 2 - 2 && mouseX <= cx + size / 2 + 2
                     && mouseY >= cy - size / 2 - 2 && mouseY <= cy + size / 2 + 2) {
-                hoverNode.clear();
-                hoverNode.addAll(nodeTooltip(i, node));
+                detailHover = i;
             }
         }
         renderFlowOrders(graphics, centreX, centreY, blockSize);
@@ -714,9 +812,23 @@ public final class MagicCircleDrawingScreen extends Screen {
                 hoverPowder.add(Component.translatable("gui.dimensional_mana.magiccircle.powder.slot",
                         Component.translatable(powder.slot().translationKey())).copy()
                         .withStyle(net.minecraft.ChatFormatting.AQUA));
-                hoverPowder.add(Component.translatable("gui.dimensional_mana.magiccircle.powder.coefficient",
-                        String.format(Locale.ROOT, "%.2f", powder.coefficient()))
-                        .copy().withStyle(net.minecraft.ChatFormatting.GOLD));
+                switch (powder.category()) {
+                    // 魔晶粉是功率槽：v2.1 起它直接换算成「每点效率降 1% 消耗」。
+                    case MANA_CRYSTAL -> hoverPowder.add(Component.translatable(
+                            "gui.dimensional_mana.magiccircle.powder.efficiency",
+                            Math.round(MagicCirclePowders.powerEfficiency(powder.itemId()) * 100))
+                            .copy().withStyle(net.minecraft.ChatFormatting.GOLD));
+                    // 其余三类在 v2.1 里不再是消耗乘数，改成说明各自的作用。
+                    case VANILLA -> hoverPowder.add(Component.translatable(
+                            "gui.dimensional_mana.magiccircle.powder.role.semantic")
+                            .copy().withStyle(net.minecraft.ChatFormatting.GOLD));
+                    case ELEMENT -> hoverPowder.add(Component.translatable(
+                            "gui.dimensional_mana.magiccircle.powder.role.element")
+                            .copy().withStyle(net.minecraft.ChatFormatting.GOLD));
+                    case DYE -> hoverPowder.add(Component.translatable(
+                            "gui.dimensional_mana.magiccircle.powder.role.dye")
+                            .copy().withStyle(net.minecraft.ChatFormatting.GOLD));
+                }
                 hoverPowder.add((state.freePowder()
                         ? Component.translatable("gui.dimensional_mana.magiccircle.powder.free")
                         : Component.translatable("gui.dimensional_mana.magiccircle.powder.amount",
@@ -754,20 +866,40 @@ public final class MagicCircleDrawingScreen extends Screen {
         }
     }
 
+    /**
+     * 右侧一列：上头「识别候选 + 功能块管理」整段做成<b>可滚轮上下滚</b>的列表，
+     * 底下六个动作按钮和蓝图槽位固定不动，两段用剪裁线隔开，内容再多也不会叠字。
+     */
     private void renderSide(GuiGraphics graphics, int mouseX, int mouseY) {
         graphics.fill(sideX, sideY, sideX + sideW, sideY + sideH, 0x33120F20);
         graphics.renderOutline(sideX, sideY, sideW, sideH, 0xFF4A3B60);
 
+        renderDetailBox(graphics);
+
         graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.candidate.title"),
-                sideX + 4, sideY + 3, COLOR_GOLD, false);
-        int candidateTop = sideY + 16;
+                sideX + 4, sideY + DETAIL_H + 6, COLOR_GOLD, false);
+        int viewTop = sideViewportTop();
+        int viewBottom = sideViewportBottom();
+        int viewportH = Math.max(24, viewBottom - viewTop);
+        viewBottom = viewTop + viewportH;
+        int contentH = sideContentHeight();
+        int maxScroll = Math.max(0, contentH - viewportH);
+        // 选中的块滚出视野时，顺手把它滚回来，不用手动找。
+        if (selectedNode >= 0 && selectedNode < state.nodes().size()) {
+            int relTop = sideCandidatesH() + 6 + NODE_ROW_HEIGHT + selectedNode * NODE_ROW_HEIGHT;
+            if (relTop - sideScroll < 0) sideScroll = relTop;
+            if (relTop + NODE_ROW_HEIGHT - sideScroll > viewportH) sideScroll = relTop + NODE_ROW_HEIGHT - viewportH;
+        }
+        sideScroll = Mth.clamp(sideScroll, 0, maxScroll);
+
+        graphics.enableScissor(sideX + 1, viewTop, sideX + sideW - 2, viewBottom);
         if (!state.candidates().isEmpty()) {
             for (int i = 0; i < state.candidates().size(); i++) {
                 Rect rect = candidateRect(i);
                 MagicCircleSyncPayload.CandidateView view = state.candidates().get(i);
                 MagicCircleGlyph glyph = MagicCircleGlyph.byId(view.glyph());
                 if (glyph == null) continue;
-                boolean hover = rect.contains(mouseX, mouseY);
+                boolean hover = sideVisible(rect) && rect.contains(mouseX, mouseY);
                 graphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, hover ? 0xAA3D2A5C : 0x88201730);
                 graphics.renderOutline(rect.x, rect.y, rect.w, rect.h, hover ? 0xFFE9C8FF : 0xFF6A4E8E);
                 graphics.drawString(font, Component.translatable(glyph.translationKey()),
@@ -783,25 +915,23 @@ public final class MagicCircleDrawingScreen extends Screen {
             Component message = Component.translatable(failed
                     ? "gui.dimensional_mana.magiccircle.candidate.failed"
                     : "gui.dimensional_mana.magiccircle.candidate.none");
-            graphics.drawWordWrap(font, message, sideX + 5, candidateTop + 2, sideW - 10,
+            graphics.drawWordWrap(font, message, sideX + 5, viewTop + 2 - sideScroll, sideW - 10,
                     failed ? 0xFFFFD86B : COLOR_DIM);
         }
 
-        int nodeTop = candidateTop + 84;
+        int nodeTitleY = viewTop + sideCandidatesH() + 6 - sideScroll;
         graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.nodes.title",
-                state.nodes().size()), sideX + 4, nodeTop, COLOR_GOLD, false);
+                state.nodes().size()), sideX + 4, nodeTitleY, COLOR_GOLD, false);
         if (state.nodes().isEmpty()) {
             graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.nodes.empty"),
-                    sideX + 4, nodeTop + 13, COLOR_DIM, false);
+                    sideX + 4, nodeTitleY + 13, COLOR_DIM, false);
         } else {
-            int start = Math.max(0, Math.min(selectedNode - MAX_VISIBLE_NODES / 2,
-                    state.nodes().size() - MAX_VISIBLE_NODES));
-            for (int row = 0; row < MAX_VISIBLE_NODES && start + row < state.nodes().size(); row++) {
-                int index = start + row;
-                Rect rect = nodeRowRect(nodeTop, row);
+            // 列表不再只显示 4 行：全部铺进滚动区，块多就滚轮翻。
+            for (int index = 0; index < state.nodes().size(); index++) {
+                Rect rect = nodeRowRect(index);
                 MagicCircleSyncPayload.NodeView node = state.nodes().get(index);
                 MagicCircleBlockType type = MagicCircleBlockType.byId(node.type());
-                boolean hover = rect.contains(mouseX, mouseY);
+                boolean hover = sideVisible(rect) && rect.contains(mouseX, mouseY);
                 boolean active = index == selectedNode || selection.contains(index);
                 graphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h,
                         active ? 0xAA4A2E6E : hover ? 0x88302A46 : 0x44120F20);
@@ -814,18 +944,23 @@ public final class MagicCircleDrawingScreen extends Screen {
                 label = font.plainSubstrByWidth(label, Math.max(10, rect.w - 6));
                 graphics.drawString(font, label, rect.x + 3, rect.y + 2, active ? 0xFFFFE4A8 : COLOR_DIM, false);
                 if (hover) {
-                    hoverNode.clear();
-                    hoverNode.addAll(nodeTooltip(index, node));
+                    detailHover = index;
                 }
             }
-            if (state.nodes().size() > MAX_VISIBLE_NODES) {
-                String more = "+" + (state.nodes().size() - MAX_VISIBLE_NODES);
-                graphics.drawString(font, more, sideX + sideW - 4 - font.width(more),
-                        nodeTop + 13 + MAX_VISIBLE_NODES * NODE_ROW_HEIGHT - 2, 0xFF8A7BA5, false);
-            }
+        }
+        graphics.disableScissor();
+
+        if (maxScroll > 0) {
+            // 细滚动条：告诉你这列还能滚、现在滚到哪儿了。
+            int trackTop = viewTop + 1;
+            int trackH = viewBottom - trackTop - 2;
+            int thumbH = Math.max(20, trackH * viewportH / Math.max(1, contentH));
+            int thumbY = trackTop + (int) ((long) (trackH - thumbH) * sideScroll / maxScroll);
+            graphics.fill(sideX + sideW - 4, trackTop, sideX + sideW - 2, trackTop + trackH, 0x33FFFFFF);
+            graphics.fill(sideX + sideW - 4, thumbY, sideX + sideW - 2, thumbY + thumbH, 0xBBAE8FD8);
         }
 
-        int buttonTop = sideY + sideH - SIDE_BUTTON_HEIGHT * 6 - 4;
+        renderBlueprintSlot(graphics, mouseX, mouseY);
         drawSideButton(graphics, redrawRect(), Component.translatable("gui.dimensional_mana.magiccircle.button.redraw"),
                 mouseX, mouseY, !raw.isEmpty() || !preview.isEmpty());
         drawSideButton(graphics, undoRect(), Component.translatable("gui.dimensional_mana.magiccircle.button.undo"),
@@ -845,33 +980,88 @@ public final class MagicCircleDrawingScreen extends Screen {
                 mouseX, mouseY, state.editable() && !state.nodes().isEmpty());
     }
 
-    /** 悬停一个功能块时显示：第几层、什么块、坐标、第几位触发，以及四个粉槽各放了什么。 */
-    private List<Component> nodeTooltip(int index, MagicCircleSyncPayload.NodeView node) {
-        List<Component> lines = new ArrayList<>();
+    /** 滚动视口顶部：让开顶部常驻的「节点详情」区，再紧挨「识别候选」标题下沿。 */
+    private int sideViewportTop() {
+        return sideY + DETAIL_H + 17;
+    }
+
+    /**
+     * 滚动视口底部：刚好卡在 6 颗动作按钮上方 2 像素处。
+     *
+     * <p>r215 修正：底下这摞固定件原来算错了一层——蓝图槽位卡按「按钮顶部 + 2」定位，
+     * 正压在「重画 / 撤销」上（用户截图里糊成一坨的就是它）。现在右列自下而上严格排队：
+     * <b>蓝图槽位卡 → 6 颗按钮 → 滚动列表</b>，谁也不压谁。</p>
+     */
+    private int sideViewportBottom() {
+        return sideButtonsTop() - 2;
+    }
+
+    /** 候选区占用高度：有候选按每个 26 像素，没有就留两行提示字的高度。 */
+    private int sideCandidatesH() {
+        return state.candidates().isEmpty() ? 28 : state.candidates().size() * 26;
+    }
+
+    /** 滚动内容总高：候选区 + 功能块标题 + 所有块（空列表也留一行占位）。 */
+    private int sideContentHeight() {
+        return sideCandidatesH() + 6 + NODE_ROW_HEIGHT + Math.max(1, state.nodes().size()) * NODE_ROW_HEIGHT + 4;
+    }
+
+    /** 这块矩形现在是不是真的露在滚动视口里（滚出去的不许当悬停 / 点击目标）。 */
+    private boolean sideVisible(Rect rect) {
+        int top = sideViewportTop();
+        int bottom = top + Math.max(24, sideViewportBottom() - top);
+        return rect.y + rect.h > top && rect.y < bottom;
+    }
+
+    /**
+     * r214：右列顶部的常驻「节点详情」区。原来是跟着鼠标飘的 tooltip，悬停列表行时
+     * 一大块正好盖住右列的按钮（用户截图里"还是重叠"就是这个）；现在改成固定 UI 区域：
+     * 悬停画布块 / 列表行立刻显示在这里，没悬停时兜底显示当前选中的块，字永远压不到按钮。
+     */
+    private void renderDetailBox(GuiGraphics graphics) {
+        int x = sideX + 3;
+        int y = sideY + 2;
+        int w = sideW - 6;
+        graphics.fill(x, y, x + w, y + DETAIL_H, 0xE6140F22);
+        graphics.renderOutline(x, y, w, DETAIL_H, detailHover >= 0 ? 0xFFAE8FD8 : 0xFF4A3B60);
+        graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.detail.title"),
+                x + 3, y + 3, COLOR_GOLD, false);
+        int index = detailHover >= 0 ? detailHover : selectedNode;
+        if (index < 0 || index >= state.nodes().size()) {
+            graphics.drawString(font, font.plainSubstrByWidth(Component.translatable(
+                            "gui.dimensional_mana.magiccircle.detail.none").getString(), w - 6),
+                    x + 3, y + 17, COLOR_DIM, false);
+            return;
+        }
+        MagicCircleSyncPayload.NodeView node = state.nodes().get(index);
         MagicCircleBlockType type = MagicCircleBlockType.byId(node.type());
-        lines.add(Component.translatable("tooltip.dimensional_mana.magiccircle.node.header",
-                        state.layer() + 1, type == null ? node.type() : type.fallbackName(), node.x(), node.y())
-                .withStyle(net.minecraft.ChatFormatting.GOLD));
+        // 第一行：第几层 · 什么块 (坐标)；右侧带角色角标（终/缀/declare/门），手绘的补一个"·手"。
+        String head = Component.translatable("tooltip.dimensional_mana.magiccircle.node.header",
+                state.layer() + 1, type == null ? node.type() : type.fallbackName(), node.x(), node.y()).getString()
+                + (node.handDrawn() ? "·手" : "");
+        String role = roleMark(index, type);
+        graphics.drawString(font, font.plainSubstrByWidth(head, role == null ? w - 6 : w - 18),
+                x + 3, y + 14, COLOR_GOLD, false);
+        if (role != null) {
+            graphics.drawString(font, role, x + w - 11, y + 14, roleMarkColor(index), false);
+        }
+        // 第二行：触发顺序；同层并列的补一句，免得看见两个「2」以为显示错了。
         int order = flow().order(index);
-        lines.add(order > 0
-                ? Component.translatable("tooltip.dimensional_mana.magiccircle.node.order", order)
-                        .withStyle(net.minecraft.ChatFormatting.AQUA)
-                : Component.translatable("tooltip.dimensional_mana.magiccircle.node.order.none")
-                        .withStyle(net.minecraft.ChatFormatting.RED));
-        // 同一层还有别的块：说一句「你们是一起触发的」，免得看见两个「2」以为是显示错了。
-        if (order > 0 && layerSiblings(order) > 1) {
-            lines.add(Component.translatable("tooltip.dimensional_mana.magiccircle.node.order.same_layer", order)
-                    .withStyle(net.minecraft.ChatFormatting.DARK_AQUA));
+        if (order > 0) {
+            int siblings = layerSiblings(order);
+            String text = Component.translatable("tooltip.dimensional_mana.magiccircle.node.order", order).getString()
+                    + (siblings > 1 ? "·并列" + siblings : "");
+            graphics.drawString(font, font.plainSubstrByWidth(text, w - 6), x + 3, y + 24, 0xFF8FE3FF, false);
+        } else {
+            graphics.drawString(font, font.plainSubstrByWidth(Component.translatable(
+                            "gui.dimensional_mana.magiccircle.detail.order.none").getString(), w - 6),
+                    x + 3, y + 24, 0xFFFF9BA8, false);
         }
-        lines.add(slotLine("element", node.element()));
-        lines.add(slotLine("semantic", node.semantic()));
-        lines.add(slotLine("power", node.power()));
-        lines.add(slotLine("dye", node.dye()));
-        if (node.handDrawn()) {
-            lines.add(Component.translatable("tooltip.dimensional_mana.magiccircle.node.manual")
-                    .withStyle(net.minecraft.ChatFormatting.YELLOW));
-        }
-        return lines;
+        // 第三/四行：四个粉槽的短名（和列表行同一口径，全名会撑爆 150 像素的列宽）。
+        int nx = drawDetailPair(graphics, x + 3, y + 34, "element", node.element(), x + w - 66);
+        drawDetailPair(graphics, nx + 4, y + 34, "semantic", node.semantic(), x + w - 4);
+        nx = drawDetailPair(graphics, x + 3, y + 44, "power", node.power(), x + w - 64);
+        drawDetailPair(graphics, nx + 4, y + 44, "dye", node.dye(), x + w - 4);
     }
 
     /** 和这块同一层（同一个序号）的块有几个：大于 1 说明它们是并列、同时触发的。 */
@@ -885,16 +1075,19 @@ public final class MagicCircleDrawingScreen extends Screen {
         return count;
     }
 
-    private Component slotLine(String slot, String itemId) {
+    /** 详情区里「标签:短名」一段：画完返回下一个标签该开始的 x 坐标。 */
+    private int drawDetailPair(GuiGraphics graphics, int x, int y, String slotKey, String itemId, int maxX) {
+        String label = Component.translatable("gui.dimensional_mana.magiccircle.slot." + slotKey).getString() + ":";
+        if (x >= maxX) return x;
+        graphics.drawString(font, label, x, y, 0xFFBDA9DE, false);
+        x += font.width(label);
         MagicCirclePowders.Powder powder = MagicCirclePowders.get(itemId);
-        Component value = powder == null
-                ? Component.translatable("tooltip.dimensional_mana.magiccircle.node.empty")
-                        .withStyle(net.minecraft.ChatFormatting.DARK_GRAY)
-                : powder.name().copy().withStyle(net.minecraft.ChatFormatting.AQUA);
-        return Component.translatable("gui.dimensional_mana.magiccircle.slot." + slot)
-                .append(Component.literal("："))
-                .append(value)
-                .withStyle(net.minecraft.ChatFormatting.GRAY);
+        String value = powder == null
+                ? Component.translatable("tooltip.dimensional_mana.magiccircle.node.empty").getString()
+                : MagicCirclePowders.shortName(itemId);
+        value = font.plainSubstrByWidth(value, Math.max(0, maxX - x));
+        graphics.drawString(font, value, x, y, powder == null ? 0xFF8A8194 : 0xFF8FE3FF, false);
+        return x + font.width(value);
     }
 
     private void renderFooter(GuiGraphics graphics) {
@@ -914,7 +1107,7 @@ public final class MagicCircleDrawingScreen extends Screen {
             StringBuilder builder = new StringBuilder();
             for (String key : state.problems()) {
                 if (builder.length() > 0) builder.append("、");
-                builder.append(Component.translatable(key).getString());
+                builder.append(MagicCircleIssue.component(key).getString());
             }
             graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.footer.problem",
                     builder.toString()), left + GAP + 4, footerY + 24, COLOR_DANGER, false);
@@ -1178,16 +1371,17 @@ public final class MagicCircleDrawingScreen extends Screen {
     // ------------------------------------------------------------------ 粉末编辑面板
 
     private int[] editorOrigin() {
+        int h = editorHeight();
         int x = canvasAreaX + (canvasAreaW - EDITOR_WIDTH) / 2;
-        int y = canvasAreaY + (canvasAreaH - EDITOR_HEIGHT) / 2;
+        int y = canvasAreaY + (canvasAreaH - h) / 2;
         return new int[]{
                 Mth.clamp(x, left + 4, Math.max(left + 4, left + panelW - EDITOR_WIDTH - 4)),
-                Mth.clamp(y, top + 4, Math.max(top + 4, top + panelH - EDITOR_HEIGHT - 4))};
+                Mth.clamp(y, top + 4, Math.max(top + 4, top + panelH - h - 4))};
     }
 
     private Rect editorRect() {
         int[] origin = editorOrigin();
-        return new Rect(origin[0], origin[1], EDITOR_WIDTH, EDITOR_HEIGHT);
+        return new Rect(origin[0], origin[1], EDITOR_WIDTH, editorHeight());
     }
 
     private Rect editorSlotRect(int index) {
@@ -1196,18 +1390,74 @@ public final class MagicCircleDrawingScreen extends Screen {
                 EDITOR_WIDTH - 8, EDITOR_ROW_HEIGHT - 1);
     }
 
+    /** 当前编辑的是不是「声明模式」的条件节点（渲染与点击判定必须用同一个口径）。 */
+    private boolean editorDeclMode() {
+        if (editorNode < 0 || editorNode >= state.nodes().size()) return false;
+        MagicCircleSyncPayload.NodeView view = state.nodes().get(editorNode);
+        return MagicCircleBlockType.byId(view.type()) == MagicCircleBlockType.CONDITION
+                && !MagicCircleGates.isGateMode(view.semantic(), view.gate())
+                && !MagicCircleDecl.Group.familyOf(view.semantic()).isEmpty();
+    }
+
+    /** 门控模式的条件节点（门控规范 v2.4）：走「门控页」——⇄ 模式钮 + ⇌ 比较方向钮 + 阈值预览。 */
+    private boolean editorGateMode() {
+        if (editorNode < 0 || editorNode >= state.nodes().size()) return false;
+        MagicCircleSyncPayload.NodeView view = state.nodes().get(editorNode);
+        return MagicCircleBlockType.byId(view.type()) == MagicCircleBlockType.CONDITION
+                && MagicCircleGates.isGateMode(view.semantic(), view.gate());
+    }
+
+    /** 底座形态的触发节点（v2.6 一 2）：槽位行罩红纱 + 黄字提示，只当逻辑起点。 */
+    private boolean editorBaseTrigger() {
+        if (editorNode < 0 || editorNode >= state.nodes().size() || clientAnalysis == null) return false;
+        MagicCircleSyncPayload.NodeView view = state.nodes().get(editorNode);
+        return MagicCircleBlockType.byId(view.type()) == MagicCircleBlockType.TRIGGER
+                && clientAnalysis.isTriggerBase(editorNode);
+    }
+
+    /** 面板停在「边界声明」页：这一页不画粉末网格，命中判定也得跟着跳过，否则点空气会误换粉。 */
+    private boolean editorOnDeclPage() {
+        return editorDeclMode() && editorDeclPage == 1;
+    }
+
+    /** 网格顶端：声明 / 门控模式面板在 y+84~y+96 留了一行页签，网格从 88 让到 98。 */
+    private int editorGridTop() {
+        // r218 重排：门控 / 底座形态在网格上方留出一整块**提示带**，
+        // 「[系统提示]」「当周围 N 格内…放行」这类动态文案全画在带里，
+        // 绝不再压到网格行或底部按钮上（用户图 11 / 图 12 圈出来的就是提示字叠进网格）。
+        if (editorGateMode()) return 130;   // 页签 84..96 + 提示三行 97..127
+        if (editorBaseTrigger()) return 120; // 提示三行 84..117
+        return editorDeclMode() ? 98 : 88;
+    }
+
+    /** 网格行高：让出页签后每行压 1 像素，保证染料 16 格还是放得下。 */
+    private int editorCellH() {
+        return editorGridTop() != 88 ? 18 : EDITOR_CELL_HEIGHT;
+    }
+
+    /** 「拿下来」按钮顶端，跟着网格底部走。 */
+    private int editorClearTop() {
+        return editorGridTop() + 4 * editorCellH() + 2;
+    }
+
+    /** 弹窗总高（r218）：门控 / 底座带提示带时面板整体加长，提示字不再溢出到底栏上。 */
+    private int editorHeight() {
+        return Math.max(EDITOR_HEIGHT, editorClearTop() + 14 + 15);
+    }
+
     private Rect editorCellRect(int index) {
         int[] origin = editorOrigin();
         int cellWidth = (EDITOR_WIDTH - 8) / EDITOR_COLUMNS;
         int row = index / EDITOR_COLUMNS;
         int column = index % EDITOR_COLUMNS;
+        int cellHeight = editorCellH();
         return new Rect(origin[0] + 4 + column * cellWidth,
-                origin[1] + 88 + row * EDITOR_CELL_HEIGHT, cellWidth - 1, EDITOR_CELL_HEIGHT - 1);
+                origin[1] + editorGridTop() + row * cellHeight, cellWidth - 1, cellHeight - 1);
     }
 
     private Rect editorClearRect() {
         int[] origin = editorOrigin();
-        return new Rect(origin[0] + 4, origin[1] + 168, EDITOR_WIDTH - 8, 14);
+        return new Rect(origin[0] + 4, origin[1] + editorClearTop(), EDITOR_WIDTH - 8, 14);
     }
 
     private List<MagicCircleSyncPayload.PowderView> editorPowders() {
@@ -1239,8 +1489,17 @@ public final class MagicCircleDrawingScreen extends Screen {
         int[] origin = editorOrigin();
         int x = origin[0];
         int y = origin[1];
-        graphics.fill(x - 3, y - 3, x + EDITOR_WIDTH + 3, y + EDITOR_HEIGHT + 3, 0xF0100C1E);
-        graphics.renderOutline(x - 3, y - 3, EDITOR_WIDTH + 6, EDITOR_HEIGHT + 6, 0xFFD9A8FF);
+        // 鼠标落在面板里：面板底下粉末盘收集的悬浮提示作废（节点详情不飘窗了，不怕挡）。
+        int h = editorHeight();
+        if (mouseX >= x - 5 && mouseX <= x + EDITOR_WIDTH + 5
+                && mouseY >= y - 3 && mouseY <= y + h + 5) {
+            hoverPowder.clear();
+            hoveredPowder = -1;
+        }
+        // 投影一圈 + 全不透明底色：r209 底色只有 0xF0，画布上的白字会透进面板里乱视线。
+        graphics.fill(x - 5, y - 1, x + EDITOR_WIDTH + 5, y + h + 5, 0x80000000);
+        graphics.fill(x - 3, y - 3, x + EDITOR_WIDTH + 3, y + h + 3, 0xFF0F0B1C);
+        graphics.renderOutline(x - 3, y - 3, EDITOR_WIDTH + 6, h + 6, 0xFFD9A8FF);
         graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.editor.title"),
                 x + 4, y + 4, COLOR_GOLD, false);
         Rect close = editorCloseRect();
@@ -1270,10 +1529,29 @@ public final class MagicCircleDrawingScreen extends Screen {
                     rect.x + 3, rect.y + 3, active ? 0xFFFFE4A8 : COLOR_TEXT, false);
         }
 
+        MagicCircleSyncPayload.NodeView editorNodeView = state.nodes().get(editorNode);
+        boolean declMode = editorDeclMode();
+        declHits.clear();
+        if (editorBaseTrigger()) {
+            renderBaseTriggerMask(graphics, x, y, editorNodeView);
+        }
+        if (editorGateMode()) {
+            renderGateTabs(graphics, x, y + 84, mouseX, mouseY, editorNodeView);
+        }
+        if (declMode) {
+            renderDeclTabs(graphics, x, y + 84, mouseX, mouseY);
+            if (editorDeclPage == 1) {
+                renderDeclPage(graphics, x, y, editorNodeView);
+                graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.decl.hint"),
+                        x + 4, y + 186, COLOR_DIM, false);
+                return;
+            }
+        }
+
         List<MagicCircleSyncPayload.PowderView> powders = editorPowders();
         for (int i = 0; i < powders.size(); i++) {
             Rect rect = editorCellRect(i);
-            if (rect.y + EDITOR_CELL_HEIGHT > y + EDITOR_HEIGHT - 34) break;
+            if (rect.y + editorCellH() > y + editorClearTop()) break;
             MagicCircleSyncPayload.PowderView view = powders.get(i);
             MagicCirclePowders.Powder powder = MagicCirclePowders.get(view.itemId());
             if (powder == null) continue;
@@ -1316,12 +1594,346 @@ public final class MagicCircleDrawingScreen extends Screen {
                         "gui.dimensional_mana.magiccircle.editor.clear"))) / 2,
                 clear.y + 3, hasValue ? COLOR_TEXT : 0xFF6A5F7E, false);
         graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.editor.hint"),
-                x + 4, y + 186, COLOR_DIM, false);
+                x + 4, y + editorHeight() - 15, COLOR_DIM, false);
+    }
+
+    /**
+     * 按像素宽自动折行画一段动态文案（r218）：门控解析句 / 上游条件摘要长短不定，
+     * 单行截断经常把「…时放行」这种关键尾巴吃掉，超过的行数末尾补省略号。
+     */
+    private void drawWrapped(GuiGraphics graphics, String text, int x, int y, int maxW,
+                             int maxLines, int color) {
+        int done = 0;
+        int n = text.length();
+        for (int line = 0; line < maxLines && done < n; line++) {
+            int take = 0;
+            int w = 0;
+            while (done + take < n) {
+                int cw = font.width(text.substring(done + take, done + take + 1));
+                if (w + cw > maxW - (done + take + 1 < n ? font.width("…") : 0)) break;
+                w += cw;
+                take++;
+            }
+            if (take == 0) take = 1;
+            boolean more = done + take < n;
+            String segment = text.substring(done, done + take) + (more ? "…" : "");
+            graphics.drawString(font, segment, x, y + line * 10, color, false);
+            done += take;
+        }
     }
 
     private Rect editorCloseRect() {
         int[] origin = editorOrigin();
         return new Rect(origin[0] + EDITOR_WIDTH - 16, origin[1] + 3, 12, 12);
+    }
+
+    /** v2.2 角色角标文字；普通块返回 null 不标。 */
+    private String roleMark(int index, MagicCircleBlockType type) {
+        if (clientAnalysis == null || type == null) return null;
+        MagicCircleGraph.Role role = clientAnalysis.roles.get(index);
+        if (role == null) return null;
+        return switch (role) {
+            case TERMINAL -> "终";
+            case PREFIX -> "缀";
+            case DECL -> "宣";
+            case GATE -> "门";
+            case TRIGGER_BASE -> "座";
+            case NORMAL -> null;
+        };
+    }
+
+    private int roleMarkColor(int index) {
+        if (clientAnalysis == null) return COLOR_TEXT;
+        MagicCircleGraph.Role role = clientAnalysis.roles.get(index);
+        if (role == null) return COLOR_TEXT;
+        return switch (role) {
+            case TERMINAL -> 0xFFFFD86B;
+            case PREFIX -> 0xFF7BE0FF;
+            case DECL -> 0xFFD9A8FF;
+            case GATE -> 0xFF9A93A8;
+            case TRIGGER_BASE -> 0xFFFF9B6B;
+            case NORMAL -> COLOR_TEXT;
+        };
+    }
+
+    // ------------------------------------------------------------------ v2.2 声明页
+
+    /** 页签：「≡ 边界声明」/「▦ 选粉末」/「⛊ 门控模式」。声明模式的条件节点才画。 */
+    private void renderDeclTabs(GuiGraphics graphics, int x, int y, int mouseX, int mouseY) {
+        MagicCircleSyncPayload.NodeView node = state.nodes().get(editorNode);
+        int count = MagicCircleDecl.parse(node.declare()).size();
+        declTab(graphics, "≡ " + Component.translatable("gui.dimensional_mana.magiccircle.decl.tab")
+                .getString() + " " + count, x + 4, y, 112, 12, editorDeclPage == 1, "tab_decl", mouseX, mouseY);
+        declTab(graphics, "▦ " + Component.translatable("gui.dimensional_mana.magiccircle.decl.tab.powder")
+                .getString(), x + 120, y, 88, 12, editorDeclPage == 0, "tab_powder", mouseX, mouseY);
+        // 门控规范 v2.4 三：声明模式一键切回门控（⇄ 同一颗钮，两个方向共用服务端 gate/mode）。
+        declTab(graphics, "⛊ 门控", x + 212, y, 56, 12, false, "gate_mode", mouseX, mouseY);
+    }
+
+    /**
+     * 门控页签行（规范 v2.4 三）：「⛊ 声明模式」切换钮 + 「⇌ ≤/≥」比较方向钮 + 阈值预览。
+     * 比较方向按钮上直接显示当前符号；切模式不清声明串（服务端决定留不留）。
+     */
+    private void renderGateTabs(GuiGraphics graphics, int x, int y, int mouseX, int mouseY,
+                                MagicCircleSyncPayload.NodeView node) {
+        declTab(graphics, "⇄ 声明", x + 4, y, 64, 12, false, "gate_mode", mouseX, mouseY);
+        MagicCircleGates.Domain domain = MagicCircleGates.domainOf(node.semantic());
+        if (domain == null) {
+            declTab(graphics, "⇌ ?", x + 72, y, 44, 12, false, "gate_op", mouseX, mouseY);
+            graphics.drawString(font, "语义槽空：装一种原版粉选判定域", x + 122, y + 3, 0xFFFF9BA8, false);
+            return;
+        }
+        MagicCircleGates.CompareOperator op = MagicCircleGates.operatorOf(domain, node.gate());
+        declTab(graphics, "⇌ " + op.symbol(), x + 72, y, 64, 12, false, "gate_op", mouseX, mouseY);
+        int tier = MagicCircleDecl.dyeTier(node.dye());
+        String preview = domain.label() + " " + op.symbol() + " "
+                + MagicCircleGates.thresholdText(domain, MagicCircleGates.threshold(domain, tier));
+        graphics.drawString(font, font.plainSubstrByWidth(preview, 146), x + 142, y + 3,
+                0xFFD9A8FF, false);
+        // 黄字提示（v2.6 界面约定）：这块门控直接喂着某个触发节点 = 触发链的第一步判定。
+        // r218：提示行画进页签下方的**提示带**（97~127），解析句超长自动折行，
+        // 不再像图 11 那样叠到「拿下来」按钮和底栏上。
+        if (clientAnalysis != null && clientAnalysis.baseGates.containsValue(editorNode)) {
+            graphics.drawString(font, "[系统提示] 这是触发链的第一步判定。", x + 4, y + 13, 0xFFFFD86B, false);
+        }
+        drawWrapped(graphics, MagicCircleGates.describe(node), x + 4, y + 23,
+                EDITOR_WIDTH - 8, 2, COLOR_DIM);
+    }
+
+    /**
+     * 底座形态触发节点的编辑器遮罩（v2.6 一 2）：元素 / 语义 / 染料三行罩红纱——里面的粉不再
+     * 参与判定、也不额外计费；功率槽行保持可用（它还管本地效率与起爆半径）。
+     */
+    private void renderBaseTriggerMask(GuiGraphics graphics, int x, int y,
+                                       MagicCircleSyncPayload.NodeView node) {
+        MagicCirclePowders.Slot[] slots = MagicCirclePowders.Slot.values();
+        for (int i = 0; i < slots.length; i++) {
+            if (slots[i] == MagicCirclePowders.Slot.POWER) continue; // 功率槽照常生效
+            Rect rect = editorSlotRect(i);
+            graphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, 0x66C03030);
+        }
+        // r218：两行提示住进 84~117 的提示带，网格从 120 起画——图 12 里
+        // 「系统提示」压进元素按钮那一行的事不会再发生。
+        graphics.drawString(font, "[系统提示] 当前节点判定已停用，仅作为逻辑起点与效率底座。",
+                x + 4, y + 85, 0xFFFFD86B, false);
+        Integer gateIdx = clientAnalysis == null ? null : clientAnalysis.baseGates.get(editorNode);
+        if (gateIdx != null && gateIdx >= 0 && gateIdx < state.nodes().size()) {
+            String summary = MagicCircleGates.describe(state.nodes().get(gateIdx));
+            drawWrapped(graphics, "真正触发需满足上游条件：" + summary, x + 4, y + 95,
+                    EDITOR_WIDTH - 8, 2, 0xFF9AE08B);
+        }
+    }
+
+    /**
+     * 页签专用按钮：两个页签**永远可点**（r209 误把"当前停在的页"当成 enabled 登记命中区，
+     * 结果没停在的那一页反而点不动，切不过去也切不回来）。选中的那个黄框高亮，悬停亮紫描边。
+     */
+    private void declTab(GuiGraphics graphics, String label, int x, int y, int w, int h,
+                         boolean active, String action, int mouseX, int mouseY) {
+        boolean hover = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
+        graphics.fill(x, y, x + w, y + h, active ? 0xC03D285D : hover ? 0xA042325C : 0x991A1428);
+        graphics.renderOutline(x, y, w, h, active ? 0xFFFFD86B : hover ? 0xFFD9A8FF : 0xFF5A4770);
+        graphics.drawString(font, font.plainSubstrByWidth(label, w - 4), x + 2,
+                y + (h - font.lineHeight) / 2 + 1, active ? 0xFFFFE4A8 : COLOR_TEXT, false);
+        declHits.add(new DeclHit(x, y, w, h, null, action, 0));
+    }
+
+    /**
+     * 声明页：本语义能声明的每个边界组一行。已声明的给出 −/＋、枚举循环、标志翻转、×删除；
+     * 未声明的给一个「+ 声明」按钮（功率容量用完就按灰）。改动只发意图，档位 / 精度夹取由服务端说了算。
+     */
+    private void renderDeclPage(GuiGraphics graphics, int x, int y, MagicCircleSyncPayload.NodeView node) {
+        List<MagicCircleDecl.Entry> entries = MagicCircleDecl.parse(node.declare());
+        List<MagicCircleDecl.Group> family = MagicCircleDecl.Group.familyOf(node.semantic());
+        int capacity = MagicCircleDecl.groupCapacity(node.power());
+        graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.decl.capacity",
+                entries.size(), capacity), x + 4, y + 98,
+                entries.size() >= capacity ? 0xFFFF9BA8 : COLOR_DIM, false);
+        String precisionName = MagicCircleDecl.precisionOf(node.power()).name();
+        graphics.drawString(font, font.plainSubstrByWidth(Component.translatable(
+                "gui.dimensional_mana.magiccircle.decl.precision." + precisionName).getString(), 150),
+                x + 118, y + 98, COLOR_DIM, false);
+        int rowY = y + 110;
+        for (MagicCircleDecl.Group group : family) {
+            if (rowY > y + 150) {
+                graphics.drawString(font, "…", x + 6, rowY, COLOR_DIM, false);
+                break;
+            }
+            MagicCircleDecl.Entry entry = null;
+            for (MagicCircleDecl.Entry candidate : entries) {
+                if (candidate.group() == group) entry = candidate;
+            }
+            if (entry == null) {
+                if (entries.size() < capacity) {
+                    declButton(graphics, "+ " + Component.translatable(group.translationKey()).getString(),
+                            x + 6, rowY, 150, 11, true, "add", group, 0);
+                } else {
+                    graphics.drawString(font, Component.translatable(group.translationKey()).getString(),
+                            x + 6, rowY, 0xFF6A5F7E, false);
+                }
+                rowY += 12;
+                continue;
+            }
+            // 第一行：名字 + 主参数 −/＋（＋第二参数）+ 删除。
+            graphics.drawString(font, Component.translatable(group.translationKey()).getString(),
+                    x + 4, rowY, COLOR_GOLD, false);
+            int px = x + 58;
+            px = declStepper(graphics, px, rowY, entry, group, entry.primary(), "minus", "plus", 0);
+            if (group.secondaryMax > 0) {
+                graphics.drawString(font, "次", x + 150, rowY, COLOR_DIM, false);
+                declStepper(graphics, x + 160, rowY, entry, group, entry.secondary(), "secminus", "secplus", 0);
+            }
+            declButton(graphics, "×", x + 246, rowY, 11, 11, true, "remove", group, 0);
+            rowY += 12;
+            // 第二行：枚举循环 + 标志开关。
+            int ex = x + 8;
+            for (int e = 0; e < group.enumCount(); e++) {
+                String[] options = group.enumOptions(e);
+                String current = options.length == 0 ? "-"
+                        : Component.translatable(options[Math.min(entry.enumValue(e), options.length - 1)]).getString();
+                if (ex + 62 > x + EDITOR_WIDTH - 26) break;
+                declButton(graphics, "⟨" + font.plainSubstrByWidth(current, 32) + "⟩", ex, rowY, 60, 11,
+                        options.length > 0, "enum", group, e);
+                ex += 63;
+            }
+            int fb = 0;
+            for (String flag : group.flags) {
+                boolean on = entry.flag(fb);
+                if (ex + 52 > x + EDITOR_WIDTH - 26) break;
+                declButton(graphics, (on ? "✓" : "✗") + font.plainSubstrByWidth(
+                        Component.translatable(flag).getString(), 24), ex, rowY, 50, 11, true,
+                        "flag", group, fb);
+                ex += 52;
+                fb++;
+            }
+            rowY += 12;
+        }
+        // 底部两个批量操作。
+        declButton(graphics, Component.translatable("gui.dimensional_mana.magiccircle.decl.recommend").getString(),
+                x + 4, y + 168, 128, 13, true, "recommend", null, 0);
+        declButton(graphics, Component.translatable("gui.dimensional_mana.magiccircle.decl.clearall").getString(),
+                x + 136, y + 168, 128, 13, true, "clearall", null, 0);
+    }
+
+    /** − 值 ＋ 三连；返回下一个可用的 x。 */
+    private int declStepper(GuiGraphics graphics, int px, int py, MagicCircleDecl.Entry entry,
+                            MagicCircleDecl.Group group, int value, String minus, String plus, int arg) {
+        declButton(graphics, "−", px, py, 11, 11, true, minus, group, arg);
+        String text = String.valueOf(value);
+        if (group.primaryUnit() != null && group.primaryUnit().length() <= 3 && value > 0) text += group.primaryUnit();
+        int width = Math.max(20, font.width(text) + 6);
+        graphics.drawString(font, text, px + 13, py, COLOR_TEXT, false);
+        int next = px + 14 + font.width(text) + 2;
+        declButton(graphics, "＋", next, py, 11, 11, true, plus, group, arg);
+        return next + 13 + width;
+    }
+
+    /** 画一个小按钮并登记命中区。 */
+    private void declButton(GuiGraphics graphics, String label, int x, int y, int w, int h,
+                            boolean enabled, String action, MagicCircleDecl.Group group, int arg) {
+        graphics.fill(x, y, x + w, y + h, enabled ? 0x66302A46 : 0x33120F20);
+        graphics.renderOutline(x, y, w, h, enabled ? 0xFF5A4770 : 0xFF332A44);
+        graphics.drawString(font, font.plainSubstrByWidth(label, w - 4), x + 2, y + (h - font.lineHeight) / 2 + 1,
+                enabled ? COLOR_TEXT : 0xFF6A5F7E, false);
+        if (enabled) declHits.add(new DeclHit(x, y, w, h, group, action, arg));
+    }
+
+    /** 点声明页按钮：改条目表 → 整串编码发回服务端（服务端负责夹取与过滤）。 */
+    private void declAction(DeclHit hit) {
+        // 翻页签不受只读限制：查看别人布的法阵也得能看声明、看粉末。
+        switch (hit.action()) {
+            case "tab_decl" -> {
+                editorDeclPage = 1;
+                return;
+            }
+            case "tab_powder" -> {
+                editorDeclPage = 0;
+                return;
+            }
+            case "gate_mode" -> {
+                if (!state.editable()) {
+                    hint = Component.translatable("gui.dimensional_mana.magiccircle.readonly");
+                    return;
+                }
+                // ⇄ 切门控 / 声明模式：服务端翻 gate 串的形态位，界面下一帧自己重画。
+                PacketDistributor.sendToServer(MagicCircleActionPayload.gate(editorNode, "mode"));
+                return;
+            }
+            case "gate_op" -> {
+                if (!state.editable()) {
+                    hint = Component.translatable("gui.dimensional_mana.magiccircle.readonly");
+                    return;
+                }
+                // ⇌ 翻转比较方向：底层只换枚举 LESS_THAN⇄GREATER_THAN，绝不存「反转标记」布尔。
+                PacketDistributor.sendToServer(MagicCircleActionPayload.gate(editorNode, "op"));
+                return;
+            }
+        }
+        if (!state.editable()) {
+            hint = Component.translatable("gui.dimensional_mana.magiccircle.readonly");
+            return;
+        }
+        MagicCircleSyncPayload.NodeView node = state.nodes().get(editorNode);
+        List<MagicCircleDecl.Entry> entries = new ArrayList<>(MagicCircleDecl.parse(node.declare()));
+        int index = -1;
+        for (int i = 0; i < entries.size(); i++) {
+            if (entries.get(i).group() == hit.group()) index = i;
+        }
+        switch (hit.action()) {
+            case "recommend" -> {
+                entries = new ArrayList<>();
+                int tier = MagicCircleDecl.dyeTier(node.dye());
+                MagicCircleDecl.Precision precision = MagicCircleDecl.precisionOf(node.power());
+                int cap = Math.max(1, MagicCircleDecl.groupCapacity(node.power()));
+                for (MagicCircleDecl.Group group : MagicCircleDecl.Group.familyOf(node.semantic())) {
+                    if (entries.size() >= cap) break;
+                    entries.add(MagicCircleDecl.recommended(group, tier, precision));
+                }
+                break;
+            }
+            case "clearall" -> {
+                entries.clear();
+                break;
+            }
+            case "add" -> {
+                if (hit.group() != null && entries.size() < MagicCircleDecl.groupCapacity(node.power())) {
+                    entries.add(MagicCircleDecl.recommended(hit.group(), MagicCircleDecl.dyeTier(node.dye()),
+                            MagicCircleDecl.precisionOf(node.power())));
+                }
+                break;
+            }
+            case "remove" -> {
+                if (index >= 0) entries.remove(index);
+            }
+            default -> {
+                if (index < 0 || hit.group() == null) return;
+                MagicCircleDecl.Entry old = entries.get(index);
+                int step = Math.max(1, old.primaryStep());
+                int secStep = Math.max(1, old.secondaryStep());
+                MagicCircleDecl.Entry updated = switch (hit.action()) {
+                    case "minus" -> new MagicCircleDecl.Entry(old.group(), Math.max(0, old.primary() - step),
+                            old.secondary(), old.enums(), old.flags());
+                    case "plus" -> new MagicCircleDecl.Entry(old.group(), old.primary() + step,
+                            old.secondary(), old.enums(), old.flags());
+                    case "secminus" -> new MagicCircleDecl.Entry(old.group(), old.primary(),
+                            Math.max(0, old.secondary() - secStep), old.enums(), old.flags());
+                    case "secplus" -> new MagicCircleDecl.Entry(old.group(), old.primary(),
+                            old.secondary() + secStep, old.enums(), old.flags());
+                    case "enum" -> {
+                        int size = Math.max(1, old.group().enumSize(hit.arg()));
+                        int[] enums = old.enums().clone();
+                        if (hit.arg() < enums.length) enums[hit.arg()] = (enums[hit.arg()] + 1) % size;
+                        yield new MagicCircleDecl.Entry(old.group(), old.primary(), old.secondary(),
+                                enums, old.flags());
+                    }
+                    default -> new MagicCircleDecl.Entry(old.group(), old.primary(), old.secondary(),
+                            old.enums(), old.flags() ^ (1 << hit.arg()));
+                };
+                entries.set(index, updated);
+            }
+        }
+        PacketDistributor.sendToServer(MagicCircleActionPayload.declare(editorNode, MagicCircleDecl.encode(entries)));
+        hint = Component.translatable("gui.dimensional_mana.magiccircle.status.editing");
     }
 
     // ------------------------------------------------------------------ 交互
@@ -1391,6 +2003,28 @@ public final class MagicCircleDrawingScreen extends Screen {
             onClose();
             return true;
         }
+        // r218：面板边线上的三颗收起 / 展开小钮（放在关闭钮之后、工具条之前认，压不到画线）。
+        if (button == 0 && paletteToggleRect().contains(mouseX, mouseY)) {
+            hidePalette = !hidePalette;
+            init();
+            hint = Component.translatable("gui.dimensional_mana.magiccircle.toggle.hint."
+                    + (hidePalette ? "off" : "on"));
+            return true;
+        }
+        if (button == 0 && sideToggleRect().contains(mouseX, mouseY)) {
+            hideSide = !hideSide;
+            init();
+            hint = Component.translatable("gui.dimensional_mana.magiccircle.toggle.hint."
+                    + (hideSide ? "off" : "on"));
+            return true;
+        }
+        if (button == 0 && footerToggleRect().contains(mouseX, mouseY)) {
+            hideFooter = !hideFooter;
+            init();
+            hint = Component.translatable("gui.dimensional_mana.magiccircle.toggle.hint."
+                    + (hideFooter ? "off" : "on"));
+            return true;
+        }
         if (button == 0) {
             if (modeDrawRect().contains(mouseX, mouseY)) {
                 setMode(false);
@@ -1400,8 +2034,8 @@ public final class MagicCircleDrawingScreen extends Screen {
                 setMode(true);
                 return true;
             }
-            if (handlePaletteClick(mouseX, mouseY)) return true;
-            if (handleSideClick(mouseX, mouseY)) return true;
+            if (!hidePalette && handlePaletteClick(mouseX, mouseY)) return true;
+            if (!hideSide && handleSideClick(mouseX, mouseY)) return true;
         }
         if (insideCanvas(mouseX, mouseY)) {
             // 按住 K 左键点一条线 = 拆掉它（任何模式都行，不用先进选择模式）。
@@ -1850,20 +2484,48 @@ public final class MagicCircleDrawingScreen extends Screen {
         if (editorCloseRect().contains(mouseX, mouseY)) {
             editorOpen = false;
             editorNode = -1;
+            editorDeclPage = 0;
+            return true;
+        }
+        if (editorNode < 0 || editorNode >= state.nodes().size()) return true;
+        if (button == 1) {
+            // 右键槽位行 = 直接把那一格粉拿下来（不用先选中再点「拿下来」，少两步）。
+            MagicCirclePowders.Slot[] rightSlots = MagicCirclePowders.Slot.values();
+            MagicCircleSyncPayload.NodeView rightNode = state.nodes().get(editorNode);
+            for (int i = 0; i < rightSlots.length; i++) {
+                if (!editorSlotRect(i).contains(mouseX, mouseY)) continue;
+                if (state.editable() && !nodeSlotValue(rightNode, rightSlots[i]).isEmpty()) {
+                    PacketDistributor.sendToServer(
+                            MagicCircleActionPayload.edit(editorNode, rightSlots[i].id(), ""));
+                    hint = Component.translatable("gui.dimensional_mana.magiccircle.status.editing");
+                }
+                return true;
+            }
             return true;
         }
         if (button != 0) return true;
-        if (editorNode < 0 || editorNode >= state.nodes().size()) return true;
+        // v2.2 声明页：页签与每行控件都靠渲染时登记的命中区，优先于槽位判定。
+        for (DeclHit hit : declHits) {
+            if (hit.contains(mouseX, mouseY)) {
+                declAction(hit);
+                return true;
+            }
+        }
         MagicCirclePowders.Slot[] slots = MagicCirclePowders.Slot.values();
         for (int i = 0; i < slots.length; i++) {
             if (!editorSlotRect(i).contains(mouseX, mouseY)) continue;
             editorSlot = slots[i];
+            // 停在声明页时点槽位 = 八成想换粉：直接翻到「选粉末」页，网格当场露出来。
+            editorDeclPage = 0;
             return true;
         }
+        // 声明页根本不画网格和「拿下来」，这两块判定也必须跳过——
+        // r208 就是漏了这一步：点声明页的空档会打到隐形的粉末格，莫名其妙把粉换了。
+        if (editorOnDeclPage()) return true;
         List<MagicCircleSyncPayload.PowderView> powders = editorPowders();
         for (int i = 0; i < powders.size(); i++) {
             Rect rect = editorCellRect(i);
-            if (rect.y + EDITOR_CELL_HEIGHT > editorOrigin()[1] + EDITOR_HEIGHT - 34) break;
+            if (rect.y + editorCellH() > editorOrigin()[1] + editorClearTop()) break;
             if (!rect.contains(mouseX, mouseY)) continue;
             MagicCircleSyncPayload.PowderView view = powders.get(i);
             if (!state.editable() || !view.unlocked()) {
@@ -1984,6 +2646,12 @@ public final class MagicCircleDrawingScreen extends Screen {
         editorSlot = MagicCirclePowders.Slot.ELEMENT;
         editorOpen = true;
         contextMenu = false;
+        // v2.2：声明模式的条件节点，打开就停在「边界声明」页（规范 14：先声明后调粉）。
+        // r217：门控模式的条件节点停在「选粉末」页——它没有声明条目，页签行换成门控钮。
+        MagicCircleSyncPayload.NodeView opened = state.nodes().get(index);
+        boolean openCond = MagicCircleBlockType.byId(opened.type()) == MagicCircleBlockType.CONDITION;
+        editorDeclPage = openCond && !MagicCircleGates.isGateMode(opened.semantic(), opened.gate())
+                && !MagicCircleDecl.Group.familyOf(opened.semantic()).isEmpty() ? 1 : 0;
         hint = Component.translatable("gui.dimensional_mana.magiccircle.status.editing");
     }
 
@@ -2024,7 +2692,8 @@ public final class MagicCircleDrawingScreen extends Screen {
 
     private boolean handleSideClick(double mouseX, double mouseY) {
         for (int i = 0; i < state.candidates().size(); i++) {
-            if (!candidateRect(i).contains(mouseX, mouseY)) continue;
+            Rect rect = candidateRect(i);
+            if (!sideVisible(rect) || !rect.contains(mouseX, mouseY)) continue;
             if (!state.editable()) {
                 hint = Component.translatable("gui.dimensional_mana.magiccircle.readonly");
                 return true;
@@ -2033,25 +2702,53 @@ public final class MagicCircleDrawingScreen extends Screen {
             hint = Component.translatable("gui.dimensional_mana.magiccircle.status.placing");
             return true;
         }
-        int nodeTop = sideY + 16 + 84;
-        if (state.nodes().size() > 0) {
-            int start = Math.max(0, Math.min(selectedNode - MAX_VISIBLE_NODES / 2,
-                    state.nodes().size() - MAX_VISIBLE_NODES));
-            for (int row = 0; row < MAX_VISIBLE_NODES && start + row < state.nodes().size(); row++) {
-                if (!nodeRowRect(nodeTop, row).contains(mouseX, mouseY)) continue;
-                int index = start + row;
-                if (selectMode) {
-                    if (Screen.hasShiftDown()) {
-                        toggleSelection(index);
-                    } else {
-                        selection.clear();
-                        selection.add(index);
-                    }
-                    hint = selectionHint();
+        for (int index = 0; index < state.nodes().size(); index++) {
+            Rect rect = nodeRowRect(index);
+            if (!sideVisible(rect) || !rect.contains(mouseX, mouseY)) continue;
+            if (selectMode) {
+                if (Screen.hasShiftDown()) {
+                    toggleSelection(index);
+                } else {
+                    selection.clear();
+                    selection.add(index);
                 }
-                selectedNode = index;
+                hint = selectionHint();
+            }
+            selectedNode = index;
+            return true;
+        }
+        // r218：槽位空着也常驻——点空槽位 = 从背包收一张空白蓝图载体放上台面。
+        if (state.editable() && !blueprintActive() && bpSlotRect().contains(mouseX, mouseY)) {
+            PacketDistributor.sendToServer(MagicCircleActionPayload.blueprintMount());
+            hint = Component.translatable("gui.dimensional_mana.magiccircle.status.bp_mount");
+            return true;
+        }
+        if (blueprintActive() && bpTakeRect().contains(mouseX, mouseY)) {
+            PacketDistributor.sendToServer(MagicCircleActionPayload.blueprintTake());
+            hint = Component.translatable("gui.dimensional_mana.magiccircle.status.bp_take");
+            return true;
+        }
+        if (blueprintActive() && bpCopyRect().contains(mouseX, mouseY)) {
+            if (!state.editable()) {
+                hint = Component.translatable("gui.dimensional_mana.magiccircle.readonly");
                 return true;
             }
+            // 复制留样只属于上稿形态；空白载体 / 成品蓝图按它没有意义（灰按钮也挡一层）。
+            if (!"edit".equals(bpKind())) {
+                hint = Component.translatable("gui.dimensional_mana.magiccircle.status.bp_not_edit");
+                return true;
+            }
+            if (state.blueprintCopied()) {
+                hint = Component.translatable("gui.dimensional_mana.magiccircle.status.bp_done");
+                return true;
+            }
+            if (state.nodes().isEmpty()) {
+                hint = Component.translatable("gui.dimensional_mana.magiccircle.status.bp_empty");
+                return true;
+            }
+            PacketDistributor.sendToServer(MagicCircleActionPayload.blueprintCopy());
+            hint = Component.translatable("gui.dimensional_mana.magiccircle.status.bp_copy");
+            return true;
         }
         if (redrawRect().contains(mouseX, mouseY)) {
             PacketDistributor.sendToServer(MagicCircleActionPayload.cancel());
@@ -2286,6 +2983,14 @@ public final class MagicCircleDrawingScreen extends Screen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double verticalDelta) {
         if (naming) return true;
+        // 滚轮压在右侧一列上：滚动列表，别去动画笔粗细。
+        if (mouseX >= sideX && mouseX < sideX + sideW
+                && mouseY >= sideY && mouseY < sideY + sideH) {
+            int viewportH = Math.max(24, sideViewportBottom() - sideViewportTop());
+            int max = Math.max(0, sideContentHeight() - viewportH);
+            sideScroll = Mth.clamp(sideScroll - (int) Math.round(verticalDelta * 14), 0, max);
+            return true;
+        }
         if (!insideCanvas(mouseX, mouseY)) return super.mouseScrolled(mouseX, mouseY, horizontalDelta, verticalDelta);
         if (Screen.hasShiftDown()) {
             cyclePowder(verticalDelta > 0 ? 1 : -1);
@@ -2589,16 +3294,83 @@ public final class MagicCircleDrawingScreen extends Screen {
     }
 
     private Rect candidateRect(int index) {
-        return new Rect(sideX + 3, sideY + 16 + index * 26, sideW - 6, 25);
+        return new Rect(sideX + 3, sideViewportTop() + index * 26 - sideScroll, sideW - 6, 25);
     }
 
-    private Rect nodeRowRect(int nodeTop, int row) {
-        return new Rect(sideX + 3, nodeTop + 13 + row * NODE_ROW_HEIGHT, sideW - 6, NODE_ROW_HEIGHT - 1);
+    private Rect nodeRowRect(int row) {
+        int top = sideViewportTop() + sideCandidatesH() + 6 + NODE_ROW_HEIGHT - sideScroll;
+        return new Rect(sideX + 3, top + row * NODE_ROW_HEIGHT, sideW - 6, NODE_ROW_HEIGHT - 1);
+    }
+
+    /**
+     * 6 颗动作按钮的最上沿：从列底往上算，先给蓝图槽位卡（仅挂蓝图时）和它上面的缝留位置。
+     */
+    private int sideButtonsTop() {
+        return sideY + sideH - SIDE_BUTTON_HEIGHT * 6 - 4 - bpAreaHeight();
     }
 
     private Rect sideButtonRect(int index) {
-        int top = sideY + sideH - SIDE_BUTTON_HEIGHT * 6 - 4;
-        return new Rect(sideX + 3, top + index * SIDE_BUTTON_HEIGHT, sideW - 6, SIDE_BUTTON_HEIGHT - 1);
+        return new Rect(sideX + 3, sideButtonsTop() + index * SIDE_BUTTON_HEIGHT,
+                sideW - 6, SIDE_BUTTON_HEIGHT - 1);
+    }
+
+    // ---------------------------------------------------------------- r211 蓝图修改模式
+
+    /** 台面右下角槽位里现在挂着一张蓝图（上稿修改模式开着）。 */
+    private boolean blueprintActive() {
+        return state != null && !state.blueprintItem().isEmpty();
+    }
+
+    /** 蓝图槽位卡的高度：一格物品槽 + 一行两个按钮（「复制留样」「打包带走」）。 */
+    private static final int BP_AREA_HEIGHT = 36;
+
+    /**
+     * 蓝图区占用的高度：槽位卡 + 它上面的缝。r218 起<b>只要台子能编辑就常显</b>——
+     * 槽位空着也是一张可用的卡片（点它装空白蓝图），不再"没蓝图就整块消失"。
+     */
+    private int bpAreaHeight() {
+        return state != null && state.editable() ? BP_AREA_HEIGHT : 0;
+    }
+
+    /** 槽位卡的形态：空 / 上稿(edit) / 空白载体(blank) / 成品(done)。老服务端没发 kind 时按上稿推断。 */
+    private String bpKind() {
+        if (state == null || !blueprintActive()) return "";
+        String kind = state.blueprintKind();
+        if (kind == null || kind.isEmpty()) return "edit";
+        return kind;
+    }
+
+    /**
+     * 蓝图槽位卡的上沿：<b>贴在右列最底下</b>，卡片落在按钮区下面，不再和按钮抢同一块地方。
+     *
+     * <p>r215：以前这里是「按钮顶部 + 2」——也就是画在按钮身上，卡里的
+     * 「已上样（粉已付）」「复制留样」「打包带走」跟按钮文字叠成一团（用户圈出来的就是这块）。
+     * 现在卡片占据列底最后 36 像素，按钮整体上移让位，两段各画各的。</p>
+     */
+    private int bpTop() {
+        // 卡片实际占据 [top-1, top+34]（含 1 像素外框），所以上沿再退 1 像素，正好贴住列底。
+        return sideY + sideH - BP_AREA_HEIGHT + 1;
+    }
+
+    private Rect bpSlotRect() {
+        return new Rect(sideX + 4, bpTop() + 1, 18, 18);
+    }
+
+    private Rect bpCopyRect() {
+        return new Rect(sideX + 4, bpTop() + 21, (sideW - 11) / 2, 13);
+    }
+
+    private Rect bpTakeRect() {
+        return new Rect(sideX + 8 + (sideW - 11) / 2, bpTop() + 21, (sideW - 11) / 2, 13);
+    }
+
+    /** 槽位里那张蓝图的图标（按同步来的物品 id 现取，取不到就画空位）。 */
+    private ItemStack blueprintStack() {
+        if (!blueprintActive()) return ItemStack.EMPTY;
+        Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                .get(net.minecraft.resources.ResourceLocation.parse(state.blueprintItem()));
+        return item == null || item == net.minecraft.world.item.Items.AIR
+                ? ItemStack.EMPTY : new ItemStack(item);
     }
 
     private Rect redrawRect() { return sideButtonRect(0); }
@@ -2852,5 +3624,110 @@ public final class MagicCircleDrawingScreen extends Screen {
                 !enabled ? 0xFF332A44 : hover ? 0xFFFFD86B : 0xFF5A4770);
         graphics.drawString(font, label, rect.x + (rect.w - font.width(label)) / 2, rect.y + 4,
                 enabled ? (hover ? 0xFFFFE4A8 : COLOR_TEXT) : 0xFF6A5F7E, false);
+    }
+
+    /**
+     * r211 右下角蓝图槽：挂着「上稿修改」的蓝图时画在侧栏按钮上方——
+     * 左边槽位放物品图标，右边写名字 / 状态，下面一排「复制留样」「打包带走」。
+     * 复制的粉末清单按当前画布上的块现算，悬停槽位就能看见。
+     */
+    private void renderBlueprintSlot(GuiGraphics graphics, int mouseX, int mouseY) {
+        // r218：只有读态（别人围观）才整块不画；能编辑的台面这张卡**常驻**。
+        if (state == null || !state.editable()) return;
+        int top = bpTop();
+        String kind = bpKind();
+        boolean mounted = blueprintActive();
+        int frameColor = mounted ? 0xFFD9A8FF : 0xFF5A4770;
+        graphics.fill(sideX + 3, top - 1, sideX + sideW - 3, top + 34, 0xE6140F22);
+        graphics.renderOutline(sideX + 3, top - 1, sideW - 6, 35, frameColor);
+        Rect slot = bpSlotRect();
+        graphics.fill(slot.x, slot.y, slot.x + slot.w, slot.y + slot.h, 0xFF241A33);
+        if (mounted) {
+            graphics.renderOutline(slot.x, slot.y, slot.w, slot.h, 0xFF8A7BA5);
+            ItemStack icon = blueprintStack();
+            if (!icon.isEmpty()) graphics.renderItem(icon, slot.x + 1, slot.y + 1);
+        } else {
+            // 空槽位：虚线框 + 一个大「＋」，摆明了"点我装一张空白蓝图"。
+            boolean slotHover = slot.contains(mouseX, mouseY);
+            for (int px = slot.x; px < slot.x + slot.w; px += 3) {
+                graphics.fill(px, slot.y, Math.min(px + 2, slot.x + slot.w), slot.y + 1,
+                        slotHover ? 0xFFFFD86B : 0xFF8A7BA5);
+                graphics.fill(px, slot.y + slot.h - 1, Math.min(px + 2, slot.x + slot.w), slot.y + slot.h,
+                        slotHover ? 0xFFFFD86B : 0xFF8A7BA5);
+            }
+            for (int py = slot.y; py < slot.y + slot.h; py += 3) {
+                graphics.fill(slot.x, py, slot.x + 1, Math.min(py + 2, slot.y + slot.h),
+                        slotHover ? 0xFFFFD86B : 0xFF8A7BA5);
+                graphics.fill(slot.x + slot.w - 1, py, slot.x + slot.w, Math.min(py + 2, slot.y + slot.h),
+                        slotHover ? 0xFFFFD86B : 0xFF8A7BA5);
+            }
+            graphics.drawString(font, "+", slot.x + (slot.w - font.width("+")) / 2,
+                    slot.y + (slot.h - font.lineHeight) / 2, slotHover ? 0xFFFFD86B : 0xFF8A7BA5, false);
+        }
+        String name = switch (kind) {
+            case "blank" -> font.plainSubstrByWidth(
+                    blueprintStack().getHoverName().getString(), sideW - 40);
+            case "done" -> font.plainSubstrByWidth(state.blueprintName(), sideW - 40);
+            case "edit" -> font.plainSubstrByWidth(state.blueprintName(), sideW - 40);
+            default -> Component.translatable("gui.dimensional_mana.magiccircle.bp.empty_name").getString();
+        };
+        graphics.drawString(font, Component.literal(name), slot.x + 22, top + 3,
+                mounted ? COLOR_GOLD : 0xFF6A5F7E, false);
+        String status = switch (kind) {
+            case "blank" -> "gui.dimensional_mana.magiccircle.bp.status_blank";
+            case "done" -> "gui.dimensional_mana.magiccircle.bp.status_done";
+            case "edit" -> state.blueprintCopied()
+                    ? "gui.dimensional_mana.magiccircle.bp.status_copied"
+                    : "gui.dimensional_mana.magiccircle.bp.status_draft";
+            default -> "gui.dimensional_mana.magiccircle.bp.status_empty";
+        };
+        int statusColor = switch (kind) {
+            case "done" -> COLOR_OK;
+            case "blank" -> COLOR_AQUA;
+            case "" -> 0xFF6A5F7E;
+            default -> state.blueprintCopied() ? COLOR_OK : COLOR_AQUA;
+        };
+        graphics.drawString(font, Component.translatable(status), slot.x + 22, top + 12, statusColor, false);
+        // 「复制留样」只有上稿形态、还没付粉时可用；空白 / 成品 / 空槽位都灰着。
+        boolean copyEnabled = state.editable() && "edit".equals(kind)
+                && !state.blueprintCopied() && !state.nodes().isEmpty();
+        drawSideButton(graphics, bpCopyRect(),
+                Component.translatable("edit".equals(kind) && state.blueprintCopied()
+                        ? "gui.dimensional_mana.magiccircle.bp.copied"
+                        : "gui.dimensional_mana.magiccircle.bp.copy"),
+                mouseX, mouseY, copyEnabled);
+        // 「打包带走」：槽位上有东西就能按（空白 / 成品 / 上稿都原样回背包）。
+        drawSideButton(graphics, bpTakeRect(),
+                Component.translatable("gui.dimensional_mana.magiccircle.bp.take"),
+                mouseX, mouseY, mounted);
+        if (slot.contains(mouseX, mouseY) || bpCopyRect().contains(mouseX, mouseY)) {
+            hoverPowder.clear();
+            if (!mounted) {
+                hoverPowder.add(Component.translatable("gui.dimensional_mana.magiccircle.bp.empty_title")
+                        .withStyle(net.minecraft.ChatFormatting.GOLD));
+                hoverPowder.add(Component.translatable("gui.dimensional_mana.magiccircle.bp.empty_line1")
+                        .withStyle(net.minecraft.ChatFormatting.GRAY));
+                hoverPowder.add(Component.translatable("gui.dimensional_mana.magiccircle.bp.empty_line2")
+                        .withStyle(net.minecraft.ChatFormatting.GRAY));
+                return;
+            }
+            hoverPowder.add(Component.translatable("gui.dimensional_mana.magiccircle.bp.tip.title")
+                    .withStyle(net.minecraft.ChatFormatting.GOLD));
+            java.util.Map<String, Integer> need = new java.util.LinkedHashMap<>();
+            for (MagicCircleSyncPayload.NodeView node : state.nodes()) {
+                for (String powder : new String[]{node.element(), node.semantic(), node.power(), node.dye()}) {
+                    if (powder == null || powder.isEmpty()) continue;
+                    need.merge(powder, 1, Integer::sum);
+                }
+            }
+            if (need.isEmpty()) {
+                hoverPowder.add(Component.translatable("gui.dimensional_mana.magiccircle.bp.tip.empty")
+                        .withStyle(net.minecraft.ChatFormatting.GRAY));
+            }
+            for (java.util.Map.Entry<String, Integer> entry : need.entrySet()) {
+                hoverPowder.add(Component.literal("· " + MagicCirclePowders.shortName(entry.getKey())
+                        + " ×" + entry.getValue()).withStyle(net.minecraft.ChatFormatting.GRAY));
+            }
+        }
     }
 }

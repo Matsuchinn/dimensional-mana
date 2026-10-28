@@ -69,6 +69,8 @@ public final class ClientReactionText {
         reset(minecraft.level);
         ClientLevel world = minecraft.level;
         if (world == null || minecraft.player == null || minecraft.options.hideGui) return;
+        // HUD 配置里关掉反应跳字时，这里直接不画（服务端与数据照常，只是不显示）。
+        if (!HudConfig.SHOW_REACTION_TEXT.get()) return;
         float partial = delta.getGameTimeDeltaPartialTick(false);
         Camera camera = minecraft.gameRenderer.getMainCamera();
         Vec3 cameraPos = camera.getPosition();

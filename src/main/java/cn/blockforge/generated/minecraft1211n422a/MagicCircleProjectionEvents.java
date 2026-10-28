@@ -27,7 +27,8 @@ import java.util.Locale;
  * 蓝图 / 刻印石板的交互总入口。
  *
  * <ul>
- *   <li>手里拿着蓝图或刻印石板右键绘制台基座 → 拆解研究（铺进画布，不消耗，首次给魔法经验）；</li>
+ *   <li>手里拿着蓝图或刻印石板右键绘制台基座 → <b>上稿修改</b>（r211：蓝图收进右下角槽位，
+ *       不复制就没痕迹；按「复制」付粉才把样本留在台上）；</li>
  *   <li>右键普通方块表面 → 贴面锚点（蓝图 = 只能试运行的投影；刻印石板 = 能正式运行的实体锚点）；</li>
  *   <li>右键已有同类锚点 → 再叠一层；</li>
  *   <li>潜行 + 右键锚点 → 卸下最上面一层（蓝图 / 石板退回手上）；</li>
@@ -96,7 +97,9 @@ public final class MagicCircleProjectionEvents {
                         .withStyle(ChatFormatting.YELLOW), false);
                 return;
             }
-            importToCanvas(serverLevel, pos, player, blueprint);
+            // r211：手持蓝图 / 石板右键绘制台 = 「上稿修改」，不再一键复制。
+            // 蓝图收进界面右下角槽位，想留在台上得按「复制」并付粉。
+            MagicCircleDrawing.beginBlueprintEdit(serverLevel, pos, player, stack);
             return;
         }
         if (state.getBlock() instanceof MagicCircleProjectionBlock) {
@@ -399,63 +402,8 @@ public final class MagicCircleProjectionEvents {
     // ------------------------------------------------------------------ 拆解研究
 
     /** 右键绘制台基座：把蓝图铺进画布（只往空层放，不覆盖已画的东西，也不消耗蓝图）。 */
-    private static void importToCanvas(ServerLevel level, BlockPos basePos, ServerPlayer player,
-                                       MagicCircleBlueprint blueprint) {
-        MagicCircleNetworks data = MagicCircleNetworks.get(level);
-        MagicCircleNetwork network = data.byBase(basePos);
-        if (network == null && level.getBlockEntity(basePos) instanceof MagicCircleBaseBlockEntity entity) {
-            network = data.byId(entity.networkId());
-        }
-        if (network == null) {
-            player.displayClientMessage(Component.translatable(
-                    "message.dimensional_mana.magiccircle.no_network").withStyle(ChatFormatting.YELLOW), false);
-            return;
-        }
-        if (!MagicCircleNetworks.canEdit(network, player)) {
-            player.displayClientMessage(Component.translatable(
-                    "message.dimensional_mana.magiccircle.readonly").withStyle(ChatFormatting.RED), false);
-            return;
-        }
-        // 同一份阵图已经在画布上了就别再铺：反复右键会把火球阵铺成 4 层重复，
-        // 既浪费画布，也让玩家以为阵「坏了」。直接打开它原来那一层。
-        int existingLayer = findExistingLayer(network, blueprint);
-        if (existingLayer >= 0) {
-            player.displayClientMessage(Component.translatable(
-                    "message.dimensional_mana.magiccircle.blueprint.already_studied",
-                    existingLayer + 1, blueprint.name()).withStyle(ChatFormatting.YELLOW), false);
-            MagicCircleDrawing.openAtLayer(level, basePos, player, existingLayer);
-            return;
-        }
-        int targetLayer = -1;
-        for (int i = 0; i < Math.max(1, MagicCircleConfig.MAX_LAYERS.get()); i++) {
-            if (network.layer(i).nodes().isEmpty()) {
-                targetLayer = i;
-                break;
-            }
-        }
-        if (targetLayer < 0) {
-            player.displayClientMessage(Component.translatable(
-                    "message.dimensional_mana.magiccircle.blueprint.canvas_full",
-                    network.baseWidth(), network.baseHeight()).withStyle(ChatFormatting.RED), false);
-            return;
-        }
-        MagicCircleNetwork.Layer target = network.layer(targetLayer);
-        int copied = copyIntoCanvas(blueprint, target, network.canvasWidth(), network.canvasHeight());
-        MagicCircleNetworks.markDirty(level);
-        player.displayClientMessage(Component.translatable(
-                "message.dimensional_mana.magiccircle.blueprint.studied",
-                blueprint.name(), blueprint.baseW(), blueprint.baseH(), copied,
-                targetLayer + 1).withStyle(ChatFormatting.AQUA), false);
-        player.displayClientMessage(Component.translatable(
-                "message.dimensional_mana.magiccircle.blueprint.studied_blocks", blueprint.blockSummary())
-                .withStyle(ChatFormatting.LIGHT_PURPLE), false);
-        for (Component line : blueprint.powderLines()) player.displayClientMessage(line, false);
-        firstStudyReward(player, blueprint);
-        MagicCircleDrawing.openAtLayer(level, basePos, player, targetLayer);
-    }
-
     /** 首次拆解给一次魔法经验，同一个蓝图只给一次（存在玩家持久数据里）。 */
-    private static void firstStudyReward(ServerPlayer player, MagicCircleBlueprint blueprint) {
+    static void firstStudyReward(ServerPlayer player, MagicCircleBlueprint blueprint) {
         CompoundTag persist = player.getPersistentData();
         String key = "magicBlueprintStudied." + blueprint.id();
         if (persist.getBoolean(key)) return;
@@ -470,7 +418,7 @@ public final class MagicCircleProjectionEvents {
      *
      * <p>比较的是「铺到这张画布上之后的样子」，所以不同尺寸的基座也能正确认出来。</p>
      */
-    private static int findExistingLayer(MagicCircleNetwork network, MagicCircleBlueprint blueprint) {
+    static int findExistingLayer(MagicCircleNetwork network, MagicCircleBlueprint blueprint) {
         if (blueprint == null || blueprint.layers().size() != 1) return -1;
         MagicCircleNetwork.Layer probe = new MagicCircleNetwork.Layer();
         if (copyIntoCanvas(blueprint, probe, network.canvasWidth(), network.canvasHeight()) <= 0) return -1;
@@ -501,8 +449,8 @@ public final class MagicCircleProjectionEvents {
      *
      * @return 实际放进去的功能块数
      */
-    private static int copyIntoCanvas(MagicCircleBlueprint blueprint, MagicCircleNetwork.Layer target,
-                                      int canvasW, int canvasH) {
+    static int copyIntoCanvas(MagicCircleBlueprint blueprint, MagicCircleNetwork.Layer target,
+                              int canvasW, int canvasH) {
         float scale = Math.min(1.0F, Math.min(canvasW / (float) blueprint.canvasWidth(),
                 canvasH / (float) blueprint.canvasHeight()));
         float offsetX = (canvasW - blueprint.canvasWidth() * scale) * 0.5F;
@@ -514,7 +462,7 @@ public final class MagicCircleProjectionEvents {
                 int x = clamp(Math.round(node.x() * scale + offsetX), canvasW);
                 int y = clamp(Math.round(node.y() * scale + offsetY), canvasH);
                 target.add(new MagicCircleNetwork.Node(node.type(), x, y, node.element(), node.semantic(),
-                        node.power(), node.dye(), node.variant(), node.handDrawn()));
+                        node.power(), node.dye(), node.variant(), node.handDrawn(), node.declare(), node.gate()));
                 added++;
             }
             int size = target.nodes().size();
@@ -590,7 +538,7 @@ public final class MagicCircleProjectionEvents {
         player.displayClientMessage(MagicCircleRites.limitSummary(player).copy()
                 .withStyle(ChatFormatting.DARK_AQUA), false);
         for (String problem : evaluation.problems()) {
-            player.displayClientMessage(Component.translatable(problem).withStyle(ChatFormatting.RED), false);
+            player.displayClientMessage(Component.empty().append(MagicCircleIssue.component(problem)).withStyle(ChatFormatting.RED), false);
         }
         if (entity.sealed()) {
             player.displayClientMessage(Component.translatable(
@@ -644,7 +592,7 @@ public final class MagicCircleProjectionEvents {
                     "message.dimensional_mana.magiccircle.blueprint.test_invalid")
                     .withStyle(ChatFormatting.RED), false);
             for (String problem : evaluation.problems()) {
-                player.displayClientMessage(Component.translatable(problem).withStyle(ChatFormatting.RED), false);
+                player.displayClientMessage(Component.empty().append(MagicCircleIssue.component(problem)).withStyle(ChatFormatting.RED), false);
             }
             return;
         }

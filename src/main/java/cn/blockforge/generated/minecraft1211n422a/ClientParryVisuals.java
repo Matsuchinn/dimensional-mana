@@ -42,7 +42,8 @@ import java.util.Set;
  *
  * <p>另有贴着被弹开那只怪物的 4 帧闪光，普通格挡和完美格挡各用一套画面：普通格挡是
  * 「三色火星迸开」，完美格挡是「八臂爆闪」——中心长出米字、最后散成一圈余火。
- * 两套都不旋转，角度写死在贴图里。</p>
+ * 完美格挡在斗气过半时回滚成最早那套爆闪贴图（r180 之前的原始配色），半下以下用新画的金橙版。
+ * 几套都不旋转，角度写死在贴图里。</p>
  *
  * <p>姿态下原版的挥刀动画会被按住零点几秒地「锁」住：右键按着不放时游戏每几刻就想再挥一次手，
  * 不锁的话剑会一直在身前抽动。按左键弹反的那一刀例外，留 7 刻让这一下看得见。</p>
@@ -98,6 +99,18 @@ public final class ClientParryVisuals {
             128, 32, 32, 4, 8, 64, 340, 0.07F, 0.55F,
             new SparkStyle(26, 9.0F, 30.0F, 1.8F, 4.6F, 5.0F, 11.0F, 0.55F,
                     new int[]{0xFFD83A, 0xFF8A1E, 0xE8321A}));
+
+    /**
+     * 最早那套爆闪（r180 之前的原始贴图，64×16 四帧）：斗气超过一半的完美格挡专用。
+     *
+     * <p>画面参数和 {@link #PERFECT_BURST_STYLE} 完全一致，只换贴图：屏幕尺寸、时长、
+     * 火星都不变，玩家一眼认出的是那团原始配色的米字爆闪，而不是新画的金橙版。</p>
+     */
+    private static final FlashStyle PERFECT_BURST_CLASSIC_STYLE = new FlashStyle(
+            ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID,
+                    "textures/effect/casting/parry_flash_classic.png"),
+            64, 16, 16, 4, 8, 64, 340, 0.07F, 0.55F,
+            PERFECT_BURST_STYLE.sparks());
 
     /** 两套画面各自的实时状态：播到第几刻、跟着哪只怪物、这一轮随机掷出的火星。 */
     private static final FlashChannel NORMAL_BURST = new FlashChannel(NORMAL_BURST_STYLE);
@@ -182,11 +195,23 @@ public final class ClientParryVisuals {
                 perfectFlash = PERFECT_FLASH_TICKS;
                 perfectGold = PERFECT_GOLD_TICKS;
                 // 服务端给了被打中那只怪物的 id：爆闪跟着它走，找不到就画在反馈坐标上。
-                PERFECT_BURST.play(payload);
+                // 斗气过半回滚到最早的米字爆闪贴图，半下以下用新画的金橙版。
+                PERFECT_BURST.play(payload, perfectBurstStyle());
             }
             case ParryFeedbackPayload.FAIL -> fail = FAIL_TICKS;
             default -> { }
         }
+    }
+
+    /**
+     * 这一次完美格挡该用哪套爆闪：自己斗气超过 50% 就换最早那张贴图。
+     *
+     * <p>读的是 HUD 那份同步下来的斗气数（{@link ClientManaState}），和准心下方的斗气条同源，
+     * 玩家看到的条过半、画面就一定过半。</p>
+     */
+    private static FlashStyle perfectBurstStyle() {
+        double ratio = ClientManaState.battleQi() / (double) Math.max(1, ClientManaState.maxBattleQi());
+        return ratio > 0.5 ? PERFECT_BURST_CLASSIC_STYLE : PERFECT_BURST_STYLE;
     }
 
     /** 退出世界时清干净，别把上一局的闪光带到下一局。 */
@@ -529,6 +554,8 @@ public final class ClientParryVisuals {
         // 姿态提示跟着举刀一起淡入淡出，不会「啪」地冒出来 / 消失。
         float stanceBlend = blend(framePartialTick());
         if (stanceBlend <= 0.02F) return;
+        // HUD 配置里可以整块关掉准心下方的「招架中」提示（金色括弧 + 文字）。
+        if (!HudConfig.SHOW_PARRY_STANCE_LABEL.get()) return;
         int fade = (int)Math.round(0xE0 * stanceBlend);
         int textFade = (int)Math.round(0xF0 * stanceBlend);
         // 姿态提示：准心下方两道金色括弧，不挡视野。
@@ -592,7 +619,9 @@ public final class ClientParryVisuals {
      * <p>普通格挡和完美格挡各一个实例，所以两下几乎同时触发也不会互相覆盖参数。</p>
      */
     private static final class FlashChannel {
-        private final FlashStyle style;
+        private final FlashStyle defaultStyle;
+        /** 本轮实际用的画面：完美通道会按斗气比例临时换贴图，普通通道永远用默认那套。 */
+        private FlashStyle style;
         private final float[] angle;
         private final float[] speed;
         private final float[] life;
@@ -603,6 +632,7 @@ public final class ClientParryVisuals {
         private double x, y, z;
 
         private FlashChannel(FlashStyle style) {
+            this.defaultStyle = style;
             this.style = style;
             SparkStyle spark = style.sparks();
             int count = spark.count();
@@ -615,12 +645,18 @@ public final class ClientParryVisuals {
 
         /** 起一轮新闪光：记下跟随的实体与兜底坐标，再掷一遍这一轮的火星。 */
         private void play(ParryFeedbackPayload payload) {
-            remaining = style.ticks();
+            play(payload, defaultStyle);
+        }
+
+        /** 用指定的一套画面起一轮：完美格挡按斗气比例在原版 / 新版贴图之间挑。 */
+        private void play(ParryFeedbackPayload payload, FlashStyle chosen) {
+            this.style = chosen;
+            remaining = chosen.ticks();
             entityId = payload.entityId();
             x = payload.x();
             y = payload.y();
             z = payload.z();
-            SparkStyle spark = style.sparks();
+            SparkStyle spark = chosen.sparks();
             java.util.Random rng = new java.util.Random();
             for (int i = 0; i < angle.length; i++) {
                 // 角度先均匀铺开再抖一点，保证四面八方都有火星，不会全挤在一边

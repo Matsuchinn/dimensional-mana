@@ -1,16 +1,16 @@
 package cn.blockforge.generated.minecraft1211n422a;
 
 /**
- * 13 类功能块的基础数值，直接对应设计文档第 6.1 节。
+ * 13 类功能块的基础数值，直接对应设计文档第 6.1 节与消耗规范 v2.0。
  *
- * <p>启动 / 维持 / 触发三项是「未乘粉末系数」的基础消耗，复杂度用于界面显示与
+ * <p>启动 / 维持 / 触发三项是「未乘任何系数」的基础魔素，复杂度用于界面显示与
  * 蓝图容量判断。{@code CORE}、{@code TRIGGER}、{@code OUTPUT} 三类还是一个可运行
- * 网络的最低要求。</p>
+ * 网络的最低要求。v2.0 的触发成本 = 输出与触发节点之和，所以触发块也占一列。</p>
  */
 public enum MagicCircleBlockType {
     CORE("core", 20, 0, 0, 5, "核心"),
     SUPPLY("supply", 6, 1, 0, 3, "供能"),
-    TRIGGER("trigger", 8, 0, 0, 2, "触发"),
+    TRIGGER("trigger", 8, 0, 8, 2, "触发"),
     OUTPUT("output", 12, 0, 12, 4, "输出"),
     AREA("area", 6, 2, 0, 2, "范围"),
     DURATION("duration", 6, 2, 0, 2, "持续"),

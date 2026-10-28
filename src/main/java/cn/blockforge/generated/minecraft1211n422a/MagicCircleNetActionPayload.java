@@ -9,11 +9,11 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 
 /**
- * 客户端 → 服务端的一张「杂事单」：法阵码导入、远程轮盘刷新 / 开关、一键停机。
+ * 客户端 → 服务端的一张「杂事单」：法阵码导入、远程面板刷新 / 开关、一键停机。
  *
  * <p>这些动作都跟绘制台那把椅子无关，所以单独开一个包，不塞进
  * {@link MagicCircleActionPayload}（那个包的前提是「玩家正坐在绘制台上」）。
- * 服务端做完全部校验：码要合法、轮盘里的锚点得是自己的、距离不能太远。</p>
+ * 服务端做完全部校验：码要合法、面板里的锚点得是自己的、距离不能太远。</p>
  */
 public record MagicCircleNetActionPayload(String action, int x, int y, int z, String text)
         implements CustomPacketPayload {
@@ -42,7 +42,7 @@ public record MagicCircleNetActionPayload(String action, int x, int y, int z, St
         return new MagicCircleNetActionPayload("import_code", 0, 0, 0, code == null ? "" : code);
     }
 
-    /** 请服务端把远程轮盘要的清单重发一份。 */
+    /** 请服务端把远程面板要的清单重发一份。 */
     public static MagicCircleNetActionPayload remoteRefresh() {
         return new MagicCircleNetActionPayload("remote_refresh", 0, 0, 0, "");
     }

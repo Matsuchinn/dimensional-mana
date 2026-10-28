@@ -45,7 +45,7 @@ public record MagicCircleActionPayload(
                 buf.writeUtf(payload.glyph(), 32);
                 buf.writeUtf(payload.blockType(), 32);
                 buf.writeUtf(payload.slot(), 16);
-                buf.writeUtf(payload.powder(), 128);
+                buf.writeUtf(payload.powder(), 200);
                 buf.writeUtf(payload.indices(), MAX_INDICES_LENGTH);
                 buf.writeUtf(payload.name(), MAX_NAME_LENGTH);
                 buf.writeVarInt(payload.x1());
@@ -54,12 +54,27 @@ public record MagicCircleActionPayload(
                 buf.writeVarInt(payload.y2());
             },
             buf -> new MagicCircleActionPayload(buf.readUtf(32), buf.readUtf(MagicCircleStroke.MAX_ENCODED_LENGTH),
-                    buf.readUtf(32), buf.readUtf(32), buf.readUtf(16), buf.readUtf(128), buf.readUtf(MAX_INDICES_LENGTH),
+                    buf.readUtf(32), buf.readUtf(32), buf.readUtf(16), buf.readUtf(200), buf.readUtf(MAX_INDICES_LENGTH),
                     buf.readUtf(MAX_NAME_LENGTH), buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readVarInt())
     );
 
     public static MagicCircleActionPayload close() {
         return new MagicCircleActionPayload("close", "", "", "", "", "", "", 0, 0, 0, 0);
+    }
+
+    /** r211 蓝图修改模式：右下角「复制」——付粉把草样转正，样本留在台面。 */
+    public static MagicCircleActionPayload blueprintCopy() {
+        return new MagicCircleActionPayload("bpCopy", "", "", "", "", "", "", 0, 0, 0, 0);
+    }
+
+    /** r211 蓝图修改模式：右下角「打包带走」——蓝图回背包，未复制的草样整层抹掉。 */
+    public static MagicCircleActionPayload blueprintTake() {
+        return new MagicCircleActionPayload("bpTake", "", "", "", "", "", "", 0, 0, 0, 0);
+    }
+
+    /** r218：点右下角<b>空着的</b>槽位——从背包收一张空白蓝图载体（纸 / 魔力布匹 / 魔法绸缎）放上台面。 */
+    public static MagicCircleActionPayload blueprintMount() {
+        return new MagicCircleActionPayload("bpMount", "", "", "", "", "", "", 0, 0, 0, 0);
     }
 
     public static MagicCircleActionPayload submit(String stroke) {
@@ -179,6 +194,25 @@ public record MagicCircleActionPayload(
     public static MagicCircleActionPayload edit(int index, String slot, String powder) {
         return new MagicCircleActionPayload("edit", "", "", "", slot == null ? "" : slot,
                 powder == null ? "" : powder, "", index, 0, 0, 0);
+    }
+
+    /**
+     * v2.2 声明模式：重写一块条件节点的边界组参数串（{@code powder} 槽位借用装 {@code c1|…} 串）。
+     * 服务端会重新解析并按大类 / 档位 / 精度夹一遍。
+     */
+    public static MagicCircleActionPayload declare(int index, String declaration) {
+        return new MagicCircleActionPayload("declare", "", "", "", "",
+                declaration == null ? "" : declaration, "", index, 0, 0, 0);
+    }
+
+    /**
+     * v2.4 门控模式：条件节点的模式切换 / ⇌ 比较符翻转。{@code intent} 只认
+     * {@code "mode"}（门控 ⇄ 声明）与 {@code "op"}（翻枚举）两种；服务端按枚举重写，
+     * 数据层不存在布尔反转字段。
+     */
+    public static MagicCircleActionPayload gate(int index, String intent) {
+        return new MagicCircleActionPayload("gate", "", "", "", "",
+                intent == null ? "" : intent, "", index, 0, 0, 0);
     }
 
     private static String safeIndices(String indices) {

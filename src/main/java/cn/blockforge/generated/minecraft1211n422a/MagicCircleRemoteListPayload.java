@@ -12,10 +12,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 服务端 → 客户端：玩家附近的「自己的刻印法阵」清单，给远程法阵轮盘用。
+ * 服务端 → 客户端：玩家附近的「自己的刻印法阵」清单，给远程法阵面板用。
  *
  * <p>服务端同时把当前名额也带上（正在跑几个 / 最多几个 / 其中等级和魔素各给了几个），
- * 轮盘顶上那一行直接用，不用再单独发一个包。</p>
+ * 面板顶上那一行直接用，不用再单独发一个包。</p>
  */
 public record MagicCircleRemoteListPayload(
         List<Entry> entries,

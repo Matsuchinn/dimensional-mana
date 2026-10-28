@@ -38,6 +38,12 @@ public final class EtchedSlateItem extends Item {
         return stack;
     }
 
+    /** 一块<b>没刻内容</b>的空白石板：砂轮磨掉阵图后的产物，也是拿去给投影刻印的钥匙。 */
+    public static ItemStack blankStack() {
+        var holder = GeneratedMod.MOD_ITEMS.get(ITEM_ID);
+        return holder == null ? ItemStack.EMPTY : new ItemStack(holder.get());
+    }
+
     /** 读出石板里的蓝图；不是石板 / 没数据就返回 null。 */
     public static MagicCircleBlueprint blueprintOf(ItemStack stack) {
         if (stack == null || stack.isEmpty() || !(stack.getItem() instanceof EtchedSlateItem)) return null;
@@ -57,6 +63,8 @@ public final class EtchedSlateItem extends Item {
             tooltip.add(Component.translatable("tooltip.dimensional_mana.magiccircle.node.title")
                     .withStyle(ChatFormatting.GOLD));
             tooltip.addAll(blueprint.nodeDetailLines(8));
+            tooltip.add(Component.translatable("tooltip.dimensional_mana.etched_slate.ground")
+                    .withStyle(ChatFormatting.GRAY));
         } else {
             tooltip.add(Component.translatable("tooltip.dimensional_mana.etched_slate.blank")
                     .withStyle(ChatFormatting.GRAY));

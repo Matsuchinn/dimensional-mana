@@ -32,7 +32,9 @@ public final class MagicCircleCode {
      * 大阵的码轻松超过 4096，于是「导得出去、导不回来」。这里放宽到 16384，和蓝图的上限对齐。
      */
     public static final int MAX_CHARS = 16384;
-    private static final int VERSION = 1;
+    /** 第 2 版：块上多了 {@code dc}（声明模式参数串）；v1 的码照常能解，条件节点当无声明。 */
+    /** 第 3 版：门控规范 v2.4 的 {@code gm}（模式 + 比较符两字符串）；v1/v2 的码按旧规则推断。 */
+    private static final int VERSION = 3;
     /** 和 {@link MagicCircleBlueprint} 的硬上限保持一致，避免导出成功、导入却被判「尺寸不合法」。 */
     private static final int MAX_SIDE = 64;
     private static final int MAX_NODES_PER_LAYER = 512;
@@ -73,6 +75,12 @@ public final class MagicCircleCode {
                 block.addProperty("d", node.dye());
                 block.addProperty("v", node.variant());
                 block.addProperty("h", node.handDrawn() ? 1 : 0);
+                if (node.declare() != null && !node.declare().isEmpty()) {
+                    block.addProperty("dc", node.declare());
+                }
+                if (node.gate() != null && !node.gate().isEmpty()) {
+                    block.addProperty("gm", node.gate());
+                }
                 blocks.add(block);
             }
             layerJson.add("blocks", blocks);
@@ -101,7 +109,9 @@ public final class MagicCircleCode {
     public static Result decode(String code) {
         if (code == null) return Result.fail("error.dimensional_mana.magiccircle.code.empty");
         String trimmed = code.trim();
-        if (trimmed.length() > MAX_CHARS) {
+        // 服务器限额（配置 importMaxChars）与硬上限取小的那个（规范 20 maxImportSize）。
+        int limit = Math.min(MAX_CHARS, Math.max(256, MagicCircleConfig.IMPORT_MAX_CHARS.get()));
+        if (trimmed.length() > limit) {
             return Result.fail("error.dimensional_mana.magiccircle.code.too_long");
         }
         if (!trimmed.startsWith(PREFIX)) {
@@ -163,13 +173,30 @@ public final class MagicCircleCode {
                 if (type == null) continue;
                 int x = clamp(optInt(block, "x", 0), canvasW);
                 int y = clamp(optInt(block, "y", 0), canvasH);
+                String declare = optString(block, "dc", "");
+                String gate = "";
+                if (type == MagicCircleBlockType.CONDITION) {
+                    // 规范 19：导入时按大类 / 染料档 / 功率精度重夹一遍，越档参数落回档内，
+                    // 不会因为一串手改的码就凭空多出越权数值。
+                    declare = MagicCircleDecl.reconcile(declare,
+                            powderOrEmpty(optString(block, "d", "")),
+                            powderOrEmpty(optString(block, "p", "")));
+                    // 门控串只认白名单组合（G/D 模式 + 可选 L/R 比较符）；其余一律当没带，退回旧规则。
+                    String wanted = optString(block, "gm", "");
+                    if (wanted.equals("G") || wanted.equals("D") || wanted.equals("GL")
+                            || wanted.equals("GR") || wanted.equals("DL") || wanted.equals("DR")) {
+                        gate = wanted;
+                    }
+                } else {
+                    declare = "";
+                }
                 layer.add(new MagicCircleNetwork.Node(type, x, y,
                         powderOrEmpty(optString(block, "e", "")),
                         powderOrEmpty(optString(block, "s", "")),
                         powderOrEmpty(optString(block, "p", "")),
                         powderOrEmpty(optString(block, "d", "")),
                         optString(block, "v", "").length() > 16 ? "" : optString(block, "v", ""),
-                        optInt(block, "h", 0) != 0));
+                        optInt(block, "h", 0) != 0, declare, gate));
             }
             int size = layer.nodes().size();
             JsonArray links = layerJson.has("links") && layerJson.get("links").isJsonArray()

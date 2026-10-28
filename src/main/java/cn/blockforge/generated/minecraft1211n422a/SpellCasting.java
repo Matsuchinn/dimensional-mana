@@ -952,6 +952,7 @@ public final class SpellCasting {
         ManaCheats.clear();
         NO_FALL.clear(); FLAME_BLESSED.clear(); THORNED.clear(); HEALS.clear(); SECONDARY_DAMAGE.clear();
         ElementReactionSystem.clearAll();
+        MagicCircleTriggers.clearEvents();
         MobSkills.clearAll();
         MobCombatSystem.clearAll();
         NewSpellSystem.clearAll();

@@ -56,6 +56,8 @@ public final class MagicCircleProjectionBlockEntity extends BlockEntity {
      */
     private long lastTestTick = -1L;
     private long lastTriggerTick = -1L;
+    /** 自动检测媒介上一次开火的刻（与手动 / 红石各自的 10 刻冷却分开，防条件一直满足时刷屏）。 */
+    private long lastSensorTick = -1L;
     /** 挖矿阵每分钟限额用的窗口起点与计数。 */
     private long miningWindowStart = Long.MIN_VALUE;
     private int miningCount;
@@ -141,7 +143,7 @@ public final class MagicCircleProjectionBlockEntity extends BlockEntity {
         boolean next = value && sealed() && !layers.isEmpty();
         if (running == next) return;
         running = next;
-        // 启停顺手记进维度档案：停机键 / 远程轮盘 / 运行上限要靠它找到「谁开着哪些阵」，
+        // 启停顺手记进维度档案：停机键 / 远程面板 / 运行上限要靠它找到「谁开着哪些阵」，
         // 因为方块实体只在区块加载时才存在，玩家一走远就点不到了。
         if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
             MagicCircleNetworks networks = MagicCircleNetworks.get(serverLevel);
@@ -198,6 +200,10 @@ public final class MagicCircleProjectionBlockEntity extends BlockEntity {
     public long lastTriggerTick() { return lastTriggerTick; }
 
     public void markTrigger(long gameTick) { lastTriggerTick = gameTick; }
+
+    public long lastSensorTick() { return lastSensorTick; }
+
+    public void markSensor(long gameTick) { lastSensorTick = gameTick; }
 
     /** 挖矿阵的每分钟限额：返回这一分钟里还能挖几块（顺便滚窗口）。 */
     public int miningBudget(long gameTick) {

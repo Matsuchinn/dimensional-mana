@@ -236,7 +236,8 @@ public final class Adventurer extends PathfinderMob {
         tradeOffers.clear();
         tradeOffers.addAll(AdventurerTrades.roll(level, getRandom()));
         tradeRestockAt = now + 24000L;
-        level.playSound(null, blockPosition(), SoundEvents.VILLAGER_CELEBRATE, SoundSource.NEUTRAL, 0.7F, 1.0F);
+        // r212：换货提示也改男声，整只冒险者不再借村民的嗓子。
+        level.playSound(null, blockPosition(), AdventurerSounds.get("restock"), SoundSource.NEUTRAL, 1.0F, 1.0F);
     }
 
     /** 右键冒险者打开交易界面（正在打你的冒险者不卖东西）。 */
@@ -250,7 +251,8 @@ public final class Adventurer extends PathfinderMob {
                         (id, inventory, owner) -> new AdventurerTradeMenu(id, inventory, this),
                         Component.translatable("gui.dimensional_mana.adventurer_trade")),
                 buffer -> buffer.writeVarInt(getId()));
-        level().playSound(null, blockPosition(), SoundEvents.VILLAGER_AMBIENT, SoundSource.NEUTRAL, 0.6F, 1.0F);
+        // r212：右键搭话改男声台词（三句随机），不再用村民哼声；音量/原速播，字才听得清。
+        level().playSound(null, blockPosition(), AdventurerSounds.get("greet"), SoundSource.NEUTRAL, 1.0F, 1.0F);
         return InteractionResult.CONSUME;
     }
 

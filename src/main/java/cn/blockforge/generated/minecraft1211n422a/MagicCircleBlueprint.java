@@ -139,7 +139,7 @@ public final class MagicCircleBlueprint {
                     Math.max(0, Math.min(width - 1, node.x())),
                     Math.max(0, Math.min(height - 1, node.y())),
                     node.element(), node.semantic(), node.power(), node.dye(),
-                    node.variant(), node.handDrawn()));
+                    node.variant(), node.handDrawn(), node.declare(), node.gate()));
         }
         for (MagicCircleNetwork.Link link : source.links()) {
             if (link.from() < 0 || link.to() < 0 || link.from() >= count || link.to() >= count) continue;

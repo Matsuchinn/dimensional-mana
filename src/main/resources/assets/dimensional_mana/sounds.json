@@ -752,12 +752,58 @@
   "parry_perfect": {
     "subtitle": "subtitles.dimensional_mana.parry_perfect",
     "sounds": [
+      "dimensional_mana:parry/perfect_anvil",
+      "dimensional_mana:parry/perfect_bell",
+      "dimensional_mana:parry/perfect_crack",
+      "dimensional_mana:parry/perfect_echo",
+      "dimensional_mana:parry/perfect_glass",
+      "dimensional_mana:parry/perfect_gong",
       "dimensional_mana:parry/perfect_steel",
       "dimensional_mana:parry/perfect_double",
       "dimensional_mana:parry/perfect_ring",
       "dimensional_mana:parry/perfect_heavy",
       "dimensional_mana:parry/perfect_sharp",
-      "dimensional_mana:parry/perfect_spark"
+      "dimensional_mana:parry/perfect_spark",
+      "dimensional_mana:parry/perfect_deflect",
+      "dimensional_mana:parry/perfect_clang"
+    ]
+  },
+  "adventurer_greet": {
+    "subtitle": "subtitles.dimensional_mana.adventurer.greet",
+    "sounds": [
+      {
+        "name": "dimensional_mana:adventurer/greet_0"
+      },
+      {
+        "name": "dimensional_mana:adventurer/greet_1"
+      },
+      {
+        "name": "dimensional_mana:adventurer/greet_2"
+      }
+    ]
+  },
+  "adventurer_thanks": {
+    "subtitle": "subtitles.dimensional_mana.adventurer.thanks",
+    "sounds": [
+      {
+        "name": "dimensional_mana:adventurer/thanks"
+      }
+    ]
+  },
+  "adventurer_deny": {
+    "subtitle": "subtitles.dimensional_mana.adventurer.deny",
+    "sounds": [
+      {
+        "name": "dimensional_mana:adventurer/deny"
+      }
+    ]
+  },
+  "adventurer_restock": {
+    "subtitle": "subtitles.dimensional_mana.adventurer.restock",
+    "sounds": [
+      {
+        "name": "dimensional_mana:adventurer/restock"
+      }
     ]
   }
 }

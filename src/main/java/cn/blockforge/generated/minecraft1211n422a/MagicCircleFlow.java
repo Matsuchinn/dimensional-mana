@@ -113,7 +113,11 @@ public final class MagicCircleFlow {
             out.get(from).add(to);
             // 接进核心的线也算能走：核心在这里是「汇总口」，不是终点。
             // 供能 → 核心 → 触发 → 输出 这种画法因此合法，入口（供能）是第 1 位触发。
-            if (!isOutput(nodes.get(from))) flow.get(from).add(to);
+            // v2.2：输出块连「下游输出 / 条件节点」也算走得通（前置编译词缀给终端）；
+            // 输出连范围 / 持续 / 触发等别的类型仍旧拦下。
+            if (!isOutput(nodes.get(from)) || isOutput(nodes.get(to)) || isCondition(nodes.get(to))) {
+                flow.get(from).add(to);
+            }
         }
         // 同层按功能块下标走，序号才不会因为连线创建的先后而乱跳。
         for (List<Integer> neighbours : flow) Collections.sort(neighbours);
@@ -176,7 +180,7 @@ public final class MagicCircleFlow {
             int from = link.from();
             int to = link.to();
             if (issues[i] != Issue.OK) continue;
-            if (isOutput(nodes.get(from))) {
+            if (isOutput(nodes.get(from)) && !isOutput(nodes.get(to)) && !isCondition(nodes.get(to))) {
                 issues[i] = Issue.FROM_OUTPUT;
                 continue;
             }
@@ -253,5 +257,10 @@ public final class MagicCircleFlow {
     private static boolean isOutput(MagicCircleSyncPayload.NodeView node) {
         MagicCircleBlockType type = MagicCircleBlockType.byId(node.type());
         return type != null && type.isOutput();
+    }
+
+    private static boolean isCondition(MagicCircleSyncPayload.NodeView node) {
+        MagicCircleBlockType type = MagicCircleBlockType.byId(node.type());
+        return type == MagicCircleBlockType.CONDITION;
     }
 }

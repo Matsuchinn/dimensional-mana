@@ -543,14 +543,16 @@ public final class AdventurerTrades {
         if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
             MagicAchievements.onTrade(serverPlayer, offer.tier());
         }
-        player.level().playSound(null, adventurer.blockPosition(), SoundEvents.VILLAGER_TRADE,
-                SoundSource.NEUTRAL, 0.9F, 1.0F);
+        // r212：成交改男声「成交，谢谢惠顾」，不再用村民交易哼声。
+        player.level().playSound(null, adventurer.blockPosition(), AdventurerSounds.get("thanks"),
+                SoundSource.NEUTRAL, 1.0F, 1.0F);
         return true;
     }
 
     private static void playDeny(Player player) {
-        player.level().playSound(null, player.blockPosition(), SoundEvents.VILLAGER_NO,
-                SoundSource.NEUTRAL, 0.8F, 1.0F);
+        // r212：被拒改男声「这个嘛，恐怕不行」。
+        player.level().playSound(null, player.blockPosition(), AdventurerSounds.get("deny"),
+                SoundSource.NEUTRAL, 1.0F, 1.0F);
     }
 
     public static Component tierName(Tier tier) {

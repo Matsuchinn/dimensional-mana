@@ -666,6 +666,11 @@ public final class ManaEvents {
 
     public void onExplosion(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
         MobSkills.onExplosion(event);
+        // 法阵触发块的「爆炸检测」要记得这里刚炸过一下。
+        if (event.getLevel() instanceof ServerLevel serverLevel) {
+            var center = event.getExplosion().center();
+            MagicCircleTriggers.recordExplosion(serverLevel, center.x, center.y, center.z);
+        }
     }
 
     public void onLevelTick(net.neoforged.neoforge.event.tick.LevelTickEvent.Post event) {

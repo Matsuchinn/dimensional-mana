@@ -140,6 +140,23 @@ public final class ClientModEvents {
         NeoForge.EVENT_BUS.addListener(InventoryGlowEffects::render);
     }
 
+    /**
+     * 登记客户端配置与模组列表里的「配置」入口（HUD 可视化编辑器）。
+     *
+     * <p>这里引用了 {@code Screen}、{@code IConfigScreenFactory} 这类只允许在客户端加载的类，
+     * 所以必须待在 {@link ClientModEvents} 里、由主类在 {@code Dist.CLIENT} 分支调用——
+     * 放进主类构造函数会让专用服务器在建模组实例时报 DISTXFORM 崩溃。</p>
+     */
+    public static void registerConfigs(net.neoforged.fml.ModContainer container) {
+        container.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT,
+                ClientManaConfig.SPEC, "dimensional_mana-client.toml");
+        container.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT,
+                HudConfig.SPEC, "dimensional_mana-hud.toml");
+        // 模组列表里点「配置」直接进 HUD 可视化编辑器（IConfigScreenFactory 是 NeoForge 的扩展点）。
+        container.registerExtensionPoint(net.neoforged.neoforge.client.gui.IConfigScreenFactory.class,
+                (modContainer, parent) -> new HudConfigScreen(parent));
+    }
+
     private static ModelResourceLocation inventoryModel(String id) {
         return ModelResourceLocation.inventory(ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, id));
     }
@@ -705,12 +722,16 @@ public final class ClientModEvents {
         double textScale = ClientManaConfig.MANA_TEXT_SCALE.get();
         int manaTextColor = overloaded ? 0xFF000000 | overloadRgb
                 : overchargeFill > 0.0 ? 0xFFBFFFF9 : 0xFFFFFFFF;
-        drawScaledCenteredString(graphics, minecraft, String.format("%.0f", ClientManaState.mana()),
-                centerX, centerY - 5, manaTextColor, textScale);
-        drawScaledCenteredString(graphics, minecraft, "/ " + String.format("%.0f", ClientManaState.maxMana()),
-                centerX, centerY + 5, overloaded ? 0xFFFFFFFF : 0xFFBED5FF, textScale);
-        renderSelectedSpellHud(graphics, minecraft, centerX + radius + 13, centerY - 12);
-        renderQiSlotIcon(graphics, minecraft, centerX + radius + 13, centerY - 12);
+        if (HudConfig.SHOW_MANA_NUMBER.get()) {
+            drawScaledCenteredString(graphics, minecraft, String.format("%.0f", ClientManaState.mana()),
+                    centerX, centerY - 5, manaTextColor, textScale);
+            drawScaledCenteredString(graphics, minecraft, "/ " + String.format("%.0f", ClientManaState.maxMana()),
+                    centerX, centerY + 5, overloaded ? 0xFFFFFFFF : 0xFFBED5FF, textScale);
+        }
+        if (HudConfig.SHOW_SPELL_HUD.get()) {
+            renderSelectedSpellHud(graphics, minecraft, centerX + radius + 13, centerY - 12);
+            renderQiSlotIcon(graphics, minecraft, centerX + radius + 13, centerY - 12);
+        }
     }
 
     /**

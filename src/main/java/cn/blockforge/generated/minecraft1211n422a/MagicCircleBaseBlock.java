@@ -108,6 +108,10 @@ public final class MagicCircleBaseBlock extends BaseEntityBlock {
                 && serverLevel.getBlockEntity(pos) instanceof MagicCircleBaseBlockEntity entity) {
             String networkId = entity.networkId();
             if (!networkId.isEmpty()) {
+                // r211：拆带绘制的绘制台 = 把里面投过的粉末全部爆出来（草稿层没付粉，不爆；
+                // 创造模式本来就没扣过粉，也不爆）。
+                MagicCircleNetwork network = MagicCircleNetworks.get(serverLevel).byId(networkId);
+                if (network != null) MagicCircleDrawing.spillNetworkPowders(serverLevel, network, pos, player);
                 entity.setNetworkId("");
                 MagicCircleNetworks.invalidate(serverLevel, networkId);
             }

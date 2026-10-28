@@ -96,6 +96,11 @@ public final class GeneratedMod {
             net.minecraft.world.level.storage.loot.predicates.LootItemConditionType> ANCIENT_FRAGMENT_LIMIT_CONDITION =
             LOOT_CONDITIONS.register("ancient_fragment_limit", () -> new net.minecraft.world.level.storage.loot.predicates.LootItemConditionType(
                     AncientFragmentLimitCondition.CODEC));
+    /** r211：法阵案例残片的「每处结构限额」条件（村庄 / 哥布林聚落 / 古代魔法祭坛共用）。 */
+    public static final DeferredHolder<net.minecraft.world.level.storage.loot.predicates.LootItemConditionType,
+            net.minecraft.world.level.storage.loot.predicates.LootItemConditionType> BLUEPRINT_FRAGMENT_LIMIT_CONDITION =
+            LOOT_CONDITIONS.register("blueprint_fragment_limit", () -> new net.minecraft.world.level.storage.loot.predicates.LootItemConditionType(
+                    BlueprintFragmentLimitCondition.CODEC));
     public static final DeferredHolder<net.minecraft.world.level.storage.loot.predicates.LootItemConditionType,
             net.minecraft.world.level.storage.loot.predicates.LootItemConditionType> ELEMENTAL_SLIME_LOOT_CHANCE =
             LOOT_CONDITIONS.register("elemental_slime_loot_chance", () -> new net.minecraft.world.level.storage.loot.predicates.LootItemConditionType(
@@ -173,7 +178,8 @@ public final class GeneratedMod {
     public static final DeferredHolder<SoundEvent, SoundEvent> CODEX_SPACE_OPEN = SOUNDS.register("codex_space_open",
             () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "codex_space_open")));
     /**
-     * 完美招架的剑鸣：sounds.json 里的 parry_perfect 挂了六段素材，播放时由原版随机挑一段。
+     * 完美招架的剑鸣：sounds.json 里的 parry_perfect 挂了十四段素材（最早六段 + 重画六段
+     * + 两段只狼式震刀采样），播放时由原版随机挑一段。
      * 必须和其他音效一样在注册阶段登记，不能在第一次弹刀时才注册（那会撞上注册表已冻结，直接崩游戏）。
      */
     public static final DeferredHolder<SoundEvent, SoundEvent> PARRY_PERFECT = SOUNDS.register("parry_perfect",
@@ -414,6 +420,9 @@ public final class GeneratedMod {
         // 雨靴：脚饰栏位，工作台用两个水元素结晶粉末 + 两个皮革合成。
         magicItem(RainBootsItem.ITEM_ID, ITEMS.register(RainBootsItem.ITEM_ID,
                 () -> new RainBootsItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON))));
+        // 雨衣：背饰栏位，工作台用六个皮革 + 三块魔力布匹合成。
+        magicItem(RainCoatItem.ITEM_ID, ITEMS.register(RainCoatItem.ITEM_ID,
+                () -> new RainCoatItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON))));
         // 斗气系：手套与护符两件饰品、战斗手册一本、技能书三本（走自己的创造页）。
         MOD_ITEMS.put(BattleQiGloveItem.ITEM_ID, ITEMS.register(BattleQiGloveItem.ITEM_ID,
                 () -> new BattleQiGloveItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON))));
@@ -485,7 +494,11 @@ public final class GeneratedMod {
                         .lightLevel(state -> 10)));
         MOD_BLOCKS.put(MagicCircleProjectionBlock.BLOCK_ID, projection);
 
-        // 两张教学蓝图：创造物品栏就能拿，生存里靠箱子 / 交易（后续阶段接掉落表）。
+        // 教学蓝图：创造物品栏就能拿，生存里靠箱子 / 交易（后续阶段接掉落表）。
+        MOD_ITEMS.put(MagicCircleBlueprints.SPARK_ITEM, ITEMS.register(MagicCircleBlueprints.SPARK_ITEM,
+                () -> new WornBlueprintItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON),
+                        MagicCircleBlueprints.SPARK_ITEM)));
+        ARCANE_ITEM_IDS.add(MagicCircleBlueprints.SPARK_ITEM);
         MOD_ITEMS.put(MagicCircleBlueprints.FIREBALL_ITEM, ITEMS.register(MagicCircleBlueprints.FIREBALL_ITEM,
                 () -> new WornBlueprintItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON),
                         MagicCircleBlueprints.FIREBALL_ITEM)));
@@ -494,6 +507,15 @@ public final class GeneratedMod {
                 () -> new WornBlueprintItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON),
                         MagicCircleBlueprints.HEALING_ITEM)));
         ARCANE_ITEM_IDS.add(MagicCircleBlueprints.HEALING_ITEM);
+        // v2.2：掘矿阵 / 守望阵两张进阶教学蓝图（终端协议 + 边界声明的示范）。
+        MOD_ITEMS.put(MagicCircleBlueprints.MINE_ITEM, ITEMS.register(MagicCircleBlueprints.MINE_ITEM,
+                () -> new WornBlueprintItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON),
+                        MagicCircleBlueprints.MINE_ITEM)));
+        ARCANE_ITEM_IDS.add(MagicCircleBlueprints.MINE_ITEM);
+        MOD_ITEMS.put(MagicCircleBlueprints.GUARD_ITEM, ITEMS.register(MagicCircleBlueprints.GUARD_ITEM,
+                () -> new WornBlueprintItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON),
+                        MagicCircleBlueprints.GUARD_ITEM)));
+        ARCANE_ITEM_IDS.add(MagicCircleBlueprints.GUARD_ITEM);
 
         // 第 4 阶段：刻印石板。刻印石胚 + 已抄录载体 + 超导粉在魔晶加工台里烧出来，
         // 贴到方块表面就是能正式运行的实体法阵锚点。
@@ -579,8 +601,11 @@ public final class GeneratedMod {
                         output.accept(MOD_ITEMS.get(MagicCircleWandItem.ITEM_ID).get());
                         output.accept(MOD_ITEMS.get("carving_stone_blank").get());
                         output.accept(MOD_ITEMS.get(EtchedSlateItem.ITEM_ID).get());
+                        output.accept(MOD_ITEMS.get(MagicCircleBlueprints.SPARK_ITEM).get());
                         output.accept(MOD_ITEMS.get(MagicCircleBlueprints.FIREBALL_ITEM).get());
                         output.accept(MOD_ITEMS.get(MagicCircleBlueprints.HEALING_ITEM).get());
+                        output.accept(MOD_ITEMS.get(MagicCircleBlueprints.MINE_ITEM).get());
+                        output.accept(MOD_ITEMS.get(MagicCircleBlueprints.GUARD_ITEM).get());
                         for (MagicCirclePowders.Category category : MagicCirclePowders.Category.values()) {
                             for (MagicCirclePowders.Powder powder : MagicCirclePowders.byCategory(category)) {
                                 ItemStack stack = powder.stack();
@@ -621,6 +646,7 @@ public final class GeneratedMod {
     private static int accessoryRank(String id) {
         for (Relics.Relic relic : Relics.ALL) if (relic.id().equals(id)) return 35;
         if (RainBootsItem.ITEM_ID.equals(id)) return 36;
+        if (RainCoatItem.ITEM_ID.equals(id)) return 37;
         if (id.endsWith("_element_ring")) return 10;
         if (MagicEquipment.ENHANCE_RING.equals(id)) return 20;
         if ("wisdom_ring".equals(id)) return 30;
@@ -681,6 +707,8 @@ public final class GeneratedMod {
         POTIONS.register(modBus);
         SpellSounds.register();
         GoblinSounds.register();
+        // r212 冒险者男声台词（右键搭话/成交/拒绝），不再用村民音。
+        AdventurerSounds.register();
         SOUNDS.register(modBus);
         MENUS.register(modBus);
         BLOCK_ENTITIES.register(modBus);
@@ -803,6 +831,8 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(fragmentLoot::addWitchDrops);
         NeoForge.EVENT_BUS.addListener(AncientFragmentLoot::addChestLoot);
         NeoForge.EVENT_BUS.addListener(AncientFragmentLoot::addEntityDrops);
+        // r211：法阵案例残片进三处宝箱（祭坛 55%、哥布林 25%、村庄 40%，各有每处上限）。
+        NeoForge.EVENT_BUS.addListener(BlueprintFragmentLoot::addChestLoot);
         NeoForge.EVENT_BUS.addListener(accessoryLoot::onLootTableLoad);
         NeoForge.EVENT_BUS.addListener(accessoryLoot::onVillagerTrades);
         NeoForge.EVENT_BUS.addListener(events::onDamagePost);
@@ -824,8 +854,29 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(MagicCircleProjectionEvents::onRightClickItem);
         // 法阵召唤物的生命周期：到期自动消散（文档 14.2 第 4 条）。
         NeoForge.EVENT_BUS.addListener(MagicCircleRites::onEntityTick);
+        // r211 召唤物守则：友伤免疫 + 玩家被咬时守卫锚点反击。
+        NeoForge.EVENT_BUS.addListener(MagicCircleRites::onSummonIncomingDamage);
+        // r211 声明「死亡掉落空」：法阵召唤物被打死什么都不吐。
+        NeoForge.EVENT_BUS.addListener(MagicCircleRites::onSummonDeathDrops);
+        // r211 蓝图修改模式：下线 / 关服都要把台面上的蓝图退到人身上。
+        NeoForge.EVENT_BUS.addListener(
+                (net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent leftEvent) ->
+                        MagicCircleDrawing.onPlayerLeft(leftEvent.getEntity()));
+        NeoForge.EVENT_BUS.addListener(
+                (net.neoforged.neoforge.event.server.ServerStoppingEvent stopEvent) -> MagicCircleDrawing.flushAll());
+        // r217 门控保持帧（规范 v3.0 二）：跳跃 / 攻击 / 受击这类 1 刻瞬时动作记 0.5 秒宽限，
+        // 20 刻一轮的判定也抓得住；停服清缓存防旧刻号误判。
+        NeoForge.EVENT_BUS.addListener(MagicCircleGates::onJump);
+        NeoForge.EVENT_BUS.addListener(MagicCircleGates::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(
+                (net.neoforged.neoforge.event.server.ServerStoppingEvent stopEvent) -> MagicCircleGates.clearActions());
         NeoForge.EVENT_BUS.addListener(ElementPlating::onGrindstonePlace);
         NeoForge.EVENT_BUS.addListener(ElementPlating::onGrindstoneTake);
+        // r211 砂轮新功能：把带内容的蓝图磨回空白，返还 25% 随机粉末。
+        NeoForge.EVENT_BUS.addListener(BlueprintGrinding::onGrindstonePlace);
+        NeoForge.EVENT_BUS.addListener(BlueprintGrinding::onGrindstoneTake);
+        // r212 修「蓝图放不进砂轮」：原版输入槽拒收纸类物品，打开界面时换成放行版槽位。
+        NeoForge.EVENT_BUS.addListener(BlueprintGrinding::onContainerOpen);
         NeoForge.EVENT_BUS.addListener(this::brewingRecipes);
         container.registerConfig(ModConfig.Type.COMMON, ManaConfig.SPEC, "dimensional_mana-common.toml");
         container.registerConfig(ModConfig.Type.COMMON, MobCombatConfig.SPEC, "dimensional_mana-mobs.toml");
@@ -834,7 +885,9 @@ public final class GeneratedMod {
         container.registerConfig(ModConfig.Type.COMMON, MagicCircleConfig.SPEC, "dimensional_mana-magiccircle.toml");
         container.registerConfig(ModConfig.Type.COMMON, SpawnConfig.SPEC, "dimensional_mana-spawns.toml");
         if (FMLEnvironment.dist == Dist.CLIENT) {
-            container.registerConfig(ModConfig.Type.CLIENT, ClientManaConfig.SPEC, "dimensional_mana-client.toml");
+            // 客户端配置与 HUD 可视化编辑器的入口登记在 ClientModEvents 里：
+            // 主类构造函数在专用服务器上也会执行，任何对 Screen 子类的直接引用都会让它起不来。
+            ClientModEvents.registerConfigs(container);
         }
     }
 

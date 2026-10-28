@@ -19,8 +19,8 @@
       "rolls": 1,
       "bonus_rolls": 0,
       "entries": [
-        {"type": "minecraft:empty", "weight": 97},
-        {"type": "minecraft:item", "name": "dimensional_mana:element_absorption_charm", "weight": 3}
+        {"type": "minecraft:empty", "weight": 92},
+        {"type": "minecraft:item", "name": "dimensional_mana:element_absorption_charm", "weight": 8}
       ]
     }
   ]

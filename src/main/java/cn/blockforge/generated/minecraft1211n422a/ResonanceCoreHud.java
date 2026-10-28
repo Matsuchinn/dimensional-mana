@@ -26,8 +26,8 @@ public final class ResonanceCoreHud {
 
         int width = graphics.guiWidth();
         int height = graphics.guiHeight();
-        int centerX = width - 30;
-        int centerY = height - 30;
+        int centerX = width - HudConfig.RES_X_FROM_RIGHT.get();
+        int centerY = height - HudConfig.RES_Y_FROM_BOTTOM.get();
         int elementColor = ResonanceCore.elementColor(ClientResonanceCoreState.element());
         boolean full = ClientResonanceCoreState.ready();
         long time = minecraft.level == null ? 0L : minecraft.level.getGameTime();
@@ -56,21 +56,26 @@ public final class ResonanceCoreHud {
         if (resonanceTicks > 0) {
             drawRing(graphics, centerX, centerY, 21, resonanceTicks / (double)ResonanceCore.RESONANCE_TICKS,
                     0x55000000, elementColor);
-            String seconds = String.format("%.0f", resonanceTicks / 20.0);
-            graphics.drawCenteredString(minecraft.font, seconds, centerX, centerY + 22, elementColor);
+            if (HudConfig.SHOW_RES_LABEL.get()) {
+                String seconds = String.format("%.0f", resonanceTicks / 20.0);
+                graphics.drawCenteredString(minecraft.font, seconds, centerX, centerY + 22, elementColor);
+            }
         }
 
-        String label;
-        if (resonanceTicks > 0) {
-            // 共鸣期间显示“魔力通透”，提示玩家四种增伤正在生效。
-            label = Component.translatable("hud.dimensional_mana.resonance_core.transparency").getString();
-        } else if (full) {
-            label = Component.translatable("hud.dimensional_mana.resonance_core.full").getString();
-        } else {
-            label = String.format("%.0f%%", ClientResonanceCoreState.charge());
+        // HUD 配置里关掉文字时只剩图标与充能环。
+        if (HudConfig.SHOW_RES_LABEL.get()) {
+            String label;
+            if (resonanceTicks > 0) {
+                // 共鸣期间显示“魔力通透”，提示玩家四种增伤正在生效。
+                label = Component.translatable("hud.dimensional_mana.resonance_core.transparency").getString();
+            } else if (full) {
+                label = Component.translatable("hud.dimensional_mana.resonance_core.full").getString();
+            } else {
+                label = String.format("%.0f%%", ClientResonanceCoreState.charge());
+            }
+            int labelColor = resonanceTicks > 0 || full ? elementColor : 0xFF9FC7FF;
+            graphics.drawString(minecraft.font, label, centerX - 24, centerY - 26, labelColor, true);
         }
-        int labelColor = resonanceTicks > 0 || full ? elementColor : 0xFF9FC7FF;
-        graphics.drawString(minecraft.font, label, centerX - 24, centerY - 26, labelColor, true);
 
         // 满充时在鼠标指针后面画同色拖影。
         if (full) renderMouseTrail(graphics, minecraft, width, height, elementColor);

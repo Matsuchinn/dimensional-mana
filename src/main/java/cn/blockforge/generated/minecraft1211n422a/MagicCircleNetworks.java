@@ -45,7 +45,7 @@ public final class MagicCircleNetworks extends SavedData {
      * 正在运行的投影锚点：坐标 → 主人 UUID。
      *
      * <p>方块实体只在所在区块加载时才存在，玩家走远之后就点不到自己开着哪些阵了。
-     * 这里随维度存档记一份：停机键、远程轮盘和「最多同时开几个」都靠它，
+     * 这里随维度存档记一份：停机键、远程面板和「最多同时开几个」都靠它，
      * 锚点被挖掉或维持费付不起时由 {@code MagicCircleProjectionBlockEntity#setRunning} 同步删掉。</p>
      */
     private final Map<BlockPos, UUID> runningAnchors = new LinkedHashMap<>();
@@ -104,7 +104,7 @@ public final class MagicCircleNetworks extends SavedData {
         return count;
     }
 
-    /** 这个玩家登记在案的所有运行中锚点坐标（停机键与远程轮盘用）。 */
+    /** 这个玩家登记在案的所有运行中锚点坐标（停机键与远程面板用）。 */
     public List<BlockPos> runningAnchorsOf(UUID owner) {
         List<BlockPos> found = new ArrayList<>();
         if (owner == null) return found;
@@ -438,7 +438,7 @@ public final class MagicCircleNetworks extends SavedData {
                 evaluation.disorder(), String.format("%.2f", evaluation.efficiency()))
                 .withStyle(ChatFormatting.LIGHT_PURPLE), false);
         for (String problem : evaluation.problems()) {
-            player.displayClientMessage(Component.translatable(problem).withStyle(ChatFormatting.RED), false);
+            player.displayClientMessage(Component.empty().append(MagicCircleIssue.component(problem)).withStyle(ChatFormatting.RED), false);
         }
     }
 

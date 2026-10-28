@@ -45,9 +45,13 @@ import java.util.UUID;
  *
  * <ul>
  *   <li>3.6 格内有敌对弹射物：消耗 2 点斗气，弹射物当场消散。</li>
- *   <li>近战：按下后 12 刻内挡下近战伤害就算弹反成功，其中 5 刻内到达的判定为完美招架。</li>
+ *   <li>近战：按下后 11 刻内挡下近战伤害就算弹反成功，其中 5 刻内到达的判定为完美招架。</li>
  *   <li>斗气不足以支付怪物攻击力时弹反失败：硬吃伤害、斗气清零并进入斗气溃散。</li>
+ *   <li>窗口到点也没挡住任何东西（空挥）：扣 1 点斗气；只扣这一笔，不会因此进溃散。</li>
  * </ul>
+ *
+ * <p>姿态期间移速降到 65%、跳跃高度降到 65%：举着刀不该还健步如飞、跳来跳去。斗气过半的完美格挡
+ * 爆闪会用最早那套米字余火贴图，这是客户端 {@link ClientParryVisuals} 的事。</p>
  *
  * <p>所有判定都在服务端完成，客户端只负责按键与画面；姿态按玩家 UUID 存在内存里，
  * 退出、死亡或换手时立刻清掉。</p>
@@ -55,8 +59,8 @@ import java.util.UUID;
 public final class BattleQiParry {
     /** 长按右键多少刻进入姿态。 */
     public static final int STANCE_HOLD_TICKS = 5;
-    /** 按下左键后，近战弹反的有效窗口。 */
-    public static final int GUARD_WINDOW_TICKS = 12;
+    /** 按下左键后，近战弹反的有效窗口。r204 起收紧 1 刻：普通格挡的判定减少 1 tick。 */
+    public static final int GUARD_WINDOW_TICKS = 11;
     /** 窗口内前 5 刻到达的伤害算完美招架。 */
     public static final int PERFECT_WINDOW_TICKS = 5;
     /** 远程/法术弹反的判定半径。 */
@@ -75,6 +79,10 @@ public final class BattleQiParry {
     public static final float VULNERABILITY_MULTIPLIER = 1.75F;
     /** 弹反一个弹射物要几点斗气。 */
     public static final int PROJECTILE_QI_COST = 2;
+    /** 空挥（窗口到点什么都没挡住）扣的斗气。静默扣，不会因此触发溃散。 */
+    public static final int WHIFF_QI_COST = 1;
+    /** 姿态期间移速与跳跃初速的惩罚比例：都只剩 65%。 */
+    public static final double STANCE_MOVE_PENALTY = 0.35;
     /** 斗气满时完美招架溢出的部分换成 2 秒速度 II。 */
     public static final int OVERFLOW_SPEED_TICKS = 40;
     /**
@@ -92,6 +100,8 @@ public final class BattleQiParry {
         boolean stance;
         long pressTick = -1;
         long guardUntil = -1;
+        /** 左键按下去开了窗口、还没挡住任何东西：窗口收掉时扣 {@link #WHIFF_QI_COST}。 */
+        boolean whiffPending;
     }
 
     private static final Map<UUID, State> STATES = new HashMap<>();
@@ -100,6 +110,20 @@ public final class BattleQiParry {
             ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "parry_full_power");
     private static final AttributeModifier FULL_POWER_SPEED = new AttributeModifier(FULL_POWER_ID,
             FULL_POWER_ATTACK_SPEED, AttributeModifier.Operation.ADD_VALUE);
+    private static final ResourceLocation STANCE_SPEED_ID =
+            ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "parry_stance_speed");
+    private static final ResourceLocation STANCE_JUMP_ID =
+            ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "parry_stance_jump");
+    /** 举刀时移速 -35%：ADD_MULTIPLIED_TOTAL 直接乘在最终值上，和药水、护符都能正常叠加。 */
+    private static final AttributeModifier STANCE_SPEED = new AttributeModifier(STANCE_SPEED_ID,
+            -STANCE_MOVE_PENALTY, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);
+    /**
+     * 举刀时跳跃高度 -35%（换算到初速只有 -19.4%：弹跳高度和初速的平方成正比，
+     * √0.65 ≈ 0.806，直接把初速砍 35% 会让高度掉掉近六成，那就不是 -35% 了）。
+     * jump_strength 是同步属性，客户端手感一致。
+     */
+    private static final AttributeModifier STANCE_JUMP = new AttributeModifier(STANCE_JUMP_ID,
+            Math.sqrt(1.0 - STANCE_MOVE_PENALTY) - 1.0, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);
     /** 玩家 UUID → 招架余势失效的那一刻；用完（打出这一刀）就改成下一刻失效。 */
     private static final Map<UUID, Long> FULL_POWER = new HashMap<>();
 
@@ -119,6 +143,8 @@ public final class BattleQiParry {
     public static void begin(ServerPlayer player) {
         if (!canParry(player)) {
             STATES.remove(player.getUUID());
+            // 防一手时序问题：条件不满足时顺手把可能挂着的姿态惩罚还回去，别留残。
+            removeStancePenalty(player);
             return;
         }
         State state = STATES.computeIfAbsent(player.getUUID(), key -> new State());
@@ -126,6 +152,8 @@ public final class BattleQiParry {
         state.stance = true;
         state.guardUntil = -1;
         state.pressTick = -1;
+        state.whiffPending = false;
+        applyStancePenalty(player);
         if (player.level() instanceof ServerLevel level) {
             // 举刀出鞘：清脆的金属摩擦声，音调抬高一档。
             level.playSound(null, player.getX(), player.getY(), player.getZ(),
@@ -135,10 +163,12 @@ public final class BattleQiParry {
         ParryStancePayload.send(player, true);
     }
 
-    /** 松开右键或换手：收回姿态。 */
+    /** 松开右键或换手：收回姿态。窗口还开着就按空挥结算一次。 */
     public static void end(ServerPlayer player) {
         State state = STATES.remove(player.getUUID());
+        removeStancePenalty(player);
         if (state == null || !state.stance) return;
+        if (state.whiffPending) billWhiff(player, state);
         if (player.level() instanceof ServerLevel level) {
             level.playSound(null, player.getX(), player.getY(), player.getZ(),
                     SoundEvents.ARMOR_EQUIP_CHAIN.value(), SoundSource.PLAYERS, 0.35F, 1.35F);
@@ -146,27 +176,59 @@ public final class BattleQiParry {
         ParryStancePayload.send(player, false);
     }
 
-    /** 掉线、换维度、死亡时的清理。 */
+    /** 掉线、换维度、死亡时的清理：不追空挥的账，只把属性还回去。 */
     public static void clear(ServerPlayer player) {
         if (player == null) return;
         State state = STATES.remove(player.getUUID());
+        removeStancePenalty(player);
         if (state != null && state.stance) ParryStancePayload.send(player, false);
         clearFullPower(player);
     }
 
-    /** 每刻复核姿态前置：换手、副手满了、被定身都会自动收刀。 */
+    /** 每刻复核姿态前置：换手、副手满了、被定身都会自动收刀（这种情况不罚空挥）。 */
     public static void tick(ServerPlayer player) {
         expireFullPower(player);
         State state = STATES.get(player.getUUID());
         if (state == null) return;
         if (!canParry(player)) {
             STATES.remove(player.getUUID());
+            removeStancePenalty(player);
             // 换手、副手满了、被定身：别人那边也要把举起来的刀放下。
             if (state.stance) ParryStancePayload.send(player, false);
             return;
         }
         long now = player.level().getGameTime();
-        if (state.guardUntil >= 0 && now > state.guardUntil) state.guardUntil = -1;
+        if (state.guardUntil >= 0 && now > state.guardUntil) {
+            // 窗口到点还挂着「没挡住任何东西」：这一刀算空挥，扣 1 点斗气。
+            if (state.whiffPending) billWhiff(player, state);
+            state.guardUntil = -1;
+        }
+    }
+
+    /** 空挥结算：静默扣 {@link #WHIFF_QI_COST} 点斗气（不够就静默跳过，绝不触发溃散）。 */
+    private static void billWhiff(ServerPlayer player, State state) {
+        state.whiffPending = false;
+        state.guardUntil = -1;
+        if (ManaData.get(player).battleQi() < WHIFF_QI_COST) return;
+        ManaData.spendBattleQiQuiet(player, WHIFF_QI_COST);
+        player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
+                "message.dimensional_mana.parry_whiff", WHIFF_QI_COST), true);
+    }
+
+    /** 进入姿态：挂上移速 / 跳跃 -35%。属性是同步属性，客户端一起变沉。 */
+    private static void applyStancePenalty(ServerPlayer player) {
+        AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+        if (speed != null) speed.addOrUpdateTransientModifier(STANCE_SPEED);
+        AttributeInstance jump = player.getAttribute(Attributes.JUMP_STRENGTH);
+        if (jump != null) jump.addOrUpdateTransientModifier(STANCE_JUMP);
+    }
+
+    /** 离开姿态：把两个惩罚摘回去（没挂过就是空操作，随处可调）。 */
+    private static void removeStancePenalty(ServerPlayer player) {
+        AttributeInstance speed = player.getAttribute(Attributes.MOVEMENT_SPEED);
+        if (speed != null && speed.getModifier(STANCE_SPEED_ID) != null) speed.removeModifier(STANCE_SPEED_ID);
+        AttributeInstance jump = player.getAttribute(Attributes.JUMP_STRENGTH);
+        if (jump != null && jump.getModifier(STANCE_JUMP_ID) != null) jump.removeModifier(STANCE_JUMP_ID);
     }
 
     // ---------------------------------------------------------------- 招架余势
@@ -227,14 +289,17 @@ public final class BattleQiParry {
 
         Projectile projectile = findHostileProjectile(player);
         if (projectile != null) {
+            // 弹掉弹射物就算这一按有了交代，上一个没结算的窗口不再追账。
+            state.whiffPending = false;
             if (!parryProjectile(player, projectile)) {
                 player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
                         "message.dimensional_mana.parry_no_qi"), true);
             }
             return;
         }
-        // 没有弹射物：开一个 12 刻的近战招架窗口，等伤害落下来再结算。
+        // 没有弹射物：开一个 11 刻的近战招架窗口，等伤害落下来再结算；到点没挡住就按空挥扣 1 点斗气。
         state.guardUntil = now + GUARD_WINDOW_TICKS;
+        state.whiffPending = true;
         if (player.level() instanceof ServerLevel level) {
             // 空挥一声，告诉玩家「这一刀已经按下去了」。
             level.playSound(null, player.getX(), player.getY(), player.getZ(),
@@ -265,6 +330,7 @@ public final class BattleQiParry {
         boolean perfect = now - state.pressTick <= PERFECT_WINDOW_TICKS;
         state.guardUntil = -1;
         state.pressTick = -1;
+        state.whiffPending = false;
         Vec3 middle = player.position().add(attacker.position()).scale(0.5).add(0, 0.9, 0);
         return settle(player, attacker, perfect, amount, middle, null) ? Outcome.PARRIED : Outcome.FAILED;
     }
@@ -274,7 +340,7 @@ public final class BattleQiParry {
      *
      * <p>这类法术没有飞行物可打，玩家看不到弹道、也没有反应时间，所以判定放宽一点：
      * 只要处在招架姿态、对方是敌对生物、距离够近，就按普通招架结算；
-     * 如果正好按下了左键（12 刻窗口内），照旧算完美招架。</p>
+     * 如果正好按下了左键（11 刻窗口内），照旧算完美招架。</p>
      *
      * @param flavor 法术元素，用来放对应的碎裂特效；传 {@code null} 表示不放。
      * @return true 表示这一下已经被弹开，调用方不要再结算伤害。
@@ -291,6 +357,8 @@ public final class BattleQiParry {
                 && now - state.pressTick <= PERFECT_WINDOW_TICKS;
         state.guardUntil = -1;
         state.pressTick = -1;
+        // 法术被弹开了，之前那一次左键按下去就有了交代，不再追空挥的账。
+        state.whiffPending = false;
         Vec3 middle = player.position().add(caster.position()).scale(0.5).add(0, 0.9, 0);
         return settle(player, caster, perfect, amount, middle, flavor);
     }

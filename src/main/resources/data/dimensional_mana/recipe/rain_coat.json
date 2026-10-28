@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["CCC", "LLL", "LLL"],
+  "key": {
+    "C": {"item": "dimensional_mana:magic_cloth"},
+    "L": {"item": "minecraft:leather"}
+  },
+  "result": {"id": "dimensional_mana:rain_coat", "count": 1}
+}

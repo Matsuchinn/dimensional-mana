@@ -29,6 +29,8 @@ public final class MagicCircleConfig {
     public static final ModConfigSpec.DoubleValue EFFICIENCY_PER_SUPERCONDUCTOR;
     public static final ModConfigSpec.DoubleValue EFFICIENCY_PER_STABILIZER;
     public static final ModConfigSpec.DoubleValue EFFICIENCY_CAP;
+    public static final ModConfigSpec.IntValue DISORDER_SUPPRESS_PER_STABILIZER;
+    public static final ModConfigSpec.DoubleValue OVERCLOCK_MANA_DRAIN;
     public static final ModConfigSpec.DoubleValue STRENGTH_PER_BASE;
     public static final ModConfigSpec.DoubleValue STRENGTH_PER_LAYER;
     public static final ModConfigSpec.DoubleValue STRENGTH_PER_AMPLIFIER;
@@ -67,6 +69,24 @@ public final class MagicCircleConfig {
     public static final ModConfigSpec.BooleanValue ALLOW_SILK_TOUCH;
     public static final ModConfigSpec.BooleanValue DROP_TO_INVENTORY;
 
+    // ---- v2.2：输出节点重构 + 条件节点声明模式 ----
+    public static final ModConfigSpec.BooleanValue DECLARE_MODE_ENABLED;
+    public static final ModConfigSpec.IntValue MAX_DECLARE_NODES_PER_TERMINAL;
+    public static final ModConfigSpec.IntValue MAX_DECLARE_NODES_PER_PREFIX_PATH;
+    public static final ModConfigSpec.IntValue CONDITION_BASE_COST;
+    public static final ModConfigSpec.IntValue CONDITION_EXTRA_GROUP_COST;
+    public static final ModConfigSpec.IntValue RUNTIME_FAIL_COOLDOWN_TICKS;
+    public static final ModConfigSpec.IntValue COMPLEXITY_TAX_PER_POINT;
+    public static final ModConfigSpec.IntValue MAX_PREFIX_PER_TERMINAL;
+    public static final ModConfigSpec.BooleanValue COMPATIBILITY_STRICT;
+    public static final ModConfigSpec.BooleanValue ALLOW_ELEMENT_HEAL;
+    public static final ModConfigSpec.DoubleValue MIN_TOTAL_EFFICIENCY;
+    public static final ModConfigSpec.IntValue DISORDER_DECLARE_THRESHOLD;
+    public static final ModConfigSpec.DoubleValue MISFIRE_CHANCE;
+    public static final ModConfigSpec.DoubleValue SAME_TAG_BONUS;
+    public static final ModConfigSpec.DoubleValue DYE_TERMINAL_STEP;
+    public static final ModConfigSpec.IntValue IMPORT_MAX_CHARS;
+
     static {
         ModConfigSpec.Builder b = new ModConfigSpec.Builder();
 
@@ -94,7 +114,7 @@ public final class MagicCircleConfig {
                 .defineInRange("testRunCostRatio", 0.5, 0.0, 1.0);
         b.pop();
 
-        b.comment("单块成本 = 基础值 × 元素粉 × 语义粉 × 功率粉 × 染料；下面这些是网络级系数")
+        b.comment("节点消耗 = 基础值 × (1-功率效率) × (1-总效率减免) × (1+紊乱×每点惩罚) × (1+全局损耗)；再乘规模 / 层数 / 重叠")
                 .push("magiccircle.cost");
         SCALE_PER_EXTRA_BASE = b.comment("每多一个基座的规模系数增量：S = 1 + 该值 × (基座数 - 1)")
                 .translation("config.dimensional_mana.magiccircle.scale_per_extra_base")
@@ -105,15 +125,21 @@ public final class MagicCircleConfig {
         OVERLAP_STEP = b.comment("每个重叠功能块的重量系数增量：O = 1 + 该值 × 重叠块数")
                 .translation("config.dimensional_mana.magiccircle.overlap_step")
                 .defineInRange("overlapStep", 0.20, 0.0, 10.0);
-        EFFICIENCY_PER_SUPERCONDUCTOR = b.comment("每份超导魔晶粉提供的效率加成")
+        EFFICIENCY_PER_SUPERCONDUCTOR = b.comment("每份超导魔晶粉给全阵带来的额外效率减免（连线超导加成）")
                 .translation("config.dimensional_mana.magiccircle.efficiency_per_superconductor")
                 .defineInRange("efficiencyPerSuperconductor", 0.04, 0.0, 10.0);
-        EFFICIENCY_PER_STABILIZER = b.comment("每个稳定功能块提供的效率加成")
+        EFFICIENCY_PER_STABILIZER = b.comment("每个稳定功能块给全阵带来的额外效率减免")
                 .translation("config.dimensional_mana.magiccircle.efficiency_per_stabilizer")
                 .defineInRange("efficiencyPerStabilizer", 0.02, 0.0, 10.0);
-        EFFICIENCY_CAP = b.comment("效率系数上限；1.60 表示最多省 37.5% 消耗")
+        EFFICIENCY_CAP = b.comment("总效率减免上限（防止零消耗）；0.75 表示最多省 75%")
                 .translation("config.dimensional_mana.magiccircle.efficiency_cap")
-                .defineInRange("efficiencyCap", 1.60, 1.0, 100.0);
+                .defineInRange("efficiencyCap", 0.75, 0.0, 0.95);
+        DISORDER_SUPPRESS_PER_STABILIZER = b.comment("每个稳定功能块压制的紊乱点数（总紊乱先加核心加成再减这个，最低到 0）")
+                .translation("config.dimensional_mana.magiccircle.disorder_suppress_per_stabilizer")
+                .defineInRange("disorderSuppressPerStabilizer", 1, 0, 100);
+        OVERCLOCK_MANA_DRAIN = b.comment("核心超频（烈焰粉）模式的全局魔素损耗；0.25 表示全阵消耗 +25%")
+                .translation("config.dimensional_mana.magiccircle.overclock_mana_drain")
+                .defineInRange("overclockManaDrain", 0.25, 0.0, 10.0);
         STRENGTH_PER_BASE = b.comment("每多一个基座的强度增量：P 的第一项")
                 .translation("config.dimensional_mana.magiccircle.strength_per_base")
                 .defineInRange("strengthPerBase", 0.10, 0.0, 10.0);
@@ -123,7 +149,7 @@ public final class MagicCircleConfig {
         STRENGTH_PER_AMPLIFIER = b.comment("每个增幅块带来的强度增量")
                 .translation("config.dimensional_mana.magiccircle.strength_per_amplifier")
                 .defineInRange("strengthPerAmplifier", 0.05, 0.0, 10.0);
-        CONFLICT_PENALTY = b.comment("每一点紊乱值让启动成本增加的倍率；0.10 表示 +10%")
+        CONFLICT_PENALTY = b.comment("每一点紊乱值让节点消耗增加的倍率；0.10 表示 +10%")
                 .translation("config.dimensional_mana.magiccircle.conflict_penalty")
                 .defineInRange("conflictPenalty", 0.10, 0.0, 10.0);
         HAND_DRAWN_COMPLEXITY = b.comment("手动框选的功能块额外增加的复杂度（系统代劳的代价）")
@@ -210,6 +236,64 @@ public final class MagicCircleConfig {
         DROP_TO_INVENTORY = b.comment("true = 产物直接进背包；false = 原地掉落")
                 .translation("config.dimensional_mana.magiccircle.drop_to_inventory")
                 .define("dropToInventory", false);
+        b.pop();
+
+        b.comment("v2.2 输出节点重构 + 条件节点声明模式（规范第 10~20 节）").push("magiccircle.condition");
+        DECLARE_MODE_ENABLED = b.comment("总开关：true = 输出节点按 v2.2 走「终端执行 / 前置编译词缀」，"
+                        + "并且缺声明的终端 E1 报错；false = 退回 v2.1 的旧结算（输出块直接按元素打）")
+                .translation("config.dimensional_mana.magiccircle.declare_mode_enabled")
+                .define("declareModeEnabled", true);
+        MAX_DECLARE_NODES_PER_TERMINAL = b.comment("一个终端最多接几个声明条件节点")
+                .translation("config.dimensional_mana.magiccircle.max_declare_nodes_per_terminal")
+                .defineInRange("maxDeclareNodesPerTerminal", 3, 1, 16);
+        MAX_DECLARE_NODES_PER_PREFIX_PATH = b.comment("一条「前置→终端」路径最多经过几个声明条件节点")
+                .translation("config.dimensional_mana.magiccircle.max_declare_nodes_per_prefix_path")
+                .defineInRange("maxDeclareNodesPerPrefixPath", 2, 0, 8);
+        CONDITION_BASE_COST = b.comment("条件节点（声明模式）基础魔素：第 21 节，默认 4")
+                .translation("config.dimensional_mana.magiccircle.condition_base_cost")
+                .defineInRange("conditionBaseCost", 4, 0, 1000);
+        CONDITION_EXTRA_GROUP_COST = b.comment("每多声明一个边界组给条件节点加的基础魔素，默认 2")
+                .translation("config.dimensional_mana.magiccircle.condition_extra_group_cost")
+                .defineInRange("conditionExtraGroupCost", 2, 0, 1000);
+        RUNTIME_FAIL_COOLDOWN_TICKS = b.comment("运行时条件不满足哑火后的冷却（刻），默认 40 = 2 秒")
+                .translation("config.dimensional_mana.magiccircle.runtime_fail_cooldown_ticks")
+                .defineInRange("runtimeFailCooldownTicks", 40, 0, 20000);
+        b.pop();
+
+        b.comment("v2.2 词缀系统：容量、复杂度税、兼容矩阵").push("magiccircle.output");
+        COMPLEXITY_TAX_PER_POINT = b.comment("每个复杂度点给终端节点基础值加的魔素（复杂度税），默认 2")
+                .translation("config.dimensional_mana.magiccircle.complexity_tax_per_point")
+                .defineInRange("complexityTaxPerPoint", 2, 0, 100);
+        MAX_PREFIX_PER_TERMINAL = b.comment("一个终端最多能收多少个前置词缀（硬上限，默认 8）")
+                .translation("config.dimensional_mana.magiccircle.max_prefix_per_terminal")
+                .defineInRange("maxPrefixPerTerminal", 8, 1, 64);
+        COMPATIBILITY_STRICT = b.comment("严格兼容：不兼容的词缀直接 E1；关掉后要靠「强制兼容」声明放行（紊乱+1）")
+                .translation("config.dimensional_mana.magiccircle.compatibility_strict")
+                .define("compatibilityStrict", true);
+        ALLOW_ELEMENT_HEAL = b.comment("糖终端的元素治疗扩展（糖+水/光/木 的额外治疗），默认关")
+                .translation("config.dimensional_mana.magiccircle.allow_element_heal")
+                .define("allowElementHeal", false);
+        SAME_TAG_BONUS = b.comment("同意义加成：词缀标签和终端主协议相同时的数值倍率，默认 1.15")
+                .translation("config.dimensional_mana.magiccircle.same_tag_bonus")
+                .defineInRange("sameTagBonus", 1.15, 1.0, 3.0);
+        DYE_TERMINAL_STEP = b.comment("终端染料槽的加值步长：治疗/伤害 += 染料消耗系数 × 该值 × 原值，默认 0.1")
+                .translation("config.dimensional_mana.magiccircle.dye_terminal_step")
+                .defineInRange("dyeTerminalStep", 0.10, 0.0, 1.0);
+        b.pop();
+
+        b.comment("v2.2 效率与紊乱：E_total 允许负值（消耗上浮），紊乱过线必须声明紊乱策略").push("magiccircle.efficiency");
+        MIN_TOTAL_EFFICIENCY = b.comment("总效率减免下限；-1.00 表示最多贵到 2 倍（负减免 = 加价）")
+                .translation("config.dimensional_mana.magiccircle.min_total_efficiency")
+                .defineInRange("minTotalEfficiency", -1.00, -5.0, 0.0);
+        DISORDER_DECLARE_THRESHOLD = b.comment("总紊乱超过这个数还想启动，就必须声明「紊乱策略」边界组，默认 4")
+                .translation("config.dimensional_mana.magiccircle.disorder_declare_threshold")
+                .defineInRange("disorderDeclareThreshold", 4, 0, 100);
+        MISFIRE_CHANCE = b.comment("冲突词缀且没有稳定块时，每次触发的哑火概率，默认 0.15")
+                .translation("config.dimensional_mana.magiccircle.misfire_chance")
+                .defineInRange("misfireChance", 0.15, 0.0, 1.0);
+        IMPORT_MAX_CHARS = b.comment("法阵码导入 / 导出的最大字符数（服务器限额），默认 16384")
+                .translation("config.dimensional_mana.magiccircle.import_max_chars")
+                .defineInRange("importMaxChars", 16384, 256, 65536);
         b.pop();
 
         SPEC = b.build();
