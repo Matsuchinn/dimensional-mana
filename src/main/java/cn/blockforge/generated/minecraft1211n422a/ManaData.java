@@ -27,6 +27,8 @@ public final class ManaData {
             maxMana *= MagicProgression.maxManaMultiplier(player) * (1.0 + amulets * 0.15) * casketMultiplier;
             // 披风的魔素上限加成是独立乘区：伤害偏转 +8%、魔法大师 +25%，各自再乘一次。
             maxMana *= MagicEquipment.maxManaMultiplier(player);
+            // 集齐全部元素天赋后的独立乘区：永久 +10%。
+            maxMana *= ElementTalentData.fullSetMultiplier(player);
             maxBattleQi = (int)Math.round(maxBattleQi * MagicProgression.maxBattleQiMultiplier(player) * casketMultiplier);
             // 斗气进阶的「斗气强化」：每级直接在最终上限上加 10 点（不吃百分比乘区）。
             maxBattleQi += t.getCompound("qiSkills").getInt("battle_qi") * QiProgression.BATTLE_QI_PER_RANK;

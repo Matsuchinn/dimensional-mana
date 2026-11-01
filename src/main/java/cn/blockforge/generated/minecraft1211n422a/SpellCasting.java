@@ -955,6 +955,7 @@ public final class SpellCasting {
         MagicCircleTriggers.clearEvents();
         MobSkills.clearAll();
         MobCombatSystem.clearAll();
+        MobPathing.clearAll();
         NewSpellSystem.clearAll();
         SpellEnvironmentSystem.clearAll();
     }

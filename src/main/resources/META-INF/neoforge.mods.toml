@@ -47,3 +47,10 @@ type="optional"
 versionRange="[19.64,)"
 ordering="AFTER"
 side="CLIENT"
+
+[[dependencies.dimensional_mana]]
+modId="geckolib"
+mandatory=true
+versionRange="[4.9.3,)" 
+ordering="AFTER"
+side="BOTH"

@@ -37,7 +37,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
     private static final int PANEL_HEIGHT = 268;
     private static final int RECIPE_ENTRIES_PER_PAGE = 18;
     private static final List<GuidePage> PAGES = List.of(
-            page("basics", 8), page("crystals", 9), page("furnaces", 9), page("processor", 12),
+            page("basics", 8), page("crystals", 9), page("furnaces", 9), page("processor", 13),
             page("grinding", 8), page("potions", 9), page("exploration", 8), page("enchantments", 12),
             page("magic_equipment", 12), page("progression", 9), page("magic_system", 8), page("schools", 13),
             page("media", 8), page("element_talents", 5), page("element_talents_more", 5),
@@ -915,12 +915,43 @@ public final class ArcaneCodexGuideScreen extends Screen {
             }
             int recipeWidth = shaped ? 3 : Math.min(3, Math.max(1, ingredients.size()));
             int recipeHeight = shaped ? 3 : Math.max(1, (ingredients.size() + recipeWidth - 1) / recipeWidth);
-            CrystalProcessorBlockEntity.OutputStack output = process.outputs().getFirst();
-            ItemStack result = CrystalProcessorBlockEntity.stackOf(output, guideRegistries());
+            // 主图标优先取主产物；像「畸变升华」这种主产物是随机数量产物的，取它当图标。
+            ItemStack result = ItemStack.EMPTY;
+            for (CrystalProcessorBlockEntity.OutputStack output : process.outputs()) {
+                if (!output.itemId().equals(process.primaryProduct())) continue;
+                result = CrystalProcessorBlockEntity.stackOf(output, guideRegistries());
+                if (!result.isEmpty()) break;
+            }
+            if (result.isEmpty()) {
+                for (CrystalProcessorBlockEntity.OutputRoll roll : process.rolls()) {
+                    result = CrystalProcessorBlockEntity.displayStackOf(roll);
+                    if (!result.isEmpty()) break;
+                }
+            }
+            if (result.isEmpty()) {
+                for (CrystalProcessorBlockEntity.OutputStack output : process.outputs()) {
+                    result = CrystalProcessorBlockEntity.stackOf(output, guideRegistries());
+                    if (!result.isEmpty()) break;
+                }
+            }
             if (result.isEmpty()) continue;
-            List<ItemStack> byproducts = process.outputs().stream().skip(1)
-                    .map(extra -> CrystalProcessorBlockEntity.stackOf(extra, guideRegistries()))
-                    .filter(stack -> !stack.isEmpty()).toList();
+            // 剩下的固定产物、随机数量的必定产物、概率产出都列进「副产品」，
+            // 不然随机配方在图鉴里看着像只出一样东西。
+            List<ItemStack> byproducts = new ArrayList<>();
+            for (CrystalProcessorBlockEntity.OutputStack extra : process.outputs()) {
+                ItemStack stack = CrystalProcessorBlockEntity.stackOf(extra, guideRegistries());
+                if (!stack.isEmpty() && !ItemStack.isSameItemSameComponents(stack, result)) byproducts.add(stack);
+            }
+            for (CrystalProcessorBlockEntity.OutputRoll roll : process.rolls()) {
+                ItemStack extra = CrystalProcessorBlockEntity.displayStackOf(roll);
+                if (!extra.isEmpty() && !ItemStack.isSameItemSameComponents(extra, result)) byproducts.add(extra);
+            }
+            if (process.chance() != null) {
+                for (CrystalProcessorBlockEntity.OutputRoll option : process.chance().options()) {
+                    ItemStack extra = CrystalProcessorBlockEntity.displayStackOf(option);
+                    if (!extra.isEmpty() && !ItemStack.isSameItemSameComponents(extra, result)) byproducts.add(extra);
+                }
+            }
             String seconds = String.format(Locale.ROOT, "%g", process.processTicks() / 20.0);
             // 秒数保持简短，避免说明超出配方框。
             if (process.processTicks() % 20 == 0) seconds = Integer.toString(process.processTicks() / 20);

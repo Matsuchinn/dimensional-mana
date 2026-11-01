@@ -805,5 +805,784 @@
         "name": "dimensional_mana:adventurer/restock"
       }
     ]
+  },
+  "crystallized_zombie_ambient": {
+    "subtitle": "subtitles.dimensional_mana.crystallized_zombie",
+    "sounds": [
+      {
+        "name": "minecraft:entity.zombie.ambient",
+        "type": "event",
+        "volume": 0.95,
+        "pitch": 0.5
+      },
+      {
+        "name": "minecraft:entity.zombie.ambient",
+        "type": "event",
+        "volume": 0.85,
+        "pitch": 0.62
+      },
+      {
+        "name": "minecraft:entity.zombie_villager.ambient",
+        "type": "event",
+        "volume": 0.7,
+        "pitch": 0.45
+      },
+      {
+        "name": "minecraft:block.amethyst_block.hit",
+        "type": "event",
+        "volume": 0.45,
+        "pitch": 0.55
+      }
+    ]
+  },
+  "crystallized_zombie_hurt": {
+    "subtitle": "subtitles.dimensional_mana.crystallized_zombie",
+    "sounds": [
+      {
+        "name": "minecraft:entity.zombie.hurt",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.45
+      },
+      {
+        "name": "minecraft:entity.zombie.hurt",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.6
+      },
+      {
+        "name": "minecraft:block.amethyst_block.hit",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 0.7
+      },
+      {
+        "name": "minecraft:block.glass.break",
+        "type": "event",
+        "volume": 0.35,
+        "pitch": 0.6
+      }
+    ]
+  },
+  "crystallized_zombie_death": {
+    "subtitle": "subtitles.dimensional_mana.crystallized_zombie",
+    "sounds": [
+      {
+        "name": "minecraft:entity.zombie.death",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.4
+      },
+      {
+        "name": "minecraft:block.amethyst_cluster.break",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.6
+      },
+      {
+        "name": "minecraft:block.glass.break",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 0.5
+      }
+    ]
+  },
+  "crystallized_zombie_shatter": {
+    "subtitle": "subtitles.dimensional_mana.crystal_shatter",
+    "sounds": [
+      {
+        "name": "dimensional_mana:spell/shatter",
+        "volume": 1.0,
+        "pitch": 1.1
+      },
+      {
+        "name": "dimensional_mana:spell/shatter",
+        "volume": 0.8,
+        "pitch": 0.85
+      },
+      {
+        "name": "minecraft:block.amethyst_cluster.break",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 1.25
+      },
+      {
+        "name": "minecraft:block.glass.break",
+        "type": "event",
+        "volume": 0.7,
+        "pitch": 1.4
+      }
+    ]
+  },
+  "crystallized_zombie_bite": {
+    "subtitle": "subtitles.dimensional_mana.crystal_bite",
+    "sounds": [
+      {
+        "name": "minecraft:entity.panda.bite",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.62
+      },
+      {
+        "name": "minecraft:entity.zombie.attack_iron_door",
+        "type": "event",
+        "volume": 0.55,
+        "pitch": 0.72
+      },
+      {
+        "name": "minecraft:block.amethyst_block.hit",
+        "type": "event",
+        "volume": 0.85,
+        "pitch": 0.55
+      },
+      {
+        "name": "minecraft:entity.generic.eat",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.58
+      }
+    ]
+  },
+  "mana_creeper_ambient": {
+    "subtitle": "subtitles.dimensional_mana.mana_creeper",
+    "sounds": [
+      {
+        "name": "minecraft:entity.creeper.primed",
+        "type": "event",
+        "volume": 0.4,
+        "pitch": 0.3
+      },
+      {
+        "name": "minecraft:entity.warden.heartbeat",
+        "type": "event",
+        "volume": 0.55,
+        "pitch": 0.5
+      },
+      {
+        "name": "minecraft:block.amethyst_block.resonate",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 0.42
+      },
+      {
+        "name": "minecraft:entity.ender_dragon.growl",
+        "type": "event",
+        "volume": 0.28,
+        "pitch": 0.55
+      }
+    ]
+  },
+  "mana_creeper_hurt": {
+    "subtitle": "subtitles.dimensional_mana.mana_creeper.hurt",
+    "sounds": [
+      {
+        "name": "minecraft:entity.creeper.hurt",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.42
+      },
+      {
+        "name": "minecraft:entity.warden.hurt",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 0.6
+      },
+      {
+        "name": "minecraft:block.amethyst_block.hit",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.5
+      },
+      {
+        "name": "minecraft:block.glass.break",
+        "type": "event",
+        "volume": 0.3,
+        "pitch": 0.55
+      }
+    ]
+  },
+  "mana_creeper_death": {
+    "subtitle": "subtitles.dimensional_mana.mana_creeper.death",
+    "sounds": [
+      {
+        "name": "minecraft:entity.creeper.death",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.38
+      },
+      {
+        "name": "minecraft:entity.warden.death",
+        "type": "event",
+        "volume": 0.45,
+        "pitch": 0.65
+      },
+      {
+        "name": "minecraft:block.amethyst_cluster.break",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.5
+      },
+      {
+        "name": "minecraft:entity.ender_dragon.growl",
+        "type": "event",
+        "volume": 0.4,
+        "pitch": 0.4
+      }
+    ]
+  },
+  "mana_creeper_primed": {
+    "subtitle": "subtitles.dimensional_mana.mana_creeper.primed",
+    "sounds": [
+      {
+        "name": "minecraft:entity.creeper.primed",
+        "type": "event",
+        "volume": 1.8,
+        "pitch": 0.45
+      },
+      {
+        "name": "minecraft:entity.creeper.primed",
+        "type": "event",
+        "volume": 1.5,
+        "pitch": 0.32
+      },
+      {
+        "name": "minecraft:entity.warden.heartbeat",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.4
+      },
+      {
+        "name": "minecraft:block.amethyst_block.resonate",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 0.35
+      }
+    ]
+  },
+  "mana_creeper_burst": {
+    "subtitle": "subtitles.dimensional_mana.mana_creeper.burst",
+    "sounds": [
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 1.6,
+        "pitch": 0.6
+      },
+      {
+        "name": "dimensional_mana:spell/shatter",
+        "volume": 1.0,
+        "pitch": 0.7
+      },
+      {
+        "name": "minecraft:block.amethyst_cluster.break",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.6
+      },
+      {
+        "name": "minecraft:block.glass.break",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.5
+      },
+      {
+        "name": "minecraft:entity.warden.sonic_boom",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 0.45
+      }
+    ]
+  },
+  "corrupted_skeleton_ambient": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_skeleton",
+    "sounds": [
+      {
+        "name": "minecraft:entity.skeleton.ambient",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.42
+      },
+      {
+        "name": "minecraft:entity.skeleton.ambient",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 0.3
+      },
+      {
+        "name": "minecraft:entity.wither_skeleton.ambient",
+        "type": "event",
+        "volume": 0.55,
+        "pitch": 0.4
+      },
+      {
+        "name": "minecraft:block.soul_sand.break",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 0.45
+      }
+    ]
+  },
+  "corrupted_skeleton_hurt": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_skeleton.hurt",
+    "sounds": [
+      {
+        "name": "minecraft:entity.skeleton.hurt",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.38
+      },
+      {
+        "name": "minecraft:entity.wither_skeleton.hurt",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.45
+      },
+      {
+        "name": "minecraft:block.amethyst_block.hit",
+        "type": "event",
+        "volume": 0.55,
+        "pitch": 0.4
+      },
+      {
+        "name": "minecraft:block.soul_sand.break",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.5
+      }
+    ]
+  },
+  "corrupted_skeleton_death": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_skeleton.death",
+    "sounds": [
+      {
+        "name": "minecraft:entity.skeleton.death",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.35
+      },
+      {
+        "name": "minecraft:entity.wither_skeleton.death",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.4
+      },
+      {
+        "name": "minecraft:block.soul_sand.break",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 0.35
+      },
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.35,
+        "pitch": 1.2
+      }
+    ]
+  },
+  "corrupted_skeleton_charge": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_skeleton.charge",
+    "sounds": [
+      {
+        "name": "minecraft:entity.warden.sonic_charge",
+        "type": "event",
+        "volume": 1.1,
+        "pitch": 0.75
+      },
+      {
+        "name": "minecraft:block.amethyst_block.resonate",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.4
+      },
+      {
+        "name": "minecraft:entity.warden.heartbeat",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 0.45
+      },
+      {
+        "name": "minecraft:entity.blaze.burn",
+        "type": "event",
+        "volume": 0.7,
+        "pitch": 0.5
+      }
+    ]
+  },
+  "corrupted_skeleton_cast": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_skeleton.cast",
+    "sounds": [
+      {
+        "name": "minecraft:entity.warden.sonic_boom",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 1.15
+      },
+      {
+        "name": "minecraft:entity.wither.shoot",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.7
+      },
+      {
+        "name": "minecraft:entity.arrow.shoot",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.6
+      },
+      {
+        "name": "minecraft:block.amethyst_cluster.break",
+        "type": "event",
+        "volume": 0.7,
+        "pitch": 0.55
+      }
+    ]
+  },
+  "soul_fire_arrow_shoot": {
+    "subtitle": "subtitles.dimensional_mana.soul_fire_arrow.shoot",
+    "sounds": [
+      {
+        "name": "minecraft:entity.arrow.shoot",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.7
+      },
+      {
+        "name": "minecraft:block.fire.ambient",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 1.4
+      },
+      {
+        "name": "minecraft:entity.blaze.burn",
+        "type": "event",
+        "volume": 0.35,
+        "pitch": 1.6
+      }
+    ]
+  },
+  "soul_fire_arrow_hit": {
+    "subtitle": "subtitles.dimensional_mana.soul_fire_arrow.hit",
+    "sounds": [
+      {
+        "name": "minecraft:entity.arrow.hit",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.75
+      },
+      {
+        "name": "minecraft:block.fire.extinguish",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 0.9
+      },
+      {
+        "name": "minecraft:particle.soul_escape",
+        "type": "event",
+        "volume": 0.7,
+        "pitch": 1.1
+      }
+    ]
+  },
+  "corrupted_weaver_ambient": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_weaver",
+    "sounds": [
+      {
+        "name": "minecraft:entity.spider.ambient",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.34
+      },
+      {
+        "name": "minecraft:entity.wither_skeleton.ambient",
+        "type": "event",
+        "volume": 0.55,
+        "pitch": 0.32
+      },
+      {
+        "name": "minecraft:block.amethyst_block.resonate",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.35
+      },
+      {
+        "name": "minecraft:block.sculk_sensor.clicking",
+        "type": "event",
+        "volume": 0.4,
+        "pitch": 0.55
+      }
+    ]
+  },
+  "corrupted_weaver_hurt": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_weaver.hurt",
+    "sounds": [
+      {
+        "name": "minecraft:entity.spider.hurt",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.36
+      },
+      {
+        "name": "minecraft:entity.wither_skeleton.hurt",
+        "type": "event",
+        "volume": 0.55,
+        "pitch": 0.42
+      },
+      {
+        "name": "minecraft:block.amethyst_block.hit",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.4
+      },
+      {
+        "name": "minecraft:block.soul_sand.break",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 0.5
+      }
+    ]
+  },
+  "corrupted_weaver_death": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_weaver.death",
+    "sounds": [
+      {
+        "name": "minecraft:entity.spider.death",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.33
+      },
+      {
+        "name": "minecraft:entity.wither_skeleton.death",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.38
+      },
+      {
+        "name": "minecraft:block.amethyst_cluster.break",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 0.45
+      },
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.3,
+        "pitch": 1.35
+      }
+    ]
+  },
+  "corrupted_weaver_web": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_weaver.web",
+    "sounds": [
+      {
+        "name": "minecraft:block.cobweb.place",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.6
+      },
+      {
+        "name": "minecraft:entity.snowball.throw",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 0.55
+      },
+      {
+        "name": "minecraft:block.amethyst_block.resonate",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 0.6
+      }
+    ]
+  },
+  "corrupted_weaver_venom": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_weaver.venom",
+    "sounds": [
+      {
+        "name": "minecraft:entity.llama.spit",
+        "type": "event",
+        "volume": 1.1,
+        "pitch": 0.55
+      },
+      {
+        "name": "minecraft:block.cobweb.break",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 0.7
+      },
+      {
+        "name": "minecraft:entity.arrow.shoot",
+        "type": "event",
+        "volume": 0.7,
+        "pitch": 0.5
+      }
+    ]
+  },
+  "corrupted_weaver_bite": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_weaver.bite",
+    "sounds": [
+      {
+        "name": "minecraft:entity.spider.attack",
+        "type": "event",
+        "volume": 1.1,
+        "pitch": 0.6
+      },
+      {
+        "name": "minecraft:block.amethyst_cluster.break",
+        "type": "event",
+        "volume": 0.55,
+        "pitch": 0.65
+      },
+      {
+        "name": "minecraft:entity.generic.eat",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 0.5
+      }
+    ]
+  },
+  "void_shade_ambient": {
+    "subtitle": "subtitles.dimensional_mana.void_shade",
+    "sounds": [
+      {
+        "name": "minecraft:entity.enderman.ambient",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.42
+      },
+      {
+        "name": "minecraft:entity.enderman.ambient",
+        "type": "event",
+        "volume": 0.7,
+        "pitch": 0.3
+      },
+      {
+        "name": "minecraft:entity.warden.ambient",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 0.55
+      },
+      {
+        "name": "minecraft:block.amethyst_block.resonate",
+        "type": "event",
+        "volume": 0.45,
+        "pitch": 0.4
+      }
+    ]
+  },
+  "void_shade_hurt": {
+    "subtitle": "subtitles.dimensional_mana.void_shade.hurt",
+    "sounds": [
+      {
+        "name": "minecraft:entity.enderman.hurt",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.38
+      },
+      {
+        "name": "minecraft:entity.enderman.hurt",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.28
+      },
+      {
+        "name": "minecraft:block.amethyst_cluster.break",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.45
+      },
+      {
+        "name": "minecraft:entity.warden.hurt",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 0.6
+      }
+    ]
+  },
+  "void_shade_death": {
+    "subtitle": "subtitles.dimensional_mana.void_shade.death",
+    "sounds": [
+      {
+        "name": "minecraft:entity.enderman.death",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.35
+      },
+      {
+        "name": "minecraft:entity.enderman.death",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.25
+      },
+      {
+        "name": "minecraft:block.amethyst_cluster.break",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 0.35
+      },
+      {
+        "name": "minecraft:entity.generic.explode",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 0.9
+      }
+    ]
+  },
+  "void_shade_charge": {
+    "subtitle": "subtitles.dimensional_mana.void_shade.charge",
+    "sounds": [
+      {
+        "name": "minecraft:entity.warden.sonic_charge",
+        "type": "event",
+        "volume": 1.2,
+        "pitch": 0.6
+      },
+      {
+        "name": "minecraft:entity.enderman.scream",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 0.35
+      },
+      {
+        "name": "minecraft:block.amethyst_block.resonate",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.28
+      },
+      {
+        "name": "minecraft:entity.warden.heartbeat",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.4
+      }
+    ]
+  },
+  "void_shade_cast": {
+    "subtitle": "subtitles.dimensional_mana.void_shade.cast",
+    "sounds": [
+      {
+        "name": "minecraft:entity.warden.sonic_boom",
+        "type": "event",
+        "volume": 1.1,
+        "pitch": 1.0
+      },
+      {
+        "name": "minecraft:entity.wither.shoot",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.55
+      },
+      {
+        "name": "minecraft:entity.enderman.scream",
+        "type": "event",
+        "volume": 0.7,
+        "pitch": 0.5
+      },
+      {
+        "name": "minecraft:block.amethyst_cluster.break",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 0.4
+      }
+    ]
   }
 }

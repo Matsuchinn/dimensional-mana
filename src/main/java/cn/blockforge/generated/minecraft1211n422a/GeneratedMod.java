@@ -48,6 +48,7 @@ import net.minecraft.world.level.storage.loot.predicates.LootItemRandomChanceCon
 import net.minecraft.world.level.storage.loot.providers.number.ConstantValue;
 import net.minecraft.world.level.material.PushReaction;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -121,6 +122,12 @@ public final class GeneratedMod {
     public static final List<String> MAGIC_ITEM_IDS = new ArrayList<>();
     /** 「次元物语：自然」创造页的摆放顺序：刷怪蛋 → 粗糙装备 → 掉落物。 */
     public static final List<String> NATURAL_ITEM_IDS = new ArrayList<>();
+    /** 魂火残渣：魔蚀骸骨的死亡掉落，也是它身上那点魂火留下的唯一实物。 */
+    public static final String SOUL_FIRE_RESIDUE_ID = "soul_fire_residue";
+    /** 魔蚀蜘蛛眼：魔蚀织网者的掉落物。 */
+    public static final String CORRUPTED_SPIDER_EYE_ID = "corrupted_spider_eye";
+    /** 魔蚀蛛丝：破坏魔蚀蛛网掉 1 个。 */
+    public static final String CORRUPTED_SILK_ID = "corrupted_silk";
     /** 「次元物语：斗气」创造页的摆放顺序：饰品 → 手册 → 技能书。 */
     public static final List<String> QI_ITEM_IDS = new ArrayList<>();
     /** 「次元物语：魔导」创造页自己收着的新东西，主创造页不再重复放一遍。 */
@@ -139,6 +146,10 @@ public final class GeneratedMod {
     public static final DeferredHolder<MobEffect, MobEffect> MAGIC_RETORT = EFFECTS.register("magic_retort", MagicRetortEffect::new);
     public static final DeferredHolder<MobEffect, MobEffect> WARDEN_MARK = EFFECTS.register("warden_mark", WardenMarkEffect::new);
     public static final DeferredHolder<MobEffect, MobEffect> ANCIENT_CURSE = EFFECTS.register("ancient_curse", AncientCurseEffect::new);
+    /** 聚魔爆裂体的魔核冷却：200 刻不能动、灰白、受伤 +50%。 */
+    public static final DeferredHolder<MobEffect, MobEffect> CORE_COOLDOWN = EFFECTS.register("core_cooldown", CoreCooldownEffect::new);
+    /** 魔蚀：魔蚀织网者留下的强制侵蚀（每 30 刻 2 点真伤 + 20 魔素）。 */
+    public static final DeferredHolder<MobEffect, MobEffect> MAGIC_EROSION = EFFECTS.register("magic_erosion", MagicErosionEffect::new);
     /** 植物线：魔力充盈（亲和 ×2.5）、“？”与维斯珀德索恩诅咒。 */
     public static final DeferredHolder<MobEffect, MobEffect> MANA_FULLNESS = EFFECTS.register("mana_fullness",
             PlantEffects.Fullness::new);
@@ -206,6 +217,130 @@ public final class GeneratedMod {
                 () -> SoundEvent.createVariableRangeEvent(
                         ResourceLocation.fromNamespaceAndPath(MOD_ID, "elemental_slime_" + id)));
     }
+    /**
+     * r230 晶化行尸的四套音效：低哑呻吟的僵尸 + 紫晶碎裂。sounds.json 里由
+     * 原版僵尸叫声（降调）与魔晶 / 玻璃碎裂音叠加，音色比原版僵尸更破败恐怖。
+     */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CRYSTALLIZED_ZOMBIE_AMBIENT =
+            crystalZombieSound("ambient");
+    public static final DeferredHolder<SoundEvent, SoundEvent> CRYSTALLIZED_ZOMBIE_HURT =
+            crystalZombieSound("hurt");
+    public static final DeferredHolder<SoundEvent, SoundEvent> CRYSTALLIZED_ZOMBIE_DEATH =
+            crystalZombieSound("death");
+    public static final DeferredHolder<SoundEvent, SoundEvent> CRYSTALLIZED_ZOMBIE_SHATTER =
+            crystalZombieSound("shatter");
+    /** r238：狂暴啃咬每一口的晶石牙啃咬声（紫晶碎屑 + 咬合）。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CRYSTALLIZED_ZOMBIE_BITE =
+            crystalZombieSound("bite");
+
+    private static DeferredHolder<SoundEvent, SoundEvent> crystalZombieSound(String id) {
+        return SOUNDS.register("crystallized_zombie_" + id,
+                () -> SoundEvent.createVariableRangeEvent(
+                        ResourceLocation.fromNamespaceAndPath(MOD_ID, "crystallized_zombie_" + id)));
+    }
+    /**
+     * 聚魔爆裂体的五套音效：闷在晶体壳里的低吼、受伤、死亡，加上蓄力的「更响的 primed」
+     * 与魔核炸开的爆响。sounds.json 里全部由原版音效叠层（压低音高 + 龙吟 / 监守者心跳 /
+     * 紫晶碎裂），不需要额外的音频文件。
+     */
+    public static final DeferredHolder<SoundEvent, SoundEvent> MANA_CREEPER_AMBIENT =
+            manaCreeperSound("ambient");
+    public static final DeferredHolder<SoundEvent, SoundEvent> MANA_CREEPER_HURT =
+            manaCreeperSound("hurt");
+    public static final DeferredHolder<SoundEvent, SoundEvent> MANA_CREEPER_DEATH =
+            manaCreeperSound("death");
+    /** 蓄力音：比原版 creeper.primed 更响、更低的充能嘶鸣。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> MANA_CREEPER_PRIMED =
+            manaCreeperSound("primed");
+    /** 魔核爆裂 / 紊乱爆炸的爆响。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> MANA_CREEPER_BURST =
+            manaCreeperSound("burst");
+
+    private static DeferredHolder<SoundEvent, SoundEvent> manaCreeperSound(String id) {
+        return SOUNDS.register("mana_creeper_" + id,
+                () -> SoundEvent.createVariableRangeEvent(
+                        ResourceLocation.fromNamespaceAndPath(MOD_ID, "mana_creeper_" + id)));
+    }
+    /**
+     * 魔蚀骸骨的五套音效：骨头里漏出魂火的低哑呻吟、受伤、死亡，蓄力时越来越尖的魂火啸叫，
+     * 以及巨型箭离弦的爆响。sounds.json 里由原版音效叠层（乞丐骷髅 / 监守者 / 凋灵骷髅 /
+     * 灵魂沙谷的环境音），不需要额外的音频文件。
+     */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_SKELETON_AMBIENT =
+            corruptedSkeletonSound("ambient");
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_SKELETON_HURT =
+            corruptedSkeletonSound("hurt");
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_SKELETON_DEATH =
+            corruptedSkeletonSound("death");
+    /** 4 秒蓄力时的魂火啸叫。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_SKELETON_CHARGE =
+            corruptedSkeletonSound("charge");
+    /** 巨型魂火箭矢离弦。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_SKELETON_CAST =
+            corruptedSkeletonSound("cast");
+    /** 魂火箭矢离弦（普通射击与死亡弹幕共用）。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> SOUL_FIRE_ARROW_SHOOT = SOUNDS.register(
+            "soul_fire_arrow_shoot", () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(MOD_ID, "soul_fire_arrow_shoot")));
+    /** 魂火箭矢命中 / 消散。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> SOUL_FIRE_ARROW_HIT = SOUNDS.register(
+            "soul_fire_arrow_hit", () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(MOD_ID, "soul_fire_arrow_hit")));
+
+    private static DeferredHolder<SoundEvent, SoundEvent> corruptedSkeletonSound(String id) {
+        return SOUNDS.register("corrupted_skeleton_" + id,
+                () -> SoundEvent.createVariableRangeEvent(
+                        ResourceLocation.fromNamespaceAndPath(MOD_ID, "corrupted_skeleton_" + id)));
+    }
+    /**
+     * 魔蚀织网者的六套音效：甲壳摩擦的低频嘶鸣、受伤、死亡，吐丝、毒液喷射和毒牙咬合。
+     * 和魔蚀骸骨一样全部由原版音效叠层（蜘蛛降调 + 紫晶碎裂 + 监守者 / 凋灵调门），
+     * 不需要额外音频文件。
+     */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_WEAVER_AMBIENT =
+            corruptedWeaverSound("ambient");
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_WEAVER_HURT =
+            corruptedWeaverSound("hurt");
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_WEAVER_DEATH =
+            corruptedWeaverSound("death");
+    /** 蛛丝球离体。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_WEAVER_WEB =
+            corruptedWeaverSound("web");
+    /** 毒液射线喷射。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_WEAVER_VENOM =
+            corruptedWeaverSound("venom");
+    /** 毒牙噬咬。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_WEAVER_BITE =
+            corruptedWeaverSound("bite");
+
+    private static DeferredHolder<SoundEvent, SoundEvent> corruptedWeaverSound(String id) {
+        return SOUNDS.register("corrupted_weaver_" + id,
+                () -> SoundEvent.createVariableRangeEvent(
+                        ResourceLocation.fromNamespaceAndPath(MOD_ID, "corrupted_weaver_" + id)));
+    }
+    /**
+     * 虚空蚀影的五套音效：比原版末影人更低更黏的呼吸、受伤、死亡，蓄力时的虚空啸叫，
+     * 以及魔能爆发射 / 眼睛成型的爆响。和前面几只魔素变异体一样，sounds.json 里全部由
+     * 原版音效叠层（末影人 / 监守者 / 凋灵 / 紫晶共鸣，统一降调），不需要额外音频文件。
+     */
+    public static final DeferredHolder<SoundEvent, SoundEvent> VOID_SHADE_AMBIENT =
+            voidShadeSound("ambient");
+    public static final DeferredHolder<SoundEvent, SoundEvent> VOID_SHADE_HURT =
+            voidShadeSound("hurt");
+    public static final DeferredHolder<SoundEvent, SoundEvent> VOID_SHADE_DEATH =
+            voidShadeSound("death");
+    /** 蓄力：两段蓄力时那阵越拧越紧的啸叫。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> VOID_SHADE_CHARGE =
+            voidShadeSound("charge");
+    /** 魔能爆发射 / 魔蚀末影之眼成型的爆响。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> VOID_SHADE_CAST =
+            voidShadeSound("cast");
+
+    private static DeferredHolder<SoundEvent, SoundEvent> voidShadeSound(String id) {
+        return SOUNDS.register("void_shade_" + id,
+                () -> SoundEvent.createVariableRangeEvent(
+                        ResourceLocation.fromNamespaceAndPath(MOD_ID, "void_shade_" + id)));
+    }
     public static final DeferredHolder<MenuType<?>, MenuType<GrinderMenu>> GRINDER_MENU = MENUS.register("grinder",
             () -> new MenuType<>(GrinderMenu::new, FeatureFlags.DEFAULT_FLAGS));
     public static final DeferredHolder<MenuType<?>, MenuType<ManaFurnaceMenu>> MANA_FORGE_MENU = MENUS.register("mana_forge",
@@ -245,6 +380,55 @@ public final class GeneratedMod {
     public static final DeferredHolder<EntityType<?>, EntityType<ManaOrb>> MANA_ORB = ENTITY_TYPES.register(
             "mana_orb", () -> EntityType.Builder.<ManaOrb>of(ManaOrb::new, MobCategory.MISC)
                     .sized(0.5F, 0.5F).clientTrackingRange(8).build(MOD_ID + ":mana_orb"));
+    /** r230：晶化行尸——高魔素区块里普通僵尸的 20% 替换者。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<CrystallizedZombie>> CRYSTALLIZED_ZOMBIE = ENTITY_TYPES.register(
+            "crystallized_zombie", () -> EntityType.Builder.<CrystallizedZombie>of(CrystallizedZombie::new, MobCategory.MONSTER)
+                    .sized(0.6F, 1.95F).clientTrackingRange(10).build(MOD_ID + ":crystallized_zombie"));
+    /** r230：晶爆尸潮抛射的畸变魔晶片弹体。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<DistortedCrystalShardEntity>> DISTORTED_CRYSTAL_SHARD = ENTITY_TYPES.register(
+            "distorted_crystal_shard", () -> EntityType.Builder.<DistortedCrystalShardEntity>of(DistortedCrystalShardEntity::new, MobCategory.MISC)
+                    .sized(0.25F, 0.25F).clientTrackingRange(4).updateInterval(1).build(MOD_ID + ":distorted_crystal_shard"));
+    /** 聚魔爆裂体：魔晶化的苦力怕，尺寸沿用原版苦力怕。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<ManaCreeper>> MANA_CREEPER = ENTITY_TYPES.register(
+            "mana_creeper", () -> EntityType.Builder.<ManaCreeper>of(ManaCreeper::new, MobCategory.MONSTER)
+                    .sized(0.6F, 1.7F).clientTrackingRange(10).build(MOD_ID + ":mana_creeper"));
+    /** 魔蚀骸骨：魔晶化的骷髅，尺寸沿用原版骷髅。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<CorruptedSkeleton>> CORRUPTED_SKELETON = ENTITY_TYPES.register(
+            "corrupted_skeleton", () -> EntityType.Builder.<CorruptedSkeleton>of(CorruptedSkeleton::new, MobCategory.MONSTER)
+                    .sized(0.6F, 1.99F).clientTrackingRange(10).build(MOD_ID + ":corrupted_skeleton"));
+    /** 魂火箭矢：魔蚀骸骨的普通远程攻击，同时用于死亡弹幕与巨型箭裂开后的小箭。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<SoulFireArrowEntity>> SOUL_FIRE_ARROW = ENTITY_TYPES.register(
+            "soul_fire_arrow", () -> EntityType.Builder.<SoulFireArrowEntity>of(SoulFireArrowEntity::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F).clientTrackingRange(8).updateInterval(2).build(MOD_ID + ":soul_fire_arrow"));
+    /** 巨型魂火箭矢：4 秒蓄力大招射出的那一发，飞满 8 格会裂成 4 根小箭。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<GiantSoulFireArrowEntity>> GIANT_SOUL_FIRE_ARROW = ENTITY_TYPES.register(
+            "giant_soul_fire_arrow", () -> EntityType.Builder.<GiantSoulFireArrowEntity>of(GiantSoulFireArrowEntity::new, MobCategory.MISC)
+                    .sized(0.7F, 0.7F).clientTrackingRange(10).updateInterval(1).build(MOD_ID + ":giant_soul_fire_arrow"));
+    /** 流浪剑士：村庄常驻的中立剑术大师，动作动画走 GeckoLib。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<WanderingSwordmaster>> WANDERING_SWORDMASTER = ENTITY_TYPES.register(
+            "wandering_swordmaster", () -> EntityType.Builder.<WanderingSwordmaster>of(WanderingSwordmaster::new, MobCategory.CREATURE)
+                    .sized(0.65F, 1.9F).clientTrackingRange(10).build(MOD_ID + ":wandering_swordmaster"));
+    /** 魔蚀织网者：魔晶化的蜘蛛，尺寸沿用原版蜘蛛。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<CorruptedWeaverEntity>> CORRUPTED_WEAVER = ENTITY_TYPES.register(
+            "corrupted_weaver", () -> EntityType.Builder.<CorruptedWeaverEntity>of(CorruptedWeaverEntity::new, MobCategory.MONSTER)
+                    .sized(1.4F, 0.9F).clientTrackingRange(10).build(MOD_ID + ":corrupted_weaver"));
+    /** 蛛丝球：抛物线的黏丝团，落点铺网。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<WebProjectileEntity>> WEB_PROJECTILE = ENTITY_TYPES.register(
+            "web_projectile", () -> EntityType.Builder.<WebProjectileEntity>of(WebProjectileEntity::new, MobCategory.MISC)
+                    .sized(0.35F, 0.35F).clientTrackingRange(8).updateInterval(1).build(MOD_ID + ":web_projectile"));
+    /** 虚空蚀影：高魔素区块里顶替原版末影人的精英变异体，尺寸沿用原版末影人。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<VoidShadeEntity>> VOID_SHADE = ENTITY_TYPES.register(
+            "void_shade", () -> EntityType.Builder.<VoidShadeEntity>of(VoidShadeEntity::new, MobCategory.MONSTER)
+                    .sized(0.6F, 2.9F).clientTrackingRange(10).build(MOD_ID + ":void_shade"));
+    /** 虚无幻影：虚空蚀影挨打时撕下来的分身，只近战、会自爆回血。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<VoidPhantomEntity>> VOID_PHANTOM = ENTITY_TYPES.register(
+            "void_phantom", () -> EntityType.Builder.<VoidPhantomEntity>of(VoidPhantomEntity::new, MobCategory.MONSTER)
+                    .sized(0.4F, 1.9F).clientTrackingRange(10).build(MOD_ID + ":void_phantom"));
+    /** 魔蚀末影之眼：绕本体旋转的浮游炮，无碰撞、不寻路。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<MagicEyeEntity>> MAGIC_EYE = ENTITY_TYPES.register(
+            "magic_eye", () -> EntityType.Builder.<MagicEyeEntity>of(MagicEyeEntity::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F).clientTrackingRange(8).updateInterval(1)
+                    .build(MOD_ID + ":magic_eye"));
     public static final DeferredHolder<StructureType<?>, StructureType<AncientMagicAltarStructure>> ANCIENT_MAGIC_ALTAR_STRUCTURE_TYPE =
             STRUCTURE_TYPES.register("ancient_magic_altar", () -> () -> AncientMagicAltarStructure.CODEC);
     public static final DeferredHolder<StructurePieceType, StructurePieceType> ANCIENT_MAGIC_ALTAR_PIECE =
@@ -452,17 +636,178 @@ public final class GeneratedMod {
         MOD_BLOCKS.put("ancient_magic_stele", stele);
         magicItem("ancient_magic_stele", ITEMS.register("ancient_magic_stele", () ->
                 new BlockItem(stele.get(), new Item.Properties().rarity(Rarity.EPIC))));
-        magicItem("wandering_witch_spawn_egg", ITEMS.register("wandering_witch_spawn_egg", () ->
-                new DeferredSpawnEggItem(WANDERING_WITCH, 0x24172F, 0x574066,
-                        new Item.Properties().rarity(Rarity.RARE))));
-        magicItem("adventurer_spawn_egg", ITEMS.register("adventurer_spawn_egg", () ->
-                new DeferredSpawnEggItem(ADVENTURER, 0x3D536C, 0xC59A55,
-                        new Item.Properties().rarity(Rarity.RARE))));
         // 「次元物语：自然」的主角：五种魔法植物、植物粉末与植物药剂，排在最前面。
         ManaPlants.register();
+        // r265：魔法页里的刷怪蛋全部搬到自然页，统一排在自然页的刷怪蛋区。
+        registerMovedSpawnEggs();
         registerElementalSlimes();
         registerGoblins();
         registerMagicCircle();
+        registerCrystalZombie();
+        registerManaCreeper();
+        registerCorruptedSkeleton();
+        registerCorruptedWeaver();
+        registerSwordmaster();
+        registerVoidShade();
+    }
+
+    /**
+     * 把刷怪蛋放进「次元物语：自然」，统一排在自然页最后一枚刷怪蛋之后。
+     *
+     * <p>自然页的既定顺序是 魔法植物 → 刷怪蛋 → 粗糙装备 → 掉落物，
+     * 所以插的时候只认 {@code _spawn_egg} 结尾的条目，不会插到植物或装备中间去。</p>
+     */
+    private static void naturalEgg(String name, DeferredItem<? extends Item> item) {
+        MOD_ITEMS.put(name, item);
+        int lastEgg = -1;
+        for (int i = 0; i < NATURAL_ITEM_IDS.size(); i++) {
+            if (NATURAL_ITEM_IDS.get(i).endsWith("_spawn_egg")) lastEgg = i;
+        }
+        if (lastEgg >= 0) NATURAL_ITEM_IDS.add(lastEgg + 1, name);
+        else NATURAL_ITEM_IDS.add(name);
+    }
+
+    /**
+     * r265：把原本摆在「次元物语：魔法」里的刷怪蛋挪到「次元物语：自然」。
+     *
+     * <p>以前刷怪蛋和法术卷轴、法杖挤在魔法页，找一只生物要翻半天；现在模组里所有刷怪蛋
+     * 都集中在自然页的同一段位置上。物品 id 不变，旧存档里的蛋、已经生成的生物都不受影响。</p>
+     */
+    private static void registerMovedSpawnEggs() {
+        naturalEgg("wandering_witch_spawn_egg", ITEMS.register("wandering_witch_spawn_egg", () ->
+                new DeferredSpawnEggItem(WANDERING_WITCH, 0x24172F, 0x574066,
+                        new Item.Properties().rarity(Rarity.RARE))));
+        naturalEgg("adventurer_spawn_egg", ITEMS.register("adventurer_spawn_egg", () ->
+                new DeferredSpawnEggItem(ADVENTURER, 0x3D536C, 0xC59A55,
+                        new Item.Properties().rarity(Rarity.RARE))));
+    }
+
+    /**
+     * r265 虚空蚀影：刷怪蛋放进「次元物语：自然」，排在自然页最后一枚刷怪蛋之后。
+     *
+     * <p>它的掉落物（畸变魔晶片、末影之眼、奥术结晶）都是已有物品，所以这里只补一枚蛋。</p>
+     */
+    private static void registerVoidShade() {
+        naturalEgg("void_shade_spawn_egg", ITEMS.register("void_shade_spawn_egg", () ->
+                new DeferredSpawnEggItem(VOID_SHADE, 0x0D0818, 0x7B3BD6,
+                        new Item.Properties().rarity(Rarity.EPIC))));
+    }
+
+    /**
+     * r230 晶化行尸一行：刷怪蛋放进「次元物语：自然」（排在哥布林刷怪蛋之后），
+     * 畸变魔晶片是它的死亡掉落，走自然页的「掉落物」位置。
+     */
+    private static void registerCrystalZombie() {
+        MOD_ITEMS.put(DistortedCrystalShardEntity.ITEM_ID, ITEMS.register(DistortedCrystalShardEntity.ITEM_ID,
+                () -> new Item(new Item.Properties().rarity(Rarity.RARE))));
+        DeferredItem<Item> egg = ITEMS.register("crystallized_zombie_spawn_egg", () ->
+                new DeferredSpawnEggItem(CRYSTALLIZED_ZOMBIE, 0x2A1438, 0x8B4FD8,
+                        new Item.Properties().rarity(Rarity.RARE)));
+        MOD_ITEMS.put("crystallized_zombie_spawn_egg", egg);
+        // 自然页的既定顺序是 刷怪蛋 → 粗糙装备 → 掉落物：把蛋插到最后一枚刷怪蛋的后面。
+        int lastEgg = -1;
+        for (int i = 0; i < NATURAL_ITEM_IDS.size(); i++) {
+            if (NATURAL_ITEM_IDS.get(i).endsWith("_spawn_egg")) lastEgg = i;
+        }
+        if (lastEgg >= 0) NATURAL_ITEM_IDS.add(lastEgg + 1, "crystallized_zombie_spawn_egg");
+        else NATURAL_ITEM_IDS.add("crystallized_zombie_spawn_egg");
+        NATURAL_ITEM_IDS.add(DistortedCrystalShardEntity.ITEM_ID);
+    }
+
+    /**
+     * 聚魔爆裂体：刷怪蛋同样放进「次元物语：自然」，排在自然页最后一枚刷怪蛋之后。
+     *
+     * <p>它没有新掉落物物品（掉的是畸变魔晶片与元素结晶粉末，两样都已存在），
+     * 所以这里只补一枚蛋。</p>
+     */
+    private static void registerManaCreeper() {
+        DeferredItem<Item> egg = ITEMS.register("mana_creeper_spawn_egg", () ->
+                new DeferredSpawnEggItem(MANA_CREEPER, 0x2B0E45, 0xA86BFF,
+                        new Item.Properties().rarity(Rarity.EPIC)));
+        MOD_ITEMS.put("mana_creeper_spawn_egg", egg);
+        int lastEgg = -1;
+        for (int i = 0; i < NATURAL_ITEM_IDS.size(); i++) {
+            if (NATURAL_ITEM_IDS.get(i).endsWith("_spawn_egg")) lastEgg = i;
+        }
+        if (lastEgg >= 0) NATURAL_ITEM_IDS.add(lastEgg + 1, "mana_creeper_spawn_egg");
+        else NATURAL_ITEM_IDS.add("mana_creeper_spawn_egg");
+    }
+
+    /**
+     * 魔蚀骸骨：刷怪蛋放进「次元物语：自然」（排在自然页最后一枚刷怪蛋之后），
+     * 它的死亡掉落「魂火残渣」是全新的物品，和畸变魔晶片一起摆在自然页的掉落物位置。
+     */
+    private static void registerCorruptedSkeleton() {
+        MOD_ITEMS.put(SOUL_FIRE_RESIDUE_ID, ITEMS.register(SOUL_FIRE_RESIDUE_ID,
+                () -> new Item(new Item.Properties().rarity(Rarity.RARE))));
+        DeferredItem<Item> egg = ITEMS.register("corrupted_skeleton_spawn_egg", () ->
+                new DeferredSpawnEggItem(CORRUPTED_SKELETON, 0x1B1330, 0x7C5CFF,
+                        new Item.Properties().rarity(Rarity.EPIC)));
+        MOD_ITEMS.put("corrupted_skeleton_spawn_egg", egg);
+        int lastEgg = -1;
+        for (int i = 0; i < NATURAL_ITEM_IDS.size(); i++) {
+            if (NATURAL_ITEM_IDS.get(i).endsWith("_spawn_egg")) lastEgg = i;
+        }
+        if (lastEgg >= 0) NATURAL_ITEM_IDS.add(lastEgg + 1, "corrupted_skeleton_spawn_egg");
+        else NATURAL_ITEM_IDS.add("corrupted_skeleton_spawn_egg");
+        // 畸变魔晶片在 registerCrystalZombie 里已经进过自然页，这里只补魂火残渣。
+        NATURAL_ITEM_IDS.add(SOUL_FIRE_RESIDUE_ID);
+    }
+
+    /**
+     * 魔蚀织网者：刷怪蛋放进「次元物语：自然」（排在最后一枚刷怪蛋之后），
+     * 另外把魔蚀蛛网、魔蚀蛛丝、魔蚀蜘蛛眼三样东西摆在自然页的掉落物位置。
+     *
+     * <p>蛛网的方块本体不进掉落表：它会被斗剑砍破 / 剪刀剪破，由
+     * {@link CorruptedWeaverEvents#onLeftClickBlock} 手动掉 1 个魔蚀蛛丝。</p>
+     */
+    /**
+     * r250 流浪剑士一线：专属长剑、剑士徽记与刷怪蛋，全部放进「次元物语：斗气」创造页。
+     *
+     * <p>长剑的数值写在 {@link SwordmasterWeaponItem}（攻击 12、4 格、0.8 倍攻速、耐久 III + 锋利 V）；
+     * 徽记是它的死亡掉落；刷怪蛋用于让玩家自己摆一只到村庄里。</p>
+     */
+    private static void registerSwordmaster() {
+        MOD_ITEMS.put(SwordmasterWeaponItem.ITEM_ID, ITEMS.register(SwordmasterWeaponItem.ITEM_ID,
+                () -> new SwordmasterWeaponItem(SwordmasterWeaponItem.bladeProperties())));
+        MOD_ITEMS.put(SwordmasterSigilItem.ITEM_ID, ITEMS.register(SwordmasterSigilItem.ITEM_ID,
+                () -> new SwordmasterSigilItem(new Item.Properties().rarity(Rarity.RARE))));
+        DeferredItem<Item> egg = ITEMS.register("wandering_swordmaster_spawn_egg", () ->
+                new DeferredSpawnEggItem(WANDERING_SWORDMASTER, 0x2A3550, 0xD8B85A,
+                        new Item.Properties().rarity(Rarity.RARE)));
+        MOD_ITEMS.put("wandering_swordmaster_spawn_egg", egg);
+        QI_ITEM_IDS.add(SwordmasterWeaponItem.ITEM_ID);
+        QI_ITEM_IDS.add(SwordmasterSigilItem.ITEM_ID);
+        QI_ITEM_IDS.add("wandering_swordmaster_spawn_egg");
+    }
+
+    private static void registerCorruptedWeaver() {
+        MOD_ITEMS.put(CORRUPTED_SPIDER_EYE_ID, ITEMS.register(CORRUPTED_SPIDER_EYE_ID, () ->
+                new Item(new Item.Properties().rarity(Rarity.RARE))));
+        MOD_ITEMS.put(CORRUPTED_SILK_ID, ITEMS.register(CORRUPTED_SILK_ID, () ->
+                new Item(new Item.Properties().rarity(Rarity.RARE))));
+        // 蛛网方块：硬度给得很高，正常挖掘磨不动，只认剑砍 3 下 / 剪刀 1 下。
+        DeferredBlock<Block> web = BLOCKS.register(CorruptedWebBlock.BLOCK_ID, () -> new CorruptedWebBlock(
+                BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_PURPLE)
+                        .strength(50.0F, 1200.0F).sound(SoundType.COBWEB)
+                        .noCollission().noOcclusion().dynamicShape()
+                        .pushReaction(PushReaction.DESTROY).noLootTable()));
+        MOD_BLOCKS.put(CorruptedWebBlock.BLOCK_ID, web);
+        MOD_ITEMS.put(CorruptedWebBlock.BLOCK_ID, ITEMS.register(CorruptedWebBlock.BLOCK_ID, () ->
+                new BlockItem(web.get(), new Item.Properties().rarity(Rarity.UNCOMMON))));
+        DeferredItem<Item> egg = ITEMS.register("corrupted_weaver_spawn_egg", () ->
+                new DeferredSpawnEggItem(CORRUPTED_WEAVER, 0x1A0F26, 0x9A4BFF,
+                        new Item.Properties().rarity(Rarity.EPIC)));
+        MOD_ITEMS.put("corrupted_weaver_spawn_egg", egg);
+        int lastEgg = -1;
+        for (int i = 0; i < NATURAL_ITEM_IDS.size(); i++) {
+            if (NATURAL_ITEM_IDS.get(i).endsWith("_spawn_egg")) lastEgg = i;
+        }
+        if (lastEgg >= 0) NATURAL_ITEM_IDS.add(lastEgg + 1, "corrupted_weaver_spawn_egg");
+        else NATURAL_ITEM_IDS.add("corrupted_weaver_spawn_egg");
+        NATURAL_ITEM_IDS.add(CorruptedWebBlock.BLOCK_ID);
+        NATURAL_ITEM_IDS.add(CORRUPTED_SILK_ID);
+        NATURAL_ITEM_IDS.add(CORRUPTED_SPIDER_EYE_ID);
     }
 
     /**
@@ -778,7 +1123,38 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(events::onWake);
         NeoForge.EVENT_BUS.addListener(CriticalSystem::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(events::onIncomingDamage);
+        // r230 晶化行尸：致命伤拦截要排在 ManaEvents 的受击链之后（/kill 先被收窄成有限值才拦得住）。
+        NeoForge.EVENT_BUS.addListener(CrystallizedZombieEvents::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(CrystallizedZombieEvents::onDamagePost);
+        NeoForge.EVENT_BUS.addListener(CrystallizedZombieEvents::onFinalizeSpawn);
+        NeoForge.EVENT_BUS.addListener(CrystallizedZombieEvents::onLivingDeath);
+        // 聚魔爆裂体：魔核冷却期受伤 +50%，死亡时照常引爆紊乱爆炸。
+        NeoForge.EVENT_BUS.addListener(ManaCreeperEvents::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(ManaCreeperEvents::onLivingDeath);
+        // 魔蚀骸骨：死亡瞬间炸出一轮 8 根魂火箭矢的死亡弹幕（刷怪替换走上面那条 onFinalizeSpawn）。
+        NeoForge.EVENT_BUS.addListener(CorruptedSkeletonEvents::onLivingDeath);
+        // 魔蚀织网者：元素抗性 / 易伤、光系化网、魔蚀的净化限制、死亡清网、自然刷新、剑剪破网。
+        NeoForge.EVENT_BUS.addListener(CorruptedWeaverEvents::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(CorruptedWeaverEvents::onLightDamage);
+        NeoForge.EVENT_BUS.addListener(CorruptedWeaverEvents::onEffectRemove);
+        NeoForge.EVENT_BUS.addListener(CorruptedWeaverEvents::onLivingDeath);
+        NeoForge.EVENT_BUS.addListener(CorruptedWeaverEvents::onFinalizeSpawn);
+        NeoForge.EVENT_BUS.addListener(CorruptedWeaverEvents::onLeftClickBlock);
+        // 虚空蚀影：受击分身、眼睛反击、幻影自爆回血、本体死亡清理召唤物。
+        NeoForge.EVENT_BUS.addListener(VoidShadeEvents::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(VoidShadeEvents::onDamagePost);
+        NeoForge.EVENT_BUS.addListener(VoidShadeEvents::onLivingDeath);
+        // 流浪剑士：雇佣交互、友伤豁免、完美格挡、远程格挡、瞬身闪避、喝药/集气打断、死亡清理。
+        NeoForge.EVENT_BUS.addListener(SwordmasterEvents::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(SwordmasterEvents::onProjectileImpact);
+        NeoForge.EVENT_BUS.addListener(SwordmasterEvents::onEntityInteract);
+        NeoForge.EVENT_BUS.addListener(SwordmasterEvents::onLivingDeath);
+        // 玩家举着掉落的长剑格挡：完美格挡全免、普通格挡七成减伤。
+        NeoForge.EVENT_BUS.addListener(SwordmasterVillageSpawning::onChunkLoad);
         NeoForge.EVENT_BUS.addListener(RelicEffects::onIncomingDamage);
+        // 天使庇护的保命兜底要排在所有伤害乘区之后；死亡兜底同理，排在其它死亡处理之后。
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, RelicEffects::onAngelShelterFinalGuard);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, RelicEffects::onAngelShelterDeathGuard);
         NeoForge.EVENT_BUS.addListener(RelicEffects::onDamagePre);
         NeoForge.EVENT_BUS.addListener(RelicEffects::onDamagePost);
         NeoForge.EVENT_BUS.addListener(RelicEffects::onHeal);
@@ -864,6 +1240,9 @@ public final class GeneratedMod {
                         MagicCircleDrawing.onPlayerLeft(leftEvent.getEntity()));
         NeoForge.EVENT_BUS.addListener(
                 (net.neoforged.neoforge.event.server.ServerStoppingEvent stopEvent) -> MagicCircleDrawing.flushAll());
+        // 法阵渲染同步：换服清指纹缓存，防旧世界的阵被新世界同 id 顶掉不刷新。
+        NeoForge.EVENT_BUS.addListener(
+                (net.neoforged.neoforge.event.server.ServerStoppingEvent stopEvent) -> MagicCircleRenderSync.clearAll());
         // r217 门控保持帧（规范 v3.0 二）：跳跃 / 攻击 / 受击这类 1 刻瞬时动作记 0.5 秒宽限，
         // 20 刻一轮的判定也抓得住；停服清缓存防旧刻号误判。
         NeoForge.EVENT_BUS.addListener(MagicCircleGates::onJump);
@@ -901,6 +1280,19 @@ public final class GeneratedMod {
         event.put(NewSpellContent.POISON_TENTACLE.get(), SpellSummon.attributes(8, 4, 0, 0, 0).build());
         for (GoblinVariant variant : GoblinVariant.values())
             event.put(goblinType(variant), Goblin.createAttributes().build());
+        // r230 晶化行尸：80 生命、半速、20 甲、完全免击退。
+        event.put(CRYSTALLIZED_ZOMBIE.get(), CrystallizedZombie.createAttributes().build());
+        // 聚魔爆裂体：80 生命、原版苦力怕 1.5 倍移速（0.375）、爆炸免疫。
+        event.put(MANA_CREEPER.get(), ManaCreeper.createAttributes().build());
+        // r244 魔蚀骸骨：80 生命、原版骷髅 1.35 倍移速（0.3375）、4000 魔素。
+        event.put(CORRUPTED_SKELETON.get(), CorruptedSkeleton.createAttributes().build());
+        // 魔蚀织网者：80 生命、原版蜘蛛 1.5 倍移速（0.45）、跳跃高度 3 倍、5000 魔素。
+        event.put(CORRUPTED_WEAVER.get(), CorruptedWeaverEntity.createAttributes().build());
+        // 流浪剑士：150 生命、20 护甲、走速 0.3 / 追击 0.45、1000 魔素 / 6000 斗气。
+        event.put(WANDERING_SWORDMASTER.get(), WanderingSwordmaster.createAttributes().build());
+        // r265 虚空蚀影：200 生命、0.375 移速（原版末影人 1.25 倍）、8 物理 + 36 奥术近战、10000 魔素 / 2000 斗气。
+        event.put(VOID_SHADE.get(), VoidShadeEntity.createAttributes().build());
+        event.put(VOID_PHANTOM.get(), VoidPhantomEntity.createAttributes().build());
         // 寒冰傀儡：35 生命、与雪傀儡一致的 0.2 移速，本身不近战，只射冰锥。
         event.put(NewSpellContent.FROST_GOLEM.get(), SpellSummon.attributes(35, 0, 0.2, 0, 0).build());
     }
@@ -918,7 +1310,7 @@ public final class GeneratedMod {
             ELEMENTAL_SLIMES.put(variant, type);
             MOD_ITEMS.put(variant.powderId(), ITEMS.registerSimpleItem(variant.powderId(),
                     new Item.Properties().rarity(Rarity.UNCOMMON)));
-            magicItem(variant.spawnEggId(), ITEMS.register(variant.spawnEggId(), () ->
+            naturalEgg(variant.spawnEggId(), ITEMS.register(variant.spawnEggId(), () ->
                     new DeferredSpawnEggItem(type, variant.color() & 0xFFFFFF,
                             (variant.color() ^ 0x6A4C7A) & 0xFFFFFF, new Item.Properties().rarity(Rarity.RARE))));
         }

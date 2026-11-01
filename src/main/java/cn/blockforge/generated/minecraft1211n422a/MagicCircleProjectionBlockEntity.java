@@ -70,6 +70,27 @@ public final class MagicCircleProjectionBlockEntity extends BlockEntity {
         return Collections.unmodifiableList(layers);
     }
 
+    // ------------------------------------------------------------------ 渲染包（客户端缓存）
+
+    /**
+     * 客户端渲染包：由层数据摊平一次、缓存下来，渲染器每帧只读。
+     * 层一有增减（含收到服务端 updateTag 触发 loadAdditional）就作废重建。
+     */
+    private MagicCircleRenderPacket renderPacket;
+
+    public MagicCircleRenderPacket renderPacket() {
+        MagicCircleRenderPacket cached = renderPacket;
+        if (cached == null) {
+            List<MagicCircleNetwork.Layer> merged = new ArrayList<>();
+            for (MagicCircleBlueprint blueprint : layers) merged.addAll(blueprint.layers());
+            cached = MagicCircleRenderPacket.build(merged, baseW(), baseH());
+            renderPacket = cached;
+        }
+        return cached;
+    }
+
+    private void invalidateRenderPacket() { renderPacket = null; }
+
     public boolean isEmpty() { return layers.isEmpty(); }
 
     public int layerCount() { return layers.size(); }
@@ -109,6 +130,7 @@ public final class MagicCircleProjectionBlockEntity extends BlockEntity {
         if (blueprint == null || full()) return false;
         if (!layers.isEmpty() && !sameSize(blueprint)) return false;
         layers.add(blueprint);
+        invalidateRenderPacket();
         sync();
         return true;
     }
@@ -118,6 +140,7 @@ public final class MagicCircleProjectionBlockEntity extends BlockEntity {
         if (layers.isEmpty()) return null;
         MagicCircleBlueprint removed = layers.remove(layers.size() - 1);
         if (layers.isEmpty()) setRunning(false);
+        invalidateRenderPacket();
         sync();
         return removed;
     }
@@ -126,6 +149,7 @@ public final class MagicCircleProjectionBlockEntity extends BlockEntity {
         if (layers.isEmpty()) return;
         layers.clear();
         setRunning(false);
+        invalidateRenderPacket();
         sync();
     }
 
@@ -253,6 +277,7 @@ public final class MagicCircleProjectionBlockEntity extends BlockEntity {
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
         layers.clear();
+        invalidateRenderPacket();
         ListTag list = tag.getList(LAYERS_TAG, Tag.TAG_COMPOUND);
         for (int i = 0; i < list.size() && i < Math.max(1, maxLayers()); i++) {
             MagicCircleBlueprint blueprint = MagicCircleBlueprint.fromTag(list.getCompound(i));

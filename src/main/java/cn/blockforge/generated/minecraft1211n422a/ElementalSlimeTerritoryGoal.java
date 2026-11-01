@@ -51,6 +51,8 @@ public final class ElementalSlimeTerritoryGoal extends Goal {
         long now = slime.level().getGameTime();
         for (LivingEntity entity : nearby) {
             if (entity instanceof Player && slime.level().getDifficulty() == Difficulty.PEACEFUL) continue;
+            // 刚被判定「够不着」的人先放过 10 秒，不然它刚放弃又被拉回去，继续贴墙。
+            if (MobPathing.isUnreachable(slime, entity)) continue;
             long since = exposureSince.computeIfAbsent(entity.getUUID(), ignored -> now);
             if (now - since >= tolerance) {
                 selected = entity;

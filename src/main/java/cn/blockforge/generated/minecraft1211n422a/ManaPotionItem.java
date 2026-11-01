@@ -51,6 +51,8 @@ public final class ManaPotionItem extends Item {
                         PlantEffects.FULLNESS_TICKS, 0, false, true));
             }
             ManaData.restoreMana(entity, amount, true);
+            // 补魔剂是【魔蚀】的白名单净化手段之一：喝下去顺手把侵蚀洗掉。
+            MagicErosionEffect.cleanse(entity);
             if (dangerous) entity.addEffect(new MobEffectInstance(MobEffects.WITHER, 3600, 0));
             entity.playSound(SoundEvents.GENERIC_DRINK, 0.8F, 1.15F);
             if (!(entity instanceof Player player) || !player.getAbilities().instabuild) {

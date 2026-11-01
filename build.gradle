@@ -2,26 +2,31 @@ plugins {
     id 'java-library'
     id 'net.neoforged.moddev' version '2.0.143'
 }
+
 version = mod_version
 group = mod_group_id
 base { archivesName = mod_id }
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
 repositories {
+    // 👇 清空默认，改用国内能连的镜像 👇
     clear()
     maven { url = "https://libraries.minecraft.net/" }
     maven { url = "https://neoforged.forgecdn.net/releases" }
     maven { url = "https://neoforged.forgecdn.net/mojang-meta" }
-    maven { 
-        name = "Jared's maven" 
-        url = "https://maven.blamejared.com/" 
-    }
-     maven {
-        name = "Modrinth"
-        url = "https://api.modrinth.com/maven"
-    }
+    
+    // 前置模组的仓库
+    maven { url = 'https://maven.theillusivec4.top/' } // Curios
+    maven { url = 'https://maven.blamejared.com/' }    // JEI
+    maven { url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' } // GeckoLib
 }
+
 dependencies {
-    implementation "maven.modrinth:BaqCltvf:6UN1b1Vc"
+    // 前置依赖
+    implementation "top.theillusivec4.curios:curios-neoforge:${curios_version}"
+    implementation "software.bernie.geckolib:geckolib-neoforge-${minecraft_version}:${geckolib_version}"
+    
+    // JEI 编译依赖
     compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
     compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}"
 }
@@ -31,16 +36,52 @@ neoForge {
     runs { client { client() }; server { server(); programArgument '--nogui' } }
     mods { "${mod_id}" { sourceSet(sourceSets.main) } }
 }
+
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+
+// 👇 批量生成模型别名脚本（绝对不要删） 👇
+def sharedItemModelAliases = [:]
+def fragmentGrades = ['lesser', 'medium', 'advanced', 'supreme', 'special']
+def elementIds = ['fire', 'water', 'ice', 'lightning', 'wind', 'earth', 'nature', 'metal', 'light', 'poison', 'sound']
+def schoolIds = ['destruction', 'protection', 'healing', 'blessing', 'curse', 'control', 'summon',
+                 'movement', 'divination', 'psychic', 'time', 'space', 'chaos']
+elementIds.each { element ->
+    fragmentGrades.each { grade -> sharedItemModelAliases["${grade}_${element}_fragment"] = 'magic_fragment_shared' }
+    sharedItemModelAliases["${element}_talent_scroll"] = 'talent_scroll_shared'
+}
+fragmentGrades.each { grade -> sharedItemModelAliases["${grade}_arcane_fragment"] = 'magic_fragment_shared' }
+schoolIds.each { school ->
+    fragmentGrades.each { grade -> sharedItemModelAliases["${grade}_${school}_school_fragment"] = 'school_fragment_shared' }
+}
+
+def generatedItemModelResources = layout.buildDirectory.dir('generated/resources/shared_item_models')
+def generateSharedItemModels = tasks.register('generateSharedItemModels') {
+    inputs.property('aliases', sharedItemModelAliases)
+    outputs.dir(generatedItemModelResources)
+    doLast {
+        File outputRoot = generatedItemModelResources.get().asFile
+        delete(outputRoot)
+        File modelDir = new File(outputRoot, 'assets/dimensional_mana/models/item')
+        modelDir.mkdirs()
+        sharedItemModelAliases.each { itemId, parentId ->
+            new File(modelDir, "${itemId}.json").setText(
+                    "{\n  \"parent\": \"dimensional_mana:item/${parentId}\"\n}\n", 'UTF-8')
+        }
+    }
+}
+
+sourceSets.main.resources.srcDir(generatedItemModelResources)
+
 processResources {
+    dependsOn(generateSharedItemModels)
     def props = [minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
                  neo_version: neo_version, loader_version_range: loader_version_range,
                  mod_id: mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version]
     inputs.properties props
     filteringCharset = 'UTF-8'
     filesMatching('META-INF/neoforge.mods.toml') { expand props }
+    
 }
-// 强制忽略打包时产生的重复文件。
 tasks.withType(Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

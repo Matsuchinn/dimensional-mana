@@ -108,8 +108,19 @@ public final class ProfessionalAppraisalSystem {
                 skill == null ? 0 : skill.remainingTicks());
     }
 
-    /** 目标每秒实际能回的魔素：原版生物读难度恢复，玩家按亲和与法杖加成算。 */
+    /**
+     * 目标每秒实际能回的魔素。
+     *
+     * <p>r263：先问生物自己 —— 本模组里自己管理恢复的生物（{@link ManaRegenSource}，比如
+     * 流浪剑士）会返回它 tick 里真正加的数字，眼镜和实际恢复才对得上；以前这类生物在通用
+     * tag 里写的是 0，HUD 上就一直显示「M恢复 0.0/s」。</p>
+     *
+     * <p>其余生物还是老规矩：原版生物读难度恢复，玩家按亲和与法杖加成算。</p>
+     */
     private static double manaRegenPerSecond(LivingEntity entity) {
+        if (entity instanceof ManaRegenSource source) {
+            return Math.max(0.0, source.manaRegenPerSecond());
+        }
         if (MobCombatSystem.enabled() && MobCombatSystem.isManagedMob(entity)) {
             return Math.max(0.0, entity.getPersistentData()
                     .getCompound(ManaData.ROOT_TAG).getDouble("mobManaRegen"));
@@ -129,8 +140,11 @@ public final class ProfessionalAppraisalSystem {
         return 0.0;
     }
 
-    /** 目标每秒实际能回的斗气：原版敌对生物在初始化时写了 mobBattleQiRegen，其余为 0。 */
+    /** 目标每秒实际能回的斗气：自己管理恢复的生物问它本人，其余读初始化时写下的 mobBattleQiRegen。 */
     private static double battleQiRegenPerSecond(LivingEntity entity) {
+        if (entity instanceof ManaRegenSource source) {
+            return Math.max(0.0, source.battleQiRegenPerSecond());
+        }
         if (MobCombatSystem.isManagedMob(entity)) {
             return Math.max(0.0, entity.getPersistentData()
                     .getCompound(ManaData.ROOT_TAG).getDouble("mobBattleQiRegen"));

@@ -120,6 +120,7 @@ public final class ClientModEvents {
         NeoForge.EVENT_BUS.addListener(ClientReactionText::tick);
         NeoForge.EVENT_BUS.addListener(ClientReactionText::renderWorld);
         NeoForge.EVENT_BUS.addListener(ClientFrozenVisuals::tick);
+        NeoForge.EVENT_BUS.addListener(SwordmasterVisuals::tick);
         NeoForge.EVENT_BUS.addListener(ClientManaSenseState::tick);
         NeoForge.EVENT_BUS.addListener(ClientManaRadarState::tick);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event)
@@ -135,6 +136,7 @@ public final class ClientModEvents {
             qiCastSuppressed = false;
         });
         NeoForge.EVENT_BUS.addListener(ClientFrozenVisuals::render);
+        NeoForge.EVENT_BUS.addListener(SwordmasterVisuals::render);
         NeoForge.EVENT_BUS.addListener(ClientManaSenseState::render);
         NeoForge.EVENT_BUS.addListener(ClientManaRadarState::render);
         NeoForge.EVENT_BUS.addListener(InventoryGlowEffects::render);
@@ -152,6 +154,8 @@ public final class ClientModEvents {
                 ClientManaConfig.SPEC, "dimensional_mana-client.toml");
         container.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT,
                 HudConfig.SPEC, "dimensional_mana-hud.toml");
+        container.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT,
+                RenderCompatConfig.SPEC, "dimensional_mana-rendercompat.toml");
         // 模组列表里点「配置」直接进 HUD 可视化编辑器（IConfigScreenFactory 是 NeoForge 的扩展点）。
         container.registerExtensionPoint(net.neoforged.neoforge.client.gui.IConfigScreenFactory.class,
                 (modContainer, parent) -> new HudConfigScreen(parent));
@@ -579,9 +583,29 @@ public final class ClientModEvents {
         event.registerEntityRenderer(NewSpellContent.BLAZING_SUN.get(), BlazingSunRenderer::new);
         event.registerEntityRenderer(NewSpellContent.METEOR_STONE.get(), MeteorStoneRenderer::new);
         event.registerEntityRenderer(GeneratedMod.MANA_ORB.get(), ManaOrbRenderer::new);
+        // r230 晶化行尸与它的晶爆尸潮弹片。
+        event.registerEntityRenderer(GeneratedMod.CRYSTALLIZED_ZOMBIE.get(), CrystallizedZombieRenderer::new);
+        event.registerEntityRenderer(GeneratedMod.DISTORTED_CRYSTAL_SHARD.get(), DistortedCrystalShardRenderer::new);
+        // 聚魔爆裂体：两张贴图（平时 / 魔核冷却灰白）+ 蓄力闪白。
+        event.registerEntityRenderer(GeneratedMod.MANA_CREEPER.get(), ManaCreeperRenderer::new);
+        // 魔蚀骸骨与它的两种魂火箭矢。
+        event.registerEntityRenderer(GeneratedMod.CORRUPTED_SKELETON.get(), CorruptedSkeletonRenderer::new);
+        event.registerEntityRenderer(GeneratedMod.CORRUPTED_WEAVER.get(), CorruptedWeaverRenderer::new);
+        // r250 流浪剑士：GeckoLib 骨骼动画渲染（玩家比例模型 + 独立皮肤 + 模型内长剑）。
+        event.registerEntityRenderer(GeneratedMod.WANDERING_SWORDMASTER.get(), SwordmasterRenderer::new);
+        event.registerEntityRenderer(GeneratedMod.WEB_PROJECTILE.get(), WebProjectileRenderer::new);
+        // r265 虚空蚀影三兄弟：本体（换贴图的末影人）、半透明分身、绕圈浮游的眼球。
+        event.registerEntityRenderer(GeneratedMod.VOID_SHADE.get(), VoidShadeRenderer::new);
+        event.registerEntityRenderer(GeneratedMod.VOID_PHANTOM.get(), VoidPhantomRenderer::new);
+        event.registerEntityRenderer(GeneratedMod.MAGIC_EYE.get(), MagicEyeRenderer::new);
+        event.registerEntityRenderer(GeneratedMod.SOUL_FIRE_ARROW.get(), SoulFireArrowRenderer::new);
+        event.registerEntityRenderer(GeneratedMod.GIANT_SOUL_FIRE_ARROW.get(), SoulFireArrowRenderer::new);
         // 第 3 阶段：贴面投影锚点上的光点 / 连线 / 呼吸脉冲。
         event.registerBlockEntityRenderer(GeneratedMod.MAGIC_CIRCLE_PROJECTION_BLOCK_ENTITY.get(),
                 MagicCircleProjectionRenderer::new);
+        // 绘制台：台上存有有效阵图时，原点基座上方常驻渲染三层动态法阵。
+        event.registerBlockEntityRenderer(GeneratedMod.MAGIC_CIRCLE_BASE_BLOCK_ENTITY.get(),
+                MagicCircleRenderer::new);
     }
 
     /** 元素结晶戒指共用一张底图：第二层宝石按元素染色，所以十二枚外观一致、颜色不同。 */

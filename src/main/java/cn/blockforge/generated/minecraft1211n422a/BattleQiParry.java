@@ -139,6 +139,16 @@ public final class BattleQiParry {
         return state != null && state.stance;
     }
 
+    /**
+     * 模组级的「招架中」接口：给 AI 读指令用，别的地方不要再自己去翻内部 State。
+     *
+     * <p>流浪剑士的 {@code SwordmasterCombatGoal} 在挥刀前用这一条判断目标是否摆着招架姿态，
+     * 是就强行取消连招、后撤、反手甩剑气；客户端/非玩家实体一律返回 false。</p>
+     */
+    public static boolean isParrying(Player player) {
+        return player instanceof ServerPlayer serverPlayer && inStance(serverPlayer);
+    }
+
     /** 客户端长按右键 5 刻后发来的「进入姿态」。 */
     public static void begin(ServerPlayer player) {
         if (!canParry(player)) {
@@ -458,11 +468,39 @@ public final class BattleQiParry {
         Vec3 center = projectile.getBoundingBox().getCenter();
         if (player.level() instanceof ServerLevel level) projectileBurst(level, center, projectileFlavor(projectile));
         projectile.discard();
-        feedback(player, ParryFeedbackPayload.PROJECTILE, center);
+        if (projectile instanceof GiantSoulFireArrowEntity) {
+            // 巨型魂火箭矢穿盾、但不吃招架：挡下来按「完美格挡」结算——
+            // 白色爆闪 + 金色光晕 + 那套剑鸣，手感上配得上「徒手接住一发大招」。
+            perfectProjectileParry(player, center);
+        } else {
+            feedback(player, ParryFeedbackPayload.PROJECTILE, center);
+        }
         return true;
     }
 
+    /**
+     * 弹开巨型魂火箭矢的完美格挡表现。
+     *
+     * <p>完美招架的正常流程要眩晕一只怪物，而这里弹的是弹射物、没有「被弹开的那只怪」，
+     * 所以只放画面与音效（金色的十字冲击、准心金圈、白闪、剑鸣），不结算眩晕与破绽。</p>
+     */
+    private static void perfectProjectileParry(ServerPlayer player, Vec3 at) {
+        if (player.level() instanceof ServerLevel level) {
+            level.sendParticles(ParticleTypes.SWEEP_ATTACK, at.x, at.y, at.z, 3, 0.4, 0.4, 0.4, 0.0);
+            level.sendParticles(ParticleTypes.CRIT, at.x, at.y, at.z, 26, 0.5, 0.4, 0.5, 0.55);
+            level.sendParticles(ParticleTypes.FIREWORK, at.x, at.y, at.z, 16, 0.45, 0.4, 0.45, 0.28);
+            level.sendParticles(ParticleTypes.ENCHANT, at.x, at.y + 0.3, at.z, 14, 0.55, 0.45, 0.55, 0.4);
+            level.sendParticles(ParticleTypes.FLASH, at.x, at.y, at.z, 1, 0.0, 0.0, 0.0, 0.0);
+            ring(level, at, ParticleTypes.END_ROD, 24, 1.0);
+            extraFlourish(level, at);
+            ParrySounds.perfect(level, at, level.getRandom());
+        }
+        ParryFeedbackPayload.sendFlash(player, ParryFeedbackPayload.PERFECT, at, -1);
+    }
+
     private static String projectileFlavor(Projectile projectile) {
+        if (projectile instanceof GiantSoulFireArrowEntity) return "soul_fire_giant";
+        if (projectile instanceof SoulFireArrowEntity) return "soul_fire";
         if (projectile instanceof SmallFireball || projectile instanceof LargeFireball
                 || projectile instanceof DragonFireball) return "fire";
         if (projectile instanceof Snowball) return "ice";
@@ -495,6 +533,22 @@ public final class BattleQiParry {
                 level.sendParticles(ParticleTypes.SPLASH, at.x, at.y, at.z, 26, 0.35, 0.35, 0.35, 0.1);
                 level.sendParticles(ParticleTypes.BUBBLE, at.x, at.y, at.z, 10, 0.3, 0.3, 0.3, 0.05);
                 play(level, at, SoundEvents.GENERIC_SPLASH, 0.8F, 1.4F);
+            }
+            case "soul_fire" -> {
+                // 魂火箭矢：紫白魂火炸开，骨屑四散。
+                level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, at.x, at.y, at.z, 26, 0.35, 0.35, 0.35, 0.05);
+                level.sendParticles(ParticleTypes.SOUL, at.x, at.y, at.z, 16, 0.3, 0.3, 0.3, 0.03);
+                level.sendParticles(ParticleTypes.CRIT, at.x, at.y, at.z, 12, 0.3, 0.3, 0.3, 0.2);
+                play(level, at, SoundEvents.SOUL_ESCAPE.value(), 1.0F, 1.5F);
+                play(level, at, SoundEvents.ARROW_HIT, 0.9F, 1.2F);
+            }
+            case "soul_fire_giant" -> {
+                // 巨型魂火箭矢：更大一圈的魂火，并补一声魂火熄灭的重响。
+                level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, at.x, at.y, at.z, 44, 0.55, 0.5, 0.55, 0.08);
+                level.sendParticles(ParticleTypes.SOUL, at.x, at.y, at.z, 28, 0.45, 0.45, 0.45, 0.05);
+                level.sendParticles(ParticleTypes.FLASH, at.x, at.y, at.z, 1, 0.0, 0.0, 0.0, 0.0);
+                play(level, at, SoundEvents.SOUL_ESCAPE.value(), 1.2F, 0.8F);
+                play(level, at, SoundEvents.WARDEN_SONIC_BOOM, 0.35F, 1.4F);
             }
             default -> {
                 level.sendParticles(ParticleTypes.PORTAL, at.x, at.y, at.z, 26, 0.35, 0.35, 0.35, 0.18);

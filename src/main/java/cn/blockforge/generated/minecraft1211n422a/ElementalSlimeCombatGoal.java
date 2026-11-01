@@ -98,6 +98,9 @@ public final class ElementalSlimeCombatGoal extends Goal {
         if (stuckBursts >= 6 || (stuckBursts >= 3 && far)) {
             // 追不到就散：放弃目标后会回到闲逛 Goal，至少不会站着不动。
             slime.setTarget(null);
+            // 顺手记 10 秒黑名单：领地意识 Goal 不会再立刻把同一个人拉回来，
+            // 否则就是「放弃 → 重新盯上 → 又撞墙」的死循环（玩家看到的就是它在墙边一直游荡）。
+            MobPathing.markUnreachable(slime, target, MobPathing.UNREACHABLE_TICKS);
             stuckBursts = 0;
         }
     }

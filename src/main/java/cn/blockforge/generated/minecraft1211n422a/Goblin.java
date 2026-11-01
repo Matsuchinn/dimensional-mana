@@ -41,7 +41,6 @@ import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
-import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.animal.IronGolem;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -74,7 +73,7 @@ import java.util.Set;
  * <p>所有技能只在服务端结算：斗气 / 魔素走 {@link ManaData}，控制效果走 {@link NewSpellSystem}。
  * 近战伤害统一按难度缩放（和平 25% / 简单 50% / 普通 75% / 困难 100%）。</p>
  */
-public final class Goblin extends PathfinderMob {
+public final class Goblin extends PathfinderMob implements ManaRegenSource {
     private static final EntityDataAccessor<Boolean> CASTING =
             SynchedEntityData.defineId(Goblin.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> CHARGING =
@@ -242,10 +241,12 @@ public final class Goblin extends PathfinderMob {
         goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 
         targetSelector.addGoal(1, new HurtByTargetGoal(this));
-        targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, true));
-        targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Villager.class, true));
-        targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, IronGolem.class, true));
-        targetSelector.addGoal(5, new NearestAttackableTargetGoal<>(this, Raider.class, true));
+        // 都会看「走不到」黑名单（MobPathing）：哥布林以前每刻都重算路径，
+        // 追一个被围墙挡着的人时就是在墙边一格一格蹭，营地、采集全都不管了。
+        targetSelector.addGoal(2, new PathAwareTargetGoal<>(this, Player.class, true));
+        targetSelector.addGoal(3, new PathAwareTargetGoal<>(this, Villager.class, true));
+        targetSelector.addGoal(4, new PathAwareTargetGoal<>(this, IronGolem.class, true));
+        targetSelector.addGoal(5, new PathAwareTargetGoal<>(this, Raider.class, true));
     }
 
     @Override
@@ -519,6 +520,43 @@ public final class Goblin extends PathfinderMob {
         startUsingItem(InteractionHand.MAIN_HAND);
     }
 
+    /**
+     * 眼镜上显示的魔素恢复：系统按难度给的那份（再乘环境浓度）+ 萨满自己的回魔。
+     * 哥布林是 MONSTER，系统本身会按 tag 恢复，这里不重复加，只是把「自己那部分」补上。
+     */
+    @Override
+    public double manaRegenPerSecond() {
+        double regen = systemManaRegenPerSecond();
+        if (variant == GoblinVariant.SHAMAN) regen += Math.max(0.0D, variant.regenPerSecond());
+        return Math.max(0.0D, regen);
+    }
+
+    /** 眼镜上显示的斗气恢复：系统那份 + 首领/战士自己的那份（「嗜血」加速时 ×4）。 */
+    @Override
+    public double battleQiRegenPerSecond() {
+        double regen = systemBattleQiRegenPerSecond();
+        if (variant != GoblinVariant.SHAMAN && variant.battleQi() > 0) {
+            regen += Math.max(0.0D, variant.regenPerSecond()) * (qiBoostTicks > 0 ? 4.0D : 1.0D);
+        }
+        return Math.max(0.0D, regen);
+    }
+
+    private double systemManaRegenPerSecond() {
+        if (!MobCombatSystem.enabled() || !MobCombatSystem.isManagedMob(this)) return 0.0D;
+        double regen = Math.max(0.0D,
+                getPersistentData().getCompound(ManaData.ROOT_TAG).getDouble("mobManaRegen"));
+        if (level() instanceof ServerLevel serverLevel) {
+            regen *= ManaConcentration.regenerationMultiplier(
+                    ManaConcentration.at(serverLevel, blockPosition()));
+        }
+        return regen;
+    }
+
+    private double systemBattleQiRegenPerSecond() {
+        if (!MobCombatSystem.enabled() || !MobCombatSystem.isManagedMob(this)) return 0.0D;
+        return Math.max(0.0D, getPersistentData().getCompound(ManaData.ROOT_TAG).getDouble("mobBattleQiRegen"));
+    }
+
     private void regenerate() {
         if (variant == GoblinVariant.SHAMAN) {
             if (variant.regenPerSecond() > 0.0) ManaData.restoreMana(this, variant.regenPerSecond(), false);
@@ -767,7 +805,8 @@ public final class Goblin extends PathfinderMob {
     }
 
     private void approach(LivingEntity target, double speed) {
-        getNavigation().moveTo(target, speed);
+        // 统一走 MobPathing：节流重算，连败三次就认定走不到、放弃目标回去干自己的事。
+        MobPathing.chase(this, target, speed);
     }
 
     /** 成年哥布林的【野蛮冲撞】：斗气 > 200 时消耗 200，短距离高速冲撞。 */
@@ -1337,7 +1376,7 @@ public final class Goblin extends PathfinderMob {
 
         private void tickWarrior(LivingEntity target, double distance) {
             if (rushTicks > 0) {
-                getNavigation().moveTo(target, 1.6);
+                MobPathing.chase(Goblin.this, target, 1.6);
                 if (distance <= 2.4) {
                     meleeAttack(target);
                     if (target.isAlive()) {
@@ -1450,9 +1489,8 @@ public final class Goblin extends PathfinderMob {
         public void tick() {
             Vec3 spot = Vec3.atCenterOf(gatherPoint);
             if (distanceToSqr(spot) > 9.0) {
-                if (getNavigation().isDone())
-                    getNavigation().moveTo(gatherPoint.getX() + 0.5, gatherPoint.getY(),
-                            gatherPoint.getZ() + 0.5, 0.9);
+                // 集合点走不到（被墙围住等）时，MobPathing 会把重算间隔拉长，不会每刻都算一遍 A*。
+                if (getNavigation().isDone()) MobPathing.moveToPoint(Goblin.this, spot, 0.9);
                 return;
             }
             getNavigation().stop();

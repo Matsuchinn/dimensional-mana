@@ -38,7 +38,6 @@ import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
-import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
@@ -89,6 +88,18 @@ public final class Adventurer extends PathfinderMob {
                     && spell != SpellDefinition.INFRASOUND).toArray(SpellDefinition[]::new);
     private static final int SPELL_LOADOUT_VERSION = 3;
     private static final int MELEE_INTERVAL_TICKS = 36; // 20 刻 = 1 秒，即每 1.8 秒一刀。
+    /** 残血急救的触发线：生命值低于 20% 就掏苹果。 */
+    private static final float LOW_HEALTH_RATIO = 0.20F;
+    /** 附魔金苹果：10 刻速吃，冷却 300 秒。 */
+    private static final int SUPPLY_ENCHANTED_APPLE = 6;
+    private static final int ENCHANTED_APPLE_EAT_TICKS = 10;
+    private static final int ENCHANTED_APPLE_COOLDOWN_TICKS = 300 * 20;
+    /** 金苹果：20 刻吃完，冷却 30 秒；附魔金苹果冷却期间顶替它上场。 */
+    private static final int SUPPLY_GOLDEN_APPLE = 7;
+    private static final int GOLDEN_APPLE_EAT_TICKS = 20;
+    private static final int GOLDEN_APPLE_COOLDOWN_TICKS = 30 * 20;
+    /** 副手不死图腾：挡下一次致命伤后的冷却，1200 秒 = 20 分钟。 */
+    private static final int TOTEM_COOLDOWN_TICKS = 1200 * 20;
 
     private final List<SpellDefinition> knownSpells = new ArrayList<>();
     private final Map<SpellDefinition, Integer> spellUses = new EnumMap<>(SpellDefinition.class);
@@ -109,7 +120,12 @@ public final class Adventurer extends PathfinderMob {
     private BlockPos lastVillage;
     private long villageStayUntil;
     private int villageSearchCooldown;
-    private boolean usedGoldenApple;
+    /** 附魔金苹果的冷却（300 秒）；冷却期间残血改吃普通金苹果。 */
+    private int enchantedAppleCooldown;
+    /** 普通金苹果的冷却（30 秒）。 */
+    private int goldenAppleCooldown;
+    /** 不死图腾的冷却（1200 秒）；冷却期间副手空着、图腾不出现。 */
+    private int totemCooldown;
     private int spellLoadoutVersion;
     private SpellDefinition lastSpell;
     /** 这名冒险者身上挂着的 10 笔交易，只在服务端存在。 */
@@ -154,10 +170,11 @@ public final class Adventurer extends PathfinderMob {
         goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 
         targetSelector.addGoal(1, new HurtByTargetGoal(this, Adventurer.class));
-        targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, 10, true, false,
+        // 会看「走不到」黑名单（MobPathing）：隔着墙的怪不会让冒险者贴在墙边来回走。
+        targetSelector.addGoal(2, new PathAwareTargetGoal<>(this, Monster.class, 10, true, false,
                 target -> !(target instanceof Adventurer)));
         // 哥布林不是原版 Monster，单独给它一条目标：冒险者会主动找上门去打。
-        targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Goblin.class, 10, true, false,
+        targetSelector.addGoal(2, new PathAwareTargetGoal<>(this, Goblin.class, 10, true, false,
                 target -> target.isAlive() && !(target instanceof Adventurer)));
     }
 
@@ -197,6 +214,37 @@ public final class Adventurer extends PathfinderMob {
         if (staff.isEmpty()) staff = new ItemStack(GeneratedMod.MOD_ITEMS.get("medium_general_staff").get());
         setItemSlot(EquipmentSlot.MAINHAND, staff.copy());
         setDropChance(EquipmentSlot.MAINHAND, 0.0F);
+        // 副手是那只不死图腾：玩家看得出它为什么能硬吃一刀。冷却期间空着。
+        tickTotem();
+    }
+
+    /** 副手是否还挂着不死图腾。 */
+    private boolean hasTotem() {
+        return getItemBySlot(EquipmentSlot.OFFHAND).is(Items.TOTEM_OF_UNDYING);
+    }
+
+    /**
+     * 维护副手图腾：冷却好了就挂上，冷却中或已经用掉就空着。
+     * 冷却剩余量的递减统一放在 {@link #customServerAiStep()}，这里只管手上有没有。
+     */
+    private void tickTotem() {
+        if (totemCooldown > 0) {
+            if (hasTotem()) setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+            return;
+        }
+        if (!hasTotem()) {
+            setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.TOTEM_OF_UNDYING));
+            setDropChance(EquipmentSlot.OFFHAND, 0.0F);
+        }
+    }
+
+    /** 图腾替冒险者挡下了一次致命伤：收进空副手，开始 20 分钟冷却，并先退开一点去嗑苹果。 */
+    private void startTotemCooldown() {
+        totemCooldown = TOTEM_COOLDOWN_TICKS;
+        setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+        retreatTicks = Math.max(retreatTicks, 40);
+        // 刚被救回来时血量只有 1 点，把补给间隔清掉，下一刻就能吃苹果继续回血。
+        if (supplyTicks <= 0) supplyCooldown = 0;
     }
 
     /** 冒险者身上挂着的交易；只有服务端会填内容，客户端拿到的是同步下来的展示格。 */
@@ -276,9 +324,13 @@ public final class Adventurer extends PathfinderMob {
         tickTradeRestock(level);
         if (supplyCooldown > 0) supplyCooldown--;
         if (speedPotionCooldown > 0) speedPotionCooldown--;
+        if (enchantedAppleCooldown > 0) enchantedAppleCooldown--;
+        if (goldenAppleCooldown > 0) goldenAppleCooldown--;
+        if (totemCooldown > 0) totemCooldown--;
         if (villageSearchCooldown > 0) villageSearchCooldown--;
         if (spellCooldown > 0) spellCooldown--;
         if (meleeCooldown > 0) meleeCooldown--;
+        tickTotem();
 
         if (NewSpellSystem.immobilized(this)) {
             cancelCharge();
@@ -336,10 +388,16 @@ public final class Adventurer extends PathfinderMob {
 
     private boolean tryStartSupply(ServerLevel level) {
         if (supplyTicks > 0 || supplyCooldown > 0 || chargeTicks > 0) return false;
-        if (!usedGoldenApple && getHealth() <= getMaxHealth() * 0.20F) {
-            usedGoldenApple = true;
-            beginSupply(2, new ItemStack(Items.GOLDEN_APPLE), 32);
-            return true;
+        // 残血急救：附魔金苹果 10 刻速吃（冷却 300 秒）；冷却期间改吃普通金苹果（20 刻，冷却 30 秒）。
+        if (getHealth() <= getMaxHealth() * LOW_HEALTH_RATIO) {
+            if (enchantedAppleCooldown <= 0) {
+                beginSupply(SUPPLY_ENCHANTED_APPLE, new ItemStack(Items.ENCHANTED_GOLDEN_APPLE), ENCHANTED_APPLE_EAT_TICKS);
+                return true;
+            }
+            if (goldenAppleCooldown <= 0) {
+                beginSupply(SUPPLY_GOLDEN_APPLE, new ItemStack(Items.GOLDEN_APPLE), GOLDEN_APPLE_EAT_TICKS);
+                return true;
+            }
         }
         // 脱战并连续安全 5 秒后，只要没满血就反复喝治疗 II，直至恢复满血。
         if (getHealth() < getMaxHealth() && safeToHeal(level)) {
@@ -393,9 +451,18 @@ public final class Adventurer extends PathfinderMob {
         stopUsingItem();
         switch (supplyKind) {
             case 1 -> heal(8.0F);
-            case 2 -> {
+            case SUPPLY_ENCHANTED_APPLE -> {
+                // 附魔金苹果：再生 II 20 秒、抗性 I 5 分钟、抗火 5 分钟、伤害吸收 IV 2 分钟。
+                addEffect(new MobEffectInstance(MobEffects.REGENERATION, 400, 1));
+                addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 6000, 0));
+                addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 6000, 0));
+                addEffect(new MobEffectInstance(MobEffects.ABSORPTION, 2400, 3));
+                enchantedAppleCooldown = ENCHANTED_APPLE_COOLDOWN_TICKS;
+            }
+            case SUPPLY_GOLDEN_APPLE -> {
                 addEffect(new MobEffectInstance(MobEffects.REGENERATION, 100, 1));
                 addEffect(new MobEffectInstance(MobEffects.ABSORPTION, 2400, 0));
+                goldenAppleCooldown = GOLDEN_APPLE_COOLDOWN_TICKS;
             }
             case 3 -> ManaData.restoreMana(this, ManaData.get(this).maxMana() * 0.025 + 64.0, false);
             case 4 -> ManaData.restoreMana(this, ManaData.get(this).maxMana() * 0.0678 + 128.0, false);
@@ -650,6 +717,21 @@ public final class Adventurer extends PathfinderMob {
         return super.doHurtTarget(entity);
     }
 
+    /**
+     * 副手那枚不死图腾：致命一击交给原版图腾逻辑处理——血量补回 1 点、再生 II 45 秒、
+     * 伤害吸收 II 5 秒、抗火 40 秒，外加图腾音效和粒子（原版实体事件 35）。
+     *
+     * <p>这里只负责认出来「这一下真的把图腾用掉了」：图腾在手、挨完这一下副手空了，
+     * 就是被原版消耗了，随即开始 1200 秒冷却。普通伤害不消耗图腾，也就不会进冷却。</p>
+     */
+    @Override
+    public boolean hurt(DamageSource source, float amount) {
+        boolean totemReady = totemCooldown <= 0 && hasTotem();
+        boolean hurt = super.hurt(source, amount);
+        if (totemReady && totemCooldown <= 0 && isAlive() && !hasTotem()) startTotemCooldown();
+        return hurt;
+    }
+
     @Override
     protected void actuallyHurt(DamageSource source, float amount) {
         super.actuallyHurt(source, amount);
@@ -664,7 +746,9 @@ public final class Adventurer extends PathfinderMob {
         super.addAdditionalSaveData(tag);
         tag.putString("KnownSpells", knownSpells.stream().map(SpellDefinition::id).collect(Collectors.joining(",")));
         tag.putInt("SpellLoadoutVersion", spellLoadoutVersion);
-        tag.putBoolean("UsedGoldenApple", usedGoldenApple);
+        tag.putInt("EnchantedAppleCooldown", enchantedAppleCooldown);
+        tag.putInt("GoldenAppleCooldown", goldenAppleCooldown);
+        tag.putInt("TotemCooldown", totemCooldown);
         tag.putInt("SpellCooldown", spellCooldown);
         tag.putInt("SupplyCooldown", supplyCooldown);
         tag.putInt("SpeedPotionCooldown", speedPotionCooldown);
@@ -687,7 +771,9 @@ public final class Adventurer extends PathfinderMob {
             if (spell != null) knownSpells.add(spell);
         }
         spellLoadoutVersion = tag.getInt("SpellLoadoutVersion");
-        usedGoldenApple = tag.getBoolean("UsedGoldenApple");
+        enchantedAppleCooldown = tag.getInt("EnchantedAppleCooldown");
+        goldenAppleCooldown = tag.getInt("GoldenAppleCooldown");
+        totemCooldown = Mth.clamp(tag.getInt("TotemCooldown"), 0, TOTEM_COOLDOWN_TICKS);
         spellCooldown = tag.getInt("SpellCooldown");
         supplyCooldown = tag.getInt("SupplyCooldown");
         speedPotionCooldown = tag.getInt("SpeedPotionCooldown");
@@ -740,8 +826,9 @@ public final class Adventurer extends PathfinderMob {
             if (getNavigation().isDone() || tickCount % 20 == 0) {
                 Vec3 destination = villageTarget.getCenter();
                 Vec3 waypoint = DefaultRandomPos.getPosTowards(Adventurer.this, 24, 8, destination, Math.PI / 3.0);
-                if (waypoint != null) getNavigation().moveTo(waypoint.x, waypoint.y, waypoint.z, 1.0);
-                else getNavigation().moveTo(destination.x, destination.y, destination.z, 1.0);
+                // 走固定点也交给 MobPathing：算不出路就拉长间隔，不会每刻空跑一遍 A*。
+                if (waypoint != null) MobPathing.moveToPoint(Adventurer.this, waypoint, 1.0);
+                else MobPathing.moveToPoint(Adventurer.this, destination, 1.0);
             }
             setSprinting(getNavigation().isInProgress());
         }
@@ -764,11 +851,11 @@ public final class Adventurer extends PathfinderMob {
                 retreatTicks = Math.max(0, retreatTicks - 1);
                 if (getNavigation().isDone() || tickCount % 8 == 0) {
                     Vec3 away = DefaultRandomPos.getPosAway(Adventurer.this, 10, 5, target.position());
-                    if (away != null) getNavigation().moveTo(away.x, away.y, away.z, 1.0);
+                    if (away != null) MobPathing.moveToPoint(Adventurer.this, away, 1.0);
                 }
             } else if (distance > 10.0 * 10.0 || spellCooldown > 0 || !hasLineOfSight(target)) {
                 // 冷却期间主动追击；setSprinting 本身不会移动，必须持续给导航目标。
-                getNavigation().moveTo(target, 1.0);
+                MobPathing.chase(Adventurer.this, target, 1.0);
             } else getNavigation().stop();
         }
     }

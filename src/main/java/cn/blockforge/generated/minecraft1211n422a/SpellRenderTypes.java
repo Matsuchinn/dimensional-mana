@@ -7,8 +7,39 @@ import net.minecraft.client.renderer.RenderType;
 
 import java.util.OptionalDouble;
 
-/** 双面、带遮挡的加色光效，不写入深度，避免透明外壳遮掉内部光芯。 */
+/**
+ * 双面、带遮挡的光效通道，不写入深度，避免透明外壳遮掉内部光芯。
+ *
+ * <p><b>关于输出层</b>：这些通道原本画在「天气缓冲」里（为了让光效盖在水面、雨后面仍然可见）。
+ * 开光影包时，天气缓冲会被光影自己的 {@code gbuffers_weather} 程序重新合成——那个程序是给雨滴写的，
+ * 它按「预乘 alpha」处理这一层，加色混合叠出来的颜色会被除回不透明，光效就变成一块块实心盘子。
+ * 关掉「天气层」改画进标准的半透明层之后，光影包会按普通透明体处理，alpha 正常生效。
+ * 原版（不开光影）下这两条路径没有区别：分层缓冲只在「华丽」图形或光影开启时才存在。</p>
+ *
+ * <p>这一层选择由 {@code dimensional_mana-rendercompat.toml} 的 {@code spell_effects_compat}
+ * 决定，<b>改完要重启游戏</b>才生效（渲染通道是静态常量，整局只建一次）。
+ * 法阵那一套的兼容判定则是每帧动态的，见 {@link ShaderCompat}。</p>
+ */
 public final class SpellRenderTypes extends RenderStateShard {
+
+    /**
+     * 光效落在哪一层：兼容光影的半透明层，还是原版的天气层。
+     *
+     * <p>只挪层、不动混合方式：加色混合在原版下是法术光效好看的原因，
+     * 改成半透明会让它变淡。若某个光影包下光效仍然发白 / 变成色块，
+     * 把 {@code spell_effects_compat} 设成 false 退回天气层再对比。</p>
+     */
+    private static OutputStateShard pickLayer() {
+        try {
+            return RenderCompatConfig.SPELL_EFFECTS_COMPAT.get() ? TRANSLUCENT_TARGET : WEATHER_TARGET;
+        } catch (Throwable ignored) {
+            return TRANSLUCENT_TARGET;   // 配置还没加载：按兼容处理，宁可普通透明也不要盘子
+        }
+    }
+
+    /** 类初始化时定一次：所有光效通道共用这一层。 */
+    private static final OutputStateShard LAYER = pickLayer();
+
     /**
      * 魔素感知的穿墙轮廓线：不做深度测试，因此被土石埋住的魔晶矿和躲在山体后的生物
      * 也能把外框画到屏幕上。线宽交给线条着色器按屏幕空间展开，远距离也看得清。
@@ -22,7 +53,7 @@ public final class SpellRenderTypes extends RenderStateShard {
                     .setDepthTestState(NO_DEPTH_TEST)
                     .setCullState(NO_CULL)
                     .setWriteMaskState(COLOR_WRITE)
-                    .setOutputState(WEATHER_TARGET)
+                    .setOutputState(LAYER)
                     .createCompositeState(false));
     public static final RenderType GLOW = RenderType.create("dimensional_mana_spell_glow",
             DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 262144, false, false,
@@ -32,7 +63,7 @@ public final class SpellRenderTypes extends RenderStateShard {
                     .setDepthTestState(LEQUAL_DEPTH_TEST)
                     .setCullState(NO_CULL)
                     .setWriteMaskState(COLOR_WRITE)
-                    .setOutputState(WEATHER_TARGET)
+                    .setOutputState(LAYER)
                     .createCompositeState(false));
     /** 普通透明混合和环境光照；岩石、钢铁、烟雾不再走加色发光通道。 */
     public enum Material {
@@ -51,7 +82,7 @@ public final class SpellRenderTypes extends RenderStateShard {
                             .setDepthTestState(LEQUAL_DEPTH_TEST)
                             .setCullState(NO_CULL)
                             .setWriteMaskState(COLOR_WRITE)
-                            .setOutputState(WEATHER_TARGET)
+                            .setOutputState(LAYER)
                             .createCompositeState(false));
         }
     }
@@ -93,7 +124,7 @@ public final class SpellRenderTypes extends RenderStateShard {
                             .setDepthTestState(LEQUAL_DEPTH_TEST)
                             .setCullState(NO_CULL)
                             .setWriteMaskState(COLOR_WRITE)
-                            .setOutputState(WEATHER_TARGET)
+                            .setOutputState(LAYER)
                             .createCompositeState(false));
         }
     }

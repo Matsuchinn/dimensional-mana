@@ -10,6 +10,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.MenuProvider;
@@ -313,15 +314,72 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
     }
 
     private boolean canFitOutputs(ProcessRecipe recipe) {
-        NonNullList<ItemStack> simulated = NonNullList.withSize(OUTPUT_END - OUTPUT_START, ItemStack.EMPTY);
-        for (int i = OUTPUT_START; i < OUTPUT_END; i++) simulated.set(i - OUTPUT_START, items.get(i).copy());
+        NonNullList<ItemStack> simulated = simulatedOutputs();
         for (OutputStack output : recipe.outputs()) {
             ItemStack produced = stackOf(output, registries());
             if (produced.isEmpty() || !insertInto(simulated, produced)) {
                 return false;
             }
         }
+        // 随机数量的产物按「上限」模拟，宁可多等一会儿也别把随机产物挤没。
+        for (OutputRoll roll : recipe.rolls()) {
+            ItemStack produced = displayStackOf(roll);
+            if (produced.isEmpty() || !insertInto(simulated, produced)) return false;
+        }
+        // 概率产出：每一种结果都得放得下才开工。
+        if (recipe.chance() != null) {
+            for (OutputRoll option : recipe.chance().options()) {
+                ItemStack produced = displayStackOf(option);
+                if (produced.isEmpty()) continue;
+                NonNullList<ItemStack> trial = copyOf(simulated);
+                if (!insertInto(trial, produced)) return false;
+            }
+        }
         return true;
+    }
+
+    /** 产物槽的当前状态快照（每个栈都复制一份，模拟插入不会动到真实槽位）。 */
+    private NonNullList<ItemStack> simulatedOutputs() {
+        NonNullList<ItemStack> simulated = NonNullList.withSize(OUTPUT_END - OUTPUT_START, ItemStack.EMPTY);
+        for (int i = OUTPUT_START; i < OUTPUT_END; i++) simulated.set(i - OUTPUT_START, items.get(i).copy());
+        return simulated;
+    }
+
+    private static NonNullList<ItemStack> copyOf(NonNullList<ItemStack> source) {
+        NonNullList<ItemStack> copy = NonNullList.withSize(source.size(), ItemStack.EMPTY);
+        for (int i = 0; i < source.size(); i++) copy.set(i, source.get(i).copy());
+        return copy;
+    }
+
+    /**
+     * 把「随机数量产物」变成展示用的真实物品栈：数量取上限，占位标签挑第一种。
+     * 图鉴与 JEI 拿它画图标，真正发货走 {@link #rollStack(OutputRoll, RandomSource)}。
+     */
+    public static ItemStack displayStackOf(OutputRoll roll) {
+        return concreteStack(roll.itemId(), roll.maxCount());
+    }
+
+    /** 真正发货：按配方掷数量，{@code #element_crystal_dust} 随机挑一种元素结晶粉。 */
+    private static ItemStack rollStack(OutputRoll roll, RandomSource random) {
+        int count = roll.roll(random);
+        if (count <= 0) return ItemStack.EMPTY;
+        if ("#element_crystal_dust".equals(roll.itemId())) {
+            ElementalSlimeVariant[] variants = ElementalSlimeVariant.values();
+            var holder = GeneratedMod.MOD_ITEMS.get(variants[random.nextInt(variants.length)].powderId());
+            return holder == null ? ItemStack.EMPTY : new ItemStack(holder.get(), count);
+        }
+        return concreteStack(roll.itemId(), count);
+    }
+
+    /** 占位标签 → 具体物品；目前只有元素结晶粉这一类。 */
+    private static ItemStack concreteStack(String itemId, int count) {
+        if (count <= 0) return ItemStack.EMPTY;
+        if ("#element_crystal_dust".equals(itemId)) {
+            var holder = GeneratedMod.MOD_ITEMS.get(ElementalSlimeVariant.MANA.powderId());
+            return holder == null ? ItemStack.EMPTY : new ItemStack(holder.get(), count);
+        }
+        Item item = outputItem(itemId);
+        return item == null ? ItemStack.EMPTY : new ItemStack(item, count);
     }
 
     /** 当前世界的数据包注册表；方块还没放进世界时返回 {@code null}。 */
@@ -376,6 +434,15 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
         for (OutputStack output : recipe.outputs()) {
             ItemStack produced = stackOf(output, registries());
             if (!produced.isEmpty()) insertOutput(produced);
+        }
+        // 随机数量的必定产物 + 概率产出（r238 畸变魔晶片升华就靠这两段）。
+        RandomSource random = level == null ? RandomSource.create() : level.random;
+        for (OutputRoll roll : recipe.rolls()) {
+            insertOutputOrDrop(rollStack(roll, random));
+        }
+        ChanceOutput chance = recipe.chance();
+        if (chance != null && !chance.options().isEmpty() && random.nextDouble() < chance.chance()) {
+            insertOutputOrDrop(rollStack(chance.options().get(random.nextInt(chance.options().size())), random));
         }
         if ("special_mana_crystal".equals(recipe.primaryProduct()) && level != null && level.random.nextFloat() < 0.005F) {
             ElementType element = ElementType.values()[level.random.nextInt(ElementType.values().length)];
@@ -453,11 +520,20 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
         }
     }
 
-    private void insertOutput(ItemStack addition) {
+    /** 往产物槽里塞物品；塞不下返回 {@code false}（调用方决定是掉地上还是算了）。 */
+    private boolean insertOutput(ItemStack addition) {
         NonNullList<ItemStack> outputs = NonNullList.withSize(OUTPUT_END - OUTPUT_START, ItemStack.EMPTY);
         for (int i = OUTPUT_START; i < OUTPUT_END; i++) outputs.set(i - OUTPUT_START, items.get(i));
-        insertInto(outputs, addition);
+        boolean inserted = insertInto(outputs, addition);
         for (int i = OUTPUT_START; i < OUTPUT_END; i++) items.set(i, outputs.get(i - OUTPUT_START));
+        return inserted;
+    }
+
+    /** 随机副产物专用：槽位满了就掉在加工台脚下，别让掷出来的东西凭空消失。 */
+    private void insertOutputOrDrop(ItemStack addition) {
+        if (addition.isEmpty()) return;
+        if (insertOutput(addition)) return;
+        if (level != null) net.minecraft.world.level.block.Block.popResource(level, worldPosition, addition);
     }
 
     private static List<ProcessRecipe> createRecipes() {
@@ -538,13 +614,57 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
                 "etched_slate", 300, 300));
 
         addElementCrystalRecipes(recipes);
+        addDistortedCrystalRecipes(recipes);
         addElementRingRecipes(recipes);
         addEquipmentRecipes(recipes);
         addAncientMaterialRecipes(recipes);
         addRelicRecipes(recipes);
         addQiRecipes(recipes);
         addEnchantBookRecipes(recipes);
+        addTalentScrollRecipes(recipes);
         return List.copyOf(recipes);
+    }
+
+    /**
+     * 畸变魔晶片升华（r238）：畸变魔晶片 ×1 + 青金石粉 ×1 + 紫水晶粉 ×1 + 烈焰粉 ×1，
+     * 20 魔素 / 4 秒（80 刻），烈焰粉原样返还。
+     *
+     * <p>必定产出：2~5 个极品魔晶粉、1~4 个随机元素结晶粉（12 种元素粉里随机一种）、返还 1 个烈焰粉。<br>
+     * 概率产出（50% 触发，触发后等概率抽一条）：1~2 下级魔晶粉 / 1~2 中级魔晶粉 /
+     * 1~2 高级魔晶粉 / 1 个特级魔晶粉。</p>
+     */
+    private static void addDistortedCrystalRecipes(List<ProcessRecipe> recipes) {
+        List<OutputRoll> luckyDusts = List.of(
+                new OutputRoll("lesser_mana_crystal_dust", 1, 2),
+                new OutputRoll("medium_mana_crystal_dust", 1, 2),
+                new OutputRoll("advanced_mana_crystal_dust", 1, 2),
+                new OutputRoll("special_mana_crystal_dust", 1, 1));
+        recipes.add(new ProcessRecipe("distorted_crystal_sublimation",
+                List.of(new IngredientStack(DistortedCrystalShardEntity.ITEM_ID, 1),
+                        new IngredientStack("lapis_dust", 1),
+                        new IngredientStack("amethyst_dust", 1),
+                        new IngredientStack("minecraft:blaze_powder", 1)),
+                List.of(),
+                List.of(new OutputStack("minecraft:blaze_powder", 1)),
+                List.of(new OutputRoll("supreme_mana_crystal_dust", 2, 5),
+                        new OutputRoll("#element_crystal_dust", 1, 4)),
+                new ChanceOutput(0.5D, luckyDusts),
+                20, 80, "supreme_mana_crystal_dust", false));
+    }
+
+    /**
+     * 十一种元素天赋卷轴的固定制作路线：下界之星 ×1 + 空白法术卷轴 ×7 + 对应元素结晶 ×1，
+     * 消耗 1600 魔素、耗时 8 秒（160 刻）。九宫格里随便怎么摆都算，按材料数量匹配。
+     */
+    private static void addTalentScrollRecipes(List<ProcessRecipe> recipes) {
+        for (ElementType element : ElementType.values()) {
+            recipes.add(new ProcessRecipe("element_talent_scroll_" + element.id(),
+                    List.of(new IngredientStack("minecraft:nether_star", 1),
+                            new IngredientStack("blank_spell_scroll", 7),
+                            new IngredientStack(MagicEquipment.crystalId(element.id()), 1)),
+                    List.of(), List.of(new OutputStack(element.scrollId(), 1)),
+                    1_600, 160, element.scrollId()));
+        }
     }
 
     /**
@@ -826,13 +946,31 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
                 manaCost, ticks, upgradedFragment);
     }
 
+    /**
+     * 燃料槽充能值：成品魔晶全额，五档魔晶粉是对应晶体的 1/5（下 20 / 中 80 / 高 320 / 极品 800 / 特级 2400）。
+     * 超导魔晶粉末保持它的连线／刻印等特殊用途，不参与常规充能（返回 0）。
+     */
     public static int fuelValue(ItemStack stack) {
         if (stack.is(GeneratedMod.MOD_ITEMS.get("lesser_mana_crystal").get())) return 100;
         if (stack.is(GeneratedMod.MOD_ITEMS.get("medium_mana_crystal").get())) return 400;
         if (stack.is(GeneratedMod.MOD_ITEMS.get("advanced_mana_crystal").get())) return 1_600;
         if (stack.is(GeneratedMod.MOD_ITEMS.get("supreme_mana_crystal").get())) return 4_000;
         if (stack.is(GeneratedMod.MOD_ITEMS.get("special_mana_crystal").get())) return 12_000;
+        if (stack.is(GeneratedMod.MOD_ITEMS.get("lesser_mana_crystal_dust").get())) return 20;
+        if (stack.is(GeneratedMod.MOD_ITEMS.get("medium_mana_crystal_dust").get())) return 80;
+        if (stack.is(GeneratedMod.MOD_ITEMS.get("advanced_mana_crystal_dust").get())) return 320;
+        if (stack.is(GeneratedMod.MOD_ITEMS.get("supreme_mana_crystal_dust").get())) return 800;
+        if (stack.is(GeneratedMod.MOD_ITEMS.get("special_mana_crystal_dust").get())) return 2_400;
         return 0;
+    }
+
+    /** 是不是五档魔晶粉：shift 点击时粉末优先去九宫格，晶体优先去燃料槽。 */
+    public static boolean isManaCrystalDust(ItemStack stack) {
+        return stack.is(GeneratedMod.MOD_ITEMS.get("lesser_mana_crystal_dust").get())
+                || stack.is(GeneratedMod.MOD_ITEMS.get("medium_mana_crystal_dust").get())
+                || stack.is(GeneratedMod.MOD_ITEMS.get("advanced_mana_crystal_dust").get())
+                || stack.is(GeneratedMod.MOD_ITEMS.get("supreme_mana_crystal_dust").get())
+                || stack.is(GeneratedMod.MOD_ITEMS.get("special_mana_crystal_dust").get());
     }
 
     @Override
@@ -930,13 +1068,46 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
         public OutputStack(String itemId, int count) { this(itemId, count, null, 0); }
     }
 
+    /**
+     * 数量随机的必定产物：数量在 [minCount, maxCount] 里掷
+     * （{@code itemId} 还支持 {@code #element_crystal_dust} 这种占位标签，产出时随机挑一种元素结晶粉）。
+     */
+    public record OutputRoll(String itemId, int minCount, int maxCount) {
+        public OutputRoll(String itemId, int count) { this(itemId, count, count); }
+
+        /** 掷一次数量，闭区间。 */
+        public int roll(RandomSource random) {
+            if (maxCount <= minCount) return minCount;
+            return minCount + random.nextInt(maxCount - minCount + 1);
+        }
+    }
+
+    /**
+     * 概率产出：{@code chance} 概率触发，触发后从 {@code options} 里等概率抽一条
+     * （「随机选择 1 个」就是这么表达的）。
+     */
+    public record ChanceOutput(double chance, List<OutputRoll> options) { }
+
+    /**
+     * 生产配方。{@code outputs} 是必定产出的固定数量产物；
+     * {@code rolls} 是必定产出但数量随机的产物；{@code chance} 是可选的概率产出。
+     */
     public record ProcessRecipe(String id, List<IngredientStack> inputs, List<String> pattern,
-                                List<OutputStack> outputs, int manaCost, int processTicks,
-                                String primaryProduct, boolean destroysProcessor) {
-        /** 普通配方：不损坏加工台。 */
+                                List<OutputStack> outputs, List<OutputRoll> rolls, ChanceOutput chance,
+                                int manaCost, int processTicks, String primaryProduct,
+                                boolean destroysProcessor) {
+        /** 普通配方：不损坏加工台、没有随机产物。 */
         public ProcessRecipe(String id, List<IngredientStack> inputs, List<String> pattern,
                              List<OutputStack> outputs, int manaCost, int processTicks, String primaryProduct) {
-            this(id, inputs, pattern, outputs, manaCost, processTicks, primaryProduct, false);
+            this(id, inputs, pattern, outputs, List.of(), null, manaCost, processTicks, primaryProduct, false);
+        }
+
+        /** 同上，额外标记「做完是否让加工台报废」。 */
+        public ProcessRecipe(String id, List<IngredientStack> inputs, List<String> pattern,
+                             List<OutputStack> outputs, int manaCost, int processTicks, String primaryProduct,
+                             boolean destroysProcessor) {
+            this(id, inputs, pattern, outputs, List.of(), null, manaCost, processTicks, primaryProduct,
+                    destroysProcessor);
         }
     }
 }

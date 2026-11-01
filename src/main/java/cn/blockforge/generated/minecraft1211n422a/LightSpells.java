@@ -201,6 +201,8 @@ public final class LightSpells {
     private static void clearPoison(LivingEntity victim) {
         victim.removeEffect(MobEffects.POISON);
         victim.removeEffect(GeneratedMod.elementEffect(ElementType.POISON));
+        // 光之庇护的净化顺带洗掉【魔蚀】（白名单净化通道之一）。
+        MagicErosionEffect.cleanse(victim);
     }
 
     private static void notifyShelter(ServerPlayer player) {

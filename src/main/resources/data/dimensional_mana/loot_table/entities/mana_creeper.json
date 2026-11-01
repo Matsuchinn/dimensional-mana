@@ -1,0 +1,5 @@
+{
+  "type": "minecraft:entity",
+  "random_sequence": "dimensional_mana:entities/mana_creeper",
+  "pools": []
+}

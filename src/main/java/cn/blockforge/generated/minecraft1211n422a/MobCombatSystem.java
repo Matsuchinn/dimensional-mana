@@ -375,6 +375,16 @@ public final class MobCombatSystem {
     private record DifficultyTuning(double manaRatio, double manaFlat, double battleQiRatio,
                                     double battleQiFlat, double regen) { }
 
+    /**
+     * 当前难度下每秒的「全局」资源恢复量（魔素、斗气同值）。
+     *
+     * <p>本模组自己管理恢复的生物（{@link ManaRegenSource}）也照这个数算，
+     * 这样专业鉴定眼镜上显示的「按全局设置恢复」就是真的按全局设置来的。</p>
+     */
+    public static double regenPerSecond(LivingEntity entity) {
+        return tuning(entity.level().getDifficulty()).regen;
+    }
+
     private static DifficultyTuning tuning(Difficulty difficulty) {
         return switch (difficulty) {
             case PEACEFUL -> new DifficultyTuning(MobCombatConfig.PEACE_MANA_RATIO.get(), 0.0,

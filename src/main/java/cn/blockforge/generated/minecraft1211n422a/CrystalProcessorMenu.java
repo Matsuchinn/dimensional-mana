@@ -79,7 +79,14 @@ public final class CrystalProcessorMenu extends AbstractContainerMenu {
         if (index < MACHINE_SLOTS) {
             if (!moveItemStackTo(source, MACHINE_SLOTS, slots.size(), true)) return ItemStack.EMPTY;
         } else if (CrystalProcessorBlockEntity.fuelValue(source) > 0) {
-            if (!moveItemStackTo(source, CrystalProcessorBlockEntity.FUEL_SLOT,
+            // 魔晶粉既是燃料又是九宫格主料（合成魔晶、附魔书升级都要用它），
+            // 所以粉末优先入九宫格、塞不下才进燃料槽；成品魔晶反过来，优先燃料槽。
+            if (CrystalProcessorBlockEntity.isManaCrystalDust(source)) {
+                if (!moveItemStackTo(source, CrystalProcessorBlockEntity.INPUT_START,
+                        CrystalProcessorBlockEntity.INPUT_END, false)
+                        && !moveItemStackTo(source, CrystalProcessorBlockEntity.FUEL_SLOT,
+                        CrystalProcessorBlockEntity.FUEL_SLOT + 1, false)) return ItemStack.EMPTY;
+            } else if (!moveItemStackTo(source, CrystalProcessorBlockEntity.FUEL_SLOT,
                     CrystalProcessorBlockEntity.FUEL_SLOT + 1, false)
                     && !moveItemStackTo(source, CrystalProcessorBlockEntity.INPUT_START,
                     CrystalProcessorBlockEntity.INPUT_END, false)) return ItemStack.EMPTY;

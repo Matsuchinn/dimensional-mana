@@ -674,7 +674,11 @@ public final class ManaEvents {
     }
 
     public void onLevelTick(net.neoforged.neoforge.event.tick.LevelTickEvent.Post event) {
-        if (event.getLevel() instanceof ServerLevel level) MobSkills.tickLevel(level);
+        if (event.getLevel() instanceof ServerLevel level) {
+            MobSkills.tickLevel(level);
+            // 法阵世界渲染：阵图变了才把渲染包推给原点基座（按指纹跳过，没变零开销）。
+            MagicCircleRenderSync.tick(level);
+        }
     }
 
     private static int enchantmentLevel(ItemStack stack, ResourceLocation id) {

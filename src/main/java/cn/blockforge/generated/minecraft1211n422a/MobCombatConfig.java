@@ -303,6 +303,30 @@ public final class MobCombatConfig {
         return DEFAULT_RESISTANCES;
     }
 
+    /**
+     * 本模组生物的元素专配内置行。
+     *
+     * <p>不写进 toml（游戏内配置界面输入框只有 32 个字符，模组命名空间 + 实体 id 就已经超了），
+     * 但玩家可以照旧在 {@code resistances} 里加同 ID 的行覆盖任意键。</p>
+     */
+    static List<String> ownMobProfiles() {
+        return List.of(
+                // 晶化行尸：奥术 75% / 水 50% / 冰 35% / 火 25%；音、金易伤 50%，光易伤 75%。
+                "dimensional_mana:crystallized_zombie arcane=0.75 water=0.5",
+                "dimensional_mana:crystallized_zombie ice=0.35 fire=0.25",
+                "dimensional_mana:crystallized_zombie sound=-0.5 metal=-0.5",
+                "dimensional_mana:crystallized_zombie light=-0.75",
+                // 聚魔爆裂体：奥术抗性 50%；金、雷、音三种元素各易伤 35%。
+                "dimensional_mana:mana_creeper arcane=0.5",
+                "dimensional_mana:mana_creeper metal=-0.35 lightning=-0.35 sound=-0.35",
+                // 魔蚀骸骨：奥术免疫（1.0 全免，实体里还另拦一道）；火 / 水 / 冰各 50%，光易伤 50%。
+                "dimensional_mana:corrupted_skeleton arcane=1 light=-0.5",
+                "dimensional_mana:corrupted_skeleton fire=0.5 water=0.5 ice=0.5",
+                // 虚空蚀影：水 / 光 / 火各 50% 抗性；奥术易伤 25%、音易伤 75%。
+                "dimensional_mana:void_shade water=0.5 light=0.5 fire=0.5",
+                "dimensional_mana:void_shade arcane=-0.25 sound=-0.75");
+    }
+
     // ------------------------------------------------------------ 指令写入
 
     /**

@@ -551,6 +551,10 @@ public final class MagicCircleProjectionEvents {
                             ? "message.dimensional_mana.magiccircle.slate.hint_running"
                             : "message.dimensional_mana.magiccircle.slate.hint_off")
                     .withStyle(ChatFormatting.GRAY), false);
+        } else if (MagicCircleConfig.DECLARE_MODE_ENABLED.get()) {
+            player.displayClientMessage(Component.translatable(
+                    "message.dimensional_mana.magiccircle.blueprint.preview_free_hint")
+                    .withStyle(ChatFormatting.GRAY), false);
         } else {
             int testCost = testCost(entity);
             player.displayClientMessage(Component.translatable(
@@ -560,13 +564,41 @@ public final class MagicCircleProjectionEvents {
         }
     }
 
-    /** 半价试运行（只对投影锚点有意义）：扣一半启动成本，打一次光效脉冲，不产生战利品。 */
+    /** 效果预览的启动窗口（刻）：预览之后 5 秒内再潜行右键刻印锚点 = 正式启动。 */
+    private static final long START_WINDOW_TICKS = 100L;
+
+    /**
+     * 调试棒潜行（Shift）右键锚点 = 效果预览（v2.2 总则）：不扣魔素、世界零改动，
+     * 聊天栏逐终端打印「预计伤害 / 词缀 / 成本」，门控现场标 T/F，缺声明当场点名 E1。
+     *
+     * <p>刻印锚点三段式：停止时潜行右键 = 预览；预览后 5 秒内再潜行右键 = 正式启动；
+     * 运行中潜行右键 = 停止。{@code declareModeEnabled=false}（退回 v2.1 引擎）时
+     * 保留老行为：刻印 = 直接启停，投影 = 半价光效试运行。</p>
+     */
     public static void testRun(ServerLevel level, BlockPos pos, ServerPlayer player) {
         if (!(level.getBlockEntity(pos) instanceof MagicCircleProjectionBlockEntity entity)) return;
-        if (entity.sealed()) {
-            // 实体锚点不搞半价了：要么启动正式跑，要么别跑。
-            MagicCircleRites.toggleRun(level, pos, player);
+        long now = level.getGameTime();
+        if (!MagicCircleConfig.DECLARE_MODE_ENABLED.get()) {
+            if (entity.sealed()) {
+                MagicCircleRites.toggleRun(level, pos, player);
+                return;
+            }
+            legacyHalfPriceTestRun(level, pos, player, entity, now);
             return;
+        }
+        if (entity.sealed()) {
+            if (entity.running()) {
+                // 运行中：潜行右键 = 停止，并关掉启动窗口，下次从效果预览重新看。
+                MagicCircleRites.toggleRun(level, pos, player);
+                entity.markTestRun(-1);
+                entity.sync();
+                return;
+            }
+            if (entity.lastTestTick() >= 0 && now - entity.lastTestTick() <= START_WINDOW_TICKS) {
+                // 预览之后 5 秒内的第二下 = 正式启动。
+                MagicCircleRites.toggleRun(level, pos, player);
+                return;
+            }
         }
         if (entity.isEmpty()) {
             player.displayClientMessage(Component.translatable(
@@ -579,7 +611,49 @@ public final class MagicCircleProjectionEvents {
                     "message.dimensional_mana.magiccircle.too_far").withStyle(ChatFormatting.RED), false);
             return;
         }
-        long now = level.getGameTime();
+        if (entity.lastTestTick() >= 0 && now - entity.lastTestTick() < TEST_COOLDOWN_TICKS) {
+            player.displayClientMessage(Component.translatable(
+                    "message.dimensional_mana.magiccircle.blueprint.test_cooldown")
+                    .withStyle(ChatFormatting.GRAY), false);
+            return;
+        }
+        MagicCircleCost.Evaluation evaluation = entity.evaluate();
+        if (evaluation.nodeCount() == 0 || !evaluation.problems().isEmpty()) {
+            // E1 / 结构不完整：红字逐条点名，不给启动窗口（照声明补好再来）。
+            player.displayClientMessage(Component.translatable(
+                    "message.dimensional_mana.magiccircle.blueprint.test_invalid")
+                    .withStyle(ChatFormatting.RED), false);
+            for (String problem : evaluation.problems()) {
+                player.displayClientMessage(Component.empty().append(MagicCircleIssue.component(problem)).withStyle(ChatFormatting.RED), false);
+            }
+            player.displayClientMessage(Component.translatable(
+                    "message.dimensional_mana.magiccircle.declare.fix_hint")
+                    .withStyle(ChatFormatting.YELLOW), false);
+            return;
+        }
+        // 效果预览：走 trigger 的 test 通道——不扣魔素、不改世界，逐终端打印「预计」。
+        MagicCircleRites.trigger(level, pos, entity, player, true);
+        if (entity.sealed()) {
+            player.displayClientMessage(Component.translatable(
+                    "message.dimensional_mana.magiccircle.slate.preview_then_start")
+                    .withStyle(ChatFormatting.YELLOW), false);
+        }
+    }
+
+    /** v2.1 旧引擎（declareModeEnabled=false）的半价光效试运行，原样保留给投影锚点。 */
+    private static void legacyHalfPriceTestRun(ServerLevel level, BlockPos pos, ServerPlayer player,
+                                               MagicCircleProjectionBlockEntity entity, long now) {
+        if (entity.isEmpty()) {
+            player.displayClientMessage(Component.translatable(
+                    "message.dimensional_mana.magiccircle.blueprint.anchor_empty")
+                    .withStyle(ChatFormatting.YELLOW), false);
+            return;
+        }
+        if (player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) > MAX_DISTANCE_SQR) {
+            player.displayClientMessage(Component.translatable(
+                    "message.dimensional_mana.magiccircle.too_far").withStyle(ChatFormatting.RED), false);
+            return;
+        }
         if (entity.lastTestTick() >= 0 && now - entity.lastTestTick() < TEST_COOLDOWN_TICKS) {
             player.displayClientMessage(Component.translatable(
                     "message.dimensional_mana.magiccircle.blueprint.test_cooldown")

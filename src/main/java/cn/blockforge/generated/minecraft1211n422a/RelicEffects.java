@@ -28,6 +28,7 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingHealEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.neoforge.event.entity.living.MobEffectEvent;
@@ -246,23 +247,62 @@ public final class RelicEffects {
     }
 
     /**
-     * 天使庇护的受击侧：无敌窗口里所有伤害归零（连刻蚀真伤也挡）；
-     * 窗口之外遇到致命伤则只扣到剩 1 滴血，并开启 200 刻无敌，冷却 200 秒。
+     * 天使庇护的受击侧：无敌窗口里这一下直接作废。
+     *
+     * <p>真正的「保命」在 {@link #onAngelShelterFinalGuard}——那里的伤害已经过完护甲、
+     * 抗性和所有乘区，压下去的数字才是玩家真正会掉的血。</p>
      */
     private static boolean tryAngelShelter(Player player, LivingIncomingDamageEvent event) {
         if (!worn(player, ANGEL_CROWN)) return false;
+        if (player.getPersistentData().getLong(ANGEL_SHELTER_UNTIL_KEY) <= player.level().getGameTime()) return false;
+        event.setAmount(0.0F);
+        event.setCanceled(true);
+        return true;
+    }
+
+    /**
+     * 天使庇护的最后一环：所有伤害乘区结算完之后再兜一次底。
+     *
+     * <p>受击那一层拿到的是「护甲前」的原始数值，之后还会被招架破绽、诅咒、元素增伤
+     * 这类乘区乘回去。只在那层压到剩 1 滴血的话，玩家会在庇护刚触发的那一刻被真打死：
+     * 消息、粒子、冷却都播了，人却进了死亡界面——也就是玩家说的「免死触发后假死」。
+     * 这里排在最低优先级，拿到的已经是最终伤害，按「吸收盾 + 生命」
+     * 重算一遍，保证这一下最多只扣到剩 1 点。</p>
+     */
+    public static void onAngelShelterFinalGuard(LivingDamageEvent.Pre event) {
+        if (!(event.getEntity() instanceof Player player) || player.level().isClientSide) return;
+        if (!worn(player, ANGEL_CROWN)) return;
+        float damage = event.getNewDamage();
+        if (damage <= 0.0F) return;
+        // /kill 这类必杀伤害不归饰品管，和受击侧保持一致。
+        if (LethalDamage.isLethal(event.getSource(), damage)) return;
         long now = player.level().getGameTime();
         if (player.getPersistentData().getLong(ANGEL_SHELTER_UNTIL_KEY) > now) {
-            event.setAmount(0.0F);
-            return true;
+            event.setNewDamage(0.0F);
+            return;
         }
         float total = player.getHealth() + player.getAbsorptionAmount();
-        if (event.getAmount() < total) return false;
-        // 冷却没好的时候庇护救不了这一下，照常结算。
-        if (!startAngelShelter(player, now, true)) return false;
-        // 这一下只扣到「总共剩 1 点」，护盾值也一起算进去，避免穿透吸收盾时反而直接猝死。
-        event.setAmount(Math.max(0.0F, total - 1.0F));
-        return true;
+        if (damage < total) return;
+        if (!startAngelShelter(player, now, true)) return;
+        event.setNewDamage(Math.max(0.0F, total - 1.0F));
+    }
+
+    /**
+     * 天使庇护的死亡兜底：无敌窗口里不该有真正的死亡。
+     *
+     * <p>万一还有别的结算直接把血写到 0（其它模组直接 setHealth、绕过伤害乘区的真伤等），
+     * 就在死亡事件上把这一下驳回、把血补回 1 点。否则服务端会先发死亡界面、玩家再被
+     * 某个治疗补回血量，客户端就停在「死亡界面 + 人还活着」的假死状态：点重生被服务端
+     * 当成「还没死」忽略，人卡在原地。</p>
+     */
+    public static void onAngelShelterDeathGuard(LivingDeathEvent event) {
+        if (!(event.getEntity() instanceof Player player) || player.level().isClientSide) return;
+        if (!worn(player, ANGEL_CROWN)) return;
+        if (player.getPersistentData().getLong(ANGEL_SHELTER_UNTIL_KEY) <= player.level().getGameTime()) return;
+        event.setCanceled(true);
+        player.setHealth(1.0F);
+        // 死亡计时拨回 0：活人身上挂着死亡动画，20 刻后原版会把实体直接 remove 掉。
+        player.deathTime = 0;
     }
 
     /**
@@ -444,7 +484,9 @@ public final class RelicEffects {
 
     /** 直接补血：绕过 {@code LivingHealEvent}，所以不会被「生命恢复速率」类效果削减。 */
     private static void grantHealth(LivingEntity entity, float amount) {
-        if (amount <= 0.0F) return;
+        // 已经死了就别再补血：把血量从 0 抬起来只会制造出「死亡界面 + 人还活着」的假死，
+        // 客户端点重生会被服务端当成「还没死」忽略，人卡在原地动不了。
+        if (amount <= 0.0F || entity.isDeadOrDying()) return;
         entity.setHealth(Math.min(entity.getMaxHealth(), entity.getHealth() + amount));
     }
 
@@ -484,6 +526,8 @@ public final class RelicEffects {
      * 已经吃满上限后，再获得正面效果改为回复 2 点生命。
      */
     private static void addAngelMaxHealth(Player player) {
+        // 死亡动画期间不结算：把血量从 0 抬回正数会让玩家停在假死状态。
+        if (player.isDeadOrDying()) return;
         AttributeInstance health = player.getAttribute(Attributes.MAX_HEALTH);
         if (health == null) return;
         double bonus = player.getPersistentData().getDouble(ANGEL_BONUS_KEY);
@@ -652,6 +696,11 @@ public final class RelicEffects {
         if (player.level().isClientSide || !(player.level() instanceof ServerLevel level)) return;
         long now = level.getGameTime();
         CompoundTag data = player.getPersistentData();
+
+        // 老存档里可能留下「血已经回上来了、死亡计时还挂着」的假死：再过 20 刻原版会把实体
+        // 直接 remove 掉，玩家就成了看不见、动不了、点重生也没反应的幽灵。活着的人
+        // deathTime 一定该是 0，这里顺手拨回去。
+        if (player.deathTime > 0 && player.getHealth() > 0.0F) player.deathTime = 0;
 
         // 天使王冠：复活或被其它系统清掉属性后，把累计的最大生命加成补回去；
         // 没戴时则确保加成已经收回。

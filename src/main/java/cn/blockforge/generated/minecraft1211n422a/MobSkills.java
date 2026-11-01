@@ -336,6 +336,8 @@ public final class MobSkills {
     /** 每刻维护反魔法区域与被标记的龙息云。 */
     public static void tickLevel(ServerLevel level) {
         MobCombatSystem.tickLevel(level);
+        // 顺手清掉寻路记录里过期的那部分（「走不到」黑名单 / 长期没用的追击状态）。
+        MobPathing.tickLevel(level);
         long now = level.getGameTime();
         Iterator<Map.Entry<UUID, MarkedCloud>> iterator = MARKED_CLOUDS.entrySet().iterator();
         while (iterator.hasNext()) {

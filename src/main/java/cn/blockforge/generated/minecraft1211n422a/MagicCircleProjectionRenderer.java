@@ -44,6 +44,16 @@ public final class MagicCircleProjectionRenderer
                 ? entity.getBlockState().getValue(MagicCircleProjectionBlock.FACING)
                 : Direction.UP;
 
+        // 刻印石板启动后：改画「分层立体阵」——底盘 / 连线 / 节点三层（需求：石板仅 Active 时渲染）。
+        // 异面连线的光脉冲照旧要画，所以先进分层分支也无妨——分层分支内部把 links 一并处理。
+        if (running && entity.sealed() && !entity.renderPacket().isEmpty()) {
+            VertexConsumer quads = buffers.getBuffer(RenderType.debugQuads());
+            VertexConsumer lines = buffers.getBuffer(LINE_TYPE);
+            drawLinks(quads, lines, poseStack, entity, entity.getLevel().getGameTime(), partialTick);
+            renderLayered(entity, partialTick, poseStack, buffers, facing);
+            return;
+        }
+
         long gameTime = entity.getLevel().getGameTime();
         float phase = (gameTime + partialTick) * (running ? 0.16F : 0.09F);
         float pulse = 0.72F + 0.28F * Mth.sin(phase);
@@ -205,6 +215,40 @@ public final class MagicCircleProjectionRenderer
         consumer.addVertex(pose, a[0], a[1], a[2]).setColor(cr, cg, cb, alpha).setNormal(nx, ny, nz);
         consumer.addVertex(pose, b[0], b[1], b[2]).setColor(cr, cg, cb, alpha).setNormal(nx, ny, nz);
     }
+
+    /**
+     * 石板启动态：把渲染包画成三层立体阵。石板只有 1 格，画布按比例缩到贴面 0.98 格；
+     * 距离降档与 {@link MagicCircleRenderer} 同规则（&gt;32 只画底盘、&gt;16 旋转 5 刻一跳）。
+     */
+    private static void renderLayered(MagicCircleProjectionBlockEntity entity, float partialTick,
+                                      PoseStack poseStack, MultiBufferSource buffers, Direction facing) {
+        MagicCircleRenderPacket packet = entity.renderPacket();
+        if (packet.isEmpty()) return;
+        double time = entity.getLevel().getGameTime() + partialTick;
+
+        // 距离 LOD：以方块中心到摄像机为准。
+        net.minecraft.client.Camera camera =
+                net.minecraft.client.Minecraft.getInstance().gameRenderer.getMainCamera();
+        Vec3 center = entity.getBlockPos().getCenter();
+        double distance = center.distanceTo(camera.getPosition());
+        if (distance > LOD_SPIN_RANGE) time = Math.floor(time / 5.0) * 5.0;
+
+        poseStack.pushPose();
+        // 画布中心落在锚点方块中心，再沿法线方向移到贴面前外一点。
+        poseStack.translate(0.5, 0.5, 0.5);
+        poseStack.translate(facing.getStepX() * 0.5F, facing.getStepY() * 0.5F, facing.getStepZ() * 0.5F);
+        float lift = 0.06F; // 贴面抬 0.06 格，不扎进底板
+        if (distance > LOD_PLATE_RANGE) {
+            MagicCircleArt.renderPlateOnly(packet, poseStack, buffers, facing, 0.98F, 0.98F, time, true, lift);
+        } else {
+            MagicCircleArt.render(packet, poseStack, buffers, facing, 0.98F, 0.98F, time, true, lift);
+        }
+        poseStack.popPose();
+    }
+
+    /** 石板渲染的距离阈值：中距旋转降频、远距只画底盘（与绘制台同一套规则）。 */
+    private static final double LOD_SPIN_RANGE = 16.0;
+    private static final double LOD_PLATE_RANGE = 32.0;
 
     /** 投影贴墙上时也希望能从远一点看见，默认 64 格够用，这里放宽到 96 格。 */
     @Override

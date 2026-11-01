@@ -14,6 +14,11 @@ public final class ElementalSlimeWanderGoal extends Goal {
     private final ElementalSlime slime;
     private int nextTurn;
     private float direction;
+    /** 撞墙检测：上一帧位置 + 连续几次「10 刻挪不动」。 */
+    private double lastX;
+    private double lastY;
+    private double lastZ;
+    private int stuckChecks;
 
     public ElementalSlimeWanderGoal(ElementalSlime slime) {
         this.slime = slime;
@@ -32,6 +37,14 @@ public final class ElementalSlimeWanderGoal extends Goal {
 
     @Override
     public boolean requiresUpdateEveryTick() { return true; }
+
+    @Override
+    public void start() {
+        lastX = slime.getX();
+        lastY = slime.getY();
+        lastZ = slime.getZ();
+        stuckChecks = 0;
+    }
 
     @Override
     public void tick() {
@@ -55,6 +68,21 @@ public final class ElementalSlimeWanderGoal extends Goal {
         if (--nextTurn <= 0) {
             nextTurn = 40 + slime.getRandom().nextInt(60);
             direction = slime.getRandom().nextFloat() * 360.0F;
+        }
+        // r264：撞墙检测。史莱姆不会寻路，只会朝一个方向一直往前蹦 ——
+        // 被围墙围住时它会整段时间贴着同一面墙蹭。连续 30 刻挪不动就立刻换个方向。
+        if (slime.tickCount % 10 == 0) {
+            double moved = slime.distanceToSqr(lastX, lastY, lastZ);
+            lastX = slime.getX();
+            lastY = slime.getY();
+            lastZ = slime.getZ();
+            stuckChecks = moved < 0.04D ? stuckChecks + 1 : 0;
+            if (stuckChecks >= 3) {
+                stuckChecks = 0;
+                // 掉头再偏 90°~180°：比「继续往同一个方向蹦」更容易找到空档。
+                direction += 90.0F + slime.getRandom().nextFloat() * 90.0F;
+                nextTurn = 30 + slime.getRandom().nextInt(30);
+            }
         }
         move.setHeading(direction, false);
         move.setWantedMovement(0.85);

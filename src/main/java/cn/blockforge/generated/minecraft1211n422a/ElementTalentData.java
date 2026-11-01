@@ -14,6 +14,13 @@ public final class ElementTalentData {
     private static final String ROOT = "DimensionalMana";
     private static final String TAG = "elementTalents";
     public static final int INITIAL_CHOICES = 3;
+    /** 新学一种元素天赋的三件套奖励：魔素上限、魔法等级经验、魔法技能点。 */
+    public static final int TALENT_MANA_BONUS = 128;
+    public static final int TALENT_MAGIC_XP = 2_000;
+    public static final int TALENT_SKILL_POINTS = 1;
+    /** 集齐全部元素天赋后永久生效的魔素上限乘区（+10%）。 */
+    public static final double FULL_SET_MANA_MULTIPLIER = 1.10;
+    private static final String FULL_SET_BONUS = "allTalentsBonus";
 
     public record Snapshot(boolean chosen, EnumSet<ElementType> selected, EnumSet<ElementType> unlocked,
                            int[] investedFragments) {
@@ -58,8 +65,51 @@ public final class ElementTalentData {
         player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
                 "message.dimensional_mana.element_unlocked",
                 net.minecraft.network.chat.Component.translatable(element.translationKey())), false);
+        grantTalentRewards(player);
         sync(player);
         return true;
+    }
+
+    /**
+     * 每新学一种元素天赋的发奖入口：魔素上限 +128（走基础上限，永久生效）、
+     * 魔法等级经验 +2000、魔法技能点 +1；若这是最后一种，再点亮集齐全部天赋的永久乘区。
+     */
+    static void grantTalentRewards(ServerPlayer player) {
+        ManaData.increaseBaseMaxMana(player, TALENT_MANA_BONUS);
+        MagicProgression.addMagicExperience(player, TALENT_MAGIC_XP);
+        MagicProgression.addSkillPoints(player, TALENT_SKILL_POINTS);
+        player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
+                "message.dimensional_mana.element_talent_reward",
+                TALENT_MANA_BONUS, TALENT_MAGIC_XP, TALENT_SKILL_POINTS), false);
+        pushMana(player);
+        checkFullSet(player);
+    }
+
+    /** 集齐十一种元素天赋时点亮永久 +10% 魔素上限标记；只点亮一次，之后不再刷提示。 */
+    static void checkFullSet(ServerPlayer player) {
+        CompoundTag data = tag(player);
+        if (data.getBoolean(FULL_SET_BONUS)) return;
+        for (ElementType element : ElementType.values()) {
+            if (!data.getBoolean("unlocked_" + element.id())) return;
+        }
+        data.putBoolean(FULL_SET_BONUS, true);
+        pushMana(player);
+        player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
+                "message.dimensional_mana.element_talents_complete"), false);
+    }
+
+    /** 上限变了立刻推给客户端，HUD 不用等下一次秒级同步。 */
+    private static void pushMana(ServerPlayer player) {
+        ManaData.Snapshot d = ManaData.get(player);
+        net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player, new ManaSyncPayload(
+                d.mana(), d.maxMana(), d.battleQi(), d.maxBattleQi(), d.exhaustionTicks() > 0,
+                ManaConfig.OVERCHARGE_SAFE_RATIO.get()));
+    }
+
+    /** 魔素上限计算里的集齐乘区：未集齐恒为 1。 */
+    public static double fullSetMultiplier(Player player) {
+        return player.getPersistentData().getCompound(ROOT).getCompound(TAG).getBoolean(FULL_SET_BONUS)
+                ? FULL_SET_MANA_MULTIPLIER : 1.0;
     }
 
     /** 调试指令：开放全部元素，不改变玩家原本三选标记。 */
@@ -67,6 +117,8 @@ public final class ElementTalentData {
         CompoundTag tag = tag(player);
         for (ElementType element : ElementType.values()) tag.putBoolean("unlocked_" + element.id(), true);
         tag.putBoolean("chosen", true);
+        // 调试指令同样算“集齐”：点亮永久乘区，但每种天赋的一次性发奖仍只走正式解锁。
+        checkFullSet(player);
         sync(player);
     }
 

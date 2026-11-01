@@ -87,11 +87,32 @@ public final class DimensionalManaJeiCategories {
                 }
             }
             int[] outputX = {86, 108, 130, 152};
-            for (int index = 0; index < recipe.outputs().size() && index < outputX.length; index++) {
+            int slot = 0;
+            for (int index = 0; index < recipe.outputs().size() && slot < outputX.length; index++, slot++) {
                 CrystalProcessorBlockEntity.OutputStack output = recipe.outputs().get(index);
-                builder.addOutputSlot(outputX[index], 22)
+                builder.addOutputSlot(outputX[slot], 22)
                         .setOutputSlotBackground()
                         .addItemStack(CrystalProcessorBlockEntity.stackOf(output, registries()));
+            }
+            // 数量随机的必定产物（r238）：每个占一格，图标按上限数量显示。
+            for (CrystalProcessorBlockEntity.OutputRoll roll : recipe.rolls()) {
+                if (slot >= outputX.length) break;
+                ItemStack stack = CrystalProcessorBlockEntity.displayStackOf(roll);
+                if (stack.isEmpty()) continue;
+                builder.addOutputSlot(outputX[slot], 22).setOutputSlotBackground().addItemStack(stack);
+                slot++;
+            }
+            // 概率产出：几种可能挤在同一格里轮播，玩家鼠标悬停就能看到全部候选。
+            CrystalProcessorBlockEntity.ChanceOutput chance = recipe.chance();
+            if (chance != null && slot < outputX.length) {
+                List<ItemStack> picks = new ArrayList<>();
+                for (CrystalProcessorBlockEntity.OutputRoll option : chance.options()) {
+                    ItemStack stack = CrystalProcessorBlockEntity.displayStackOf(option);
+                    if (!stack.isEmpty()) picks.add(stack);
+                }
+                if (!picks.isEmpty()) {
+                    builder.addOutputSlot(outputX[slot], 22).setOutputSlotBackground().addItemStacks(picks);
+                }
             }
         }
 

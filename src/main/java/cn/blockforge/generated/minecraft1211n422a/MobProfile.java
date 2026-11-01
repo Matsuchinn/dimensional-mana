@@ -163,6 +163,8 @@ public final class MobProfile {
         // 先铺一层内置默认值，再用配置文件覆盖：删掉某一行只会回到默认值，不会让生物失去专配。
         for (String line : MobCombatConfig.defaultSpecialMobs()) parseLine(line, builders);
         for (String line : MobCombatConfig.defaultResistances()) parseLine(line, builders);
+        // 本模组生物的元素专配（行太长进不了 32 字符的配置输入框，只在代码里内置）。
+        for (String line : MobCombatConfig.ownMobProfiles()) parseLine(line, builders);
         for (String line : mobs) parseLine(line, builders);
         for (String line : resistances) parseLine(line, builders);
         for (Map.Entry<String, Builder> entry : builders.entrySet()) {
