@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": {
+    "item": "dimensional_mana:erosion_stone_bricks"
+  },
+  "result": {
+    "id": "dimensional_mana:erosion_stone_brick_wall",
+    "count": 1
+  }
+}

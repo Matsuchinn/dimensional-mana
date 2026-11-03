@@ -5,35 +5,31 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Mth;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 import java.util.List;
 
 /**
- * HUD 可视化编辑界面：从模组列表的「配置」按钮进入。
+ * HUD 可视化编辑器：从模组列表的「配置」→「HUD 位置与大小」进入。
  *
- * <p>左列是一排开关：哪类文字提示不想看就关掉哪类（含鉴定面板的五类显示项）；
- * 屏幕本体就是预览画布——魔素球、共鸣核心、鉴定面板三个可拖拽的虚线框按当前配置
- * 画在真实位置上，按住拖动即时写回配置并保存文件。单人游戏里从暂停菜单打开时，
- * 背后的真实 HUD 会跟着动，所见即所得。</p>
+ * <p>r295 重做：HUD 被拆成七个可以<b>单独拖动、单独缩放</b>的部件（魔素球图标、魔素数字、
+ * 法术信息块、共鸣核心图标、共鸣核心文字、鉴定面板、鉴定扫描小窗）。左边先点一个部件，
+ * 再在画布上拖虚线框改位置、用「−/＋」（或滚轮）改大小；另一页是各类文字提示的显示开关。
+ * 所有改动即时写回 {@link HudConfig} 并保存到 {@code config/dimensional_mana-hud.toml}。</p>
+ *
+ * <p>预览和真实 HUD 用的是同一套锚点（{@link HudConfig#anchorX}/{@link HudConfig#anchorY}），
+ * 所以画布上拖到哪，游戏里就在哪——鉴定面板以前拖了没反应，就是因为两边各算各的。</p>
  */
 public final class HudConfigScreen extends Screen {
-    /** 画布上可拖拽的三块 HUD。 */
-    private enum Element {
-        MANA_ORB("hud.edit.dimensional_mana.mana_orb"),
-        RES_CORE("hud.edit.dimensional_mana.res_core"),
-        APPRAISAL("hud.edit.dimensional_mana.appraisal_panel");
-
-        private final String nameKey;
-        Element(String nameKey) { this.nameKey = nameKey; }
-    }
+    /** 两个页面：拖位置/调大小、开关文字提示。 */
+    private enum Page { LAYOUT, TOGGLES }
 
     /** 每行开关：翻译键 + 配置项，绑定同一个 CycleButton。 */
     private record ToggleEntry(String nameKey, ModConfigSpec.BooleanValue value) { }
 
-    private static final int ROW_HEIGHT = 15;
+    private static final int PANEL_X = 8;
     private static final int PANEL_WIDTH = 168;
+    private static final int ROW_HEIGHT = 15;
 
     private final Screen parent;
     private final List<ToggleEntry> toggles = List.of(
@@ -48,162 +44,206 @@ public final class HudConfigScreen extends Screen {
             new ToggleEntry("hud.edit.dimensional_mana.show_skill_line", AppraisalConfig.SHOW_SKILL_LINE),
             new ToggleEntry("hud.edit.dimensional_mana.show_scanline", AppraisalConfig.SHOW_SCANLINE));
 
-    private Element dragging;
-    private int dragOffsetX;
-    private int dragOffsetY;
-    private Button manaScaleValue;
+    private final Page page;
+    private HudConfig.Part selected = HudConfig.Part.MANA_ICON;
+    private HudConfig.Part dragging;
+    private double dragStartMouseX;
+    private double dragStartMouseY;
+    private int dragStartDx;
+    private int dragStartDy;
+    private Button scaleButton;
 
     public HudConfigScreen(Screen parent) {
+        this(parent, Page.LAYOUT);
+    }
+
+    private HudConfigScreen(Screen parent, Page page) {
         super(Component.translatable("hud.edit.dimensional_mana.title"));
         this.parent = parent;
+        this.page = page;
+    }
+
+    /** 直接打开「显示开关」那一页。 */
+    public static HudConfigScreen toggles(Screen parent) {
+        return new HudConfigScreen(parent, Page.TOGGLES);
     }
 
     @Override
     protected void init() {
-        int y = 16;
+        if (page == Page.LAYOUT) initLayoutPage();
+        else initTogglePage();
+    }
+
+    // ---------------------------------------------------------------- 页面搭建
+
+    private void initLayoutPage() {
+        // 部件按钮排成两列，尽量只占左上角：默认排版里魔素球在左下角，
+        // 面板要是铺满整条左边，就会把要拖的东西压在按钮下面点不到。
+        HudConfig.Part[] parts = HudConfig.Part.values();
+        for (int i = 0; i < parts.length; i++) {
+            HudConfig.Part target = parts[i];
+            int x = PANEL_X + (i % 2) * 86;
+            int y = 14 + (i / 2) * 16;
+            addRenderableWidget(Button.builder(Component.translatable(target.nameKey), button -> {
+                selected = target;
+                refreshScaleLabel();
+            }).bounds(x, y, 82, 14).build());
+        }
+        int y = 14 + 4 * 16 + 2;
+        addRenderableWidget(Button.builder(Component.literal("−"), button -> adjustScale(-0.05D))
+                .bounds(PANEL_X, y, 20, 16).build());
+        scaleButton = Button.builder(Component.empty(), button -> { }).bounds(PANEL_X + 24, y, 100, 16).build();
+        scaleButton.active = false;
+        addRenderableWidget(scaleButton);
+        addRenderableWidget(Button.builder(Component.literal("＋"), button -> adjustScale(0.05D))
+                .bounds(PANEL_X + 128, y, 20, 16).build());
+
+        y += 22;
+        addRenderableWidget(Button.builder(Component.translatable("hud.edit.dimensional_mana.reset"),
+                button -> {
+                    HudConfig.resetLayout();
+                    refreshScaleLabel();
+                    saveAll();
+                }).bounds(PANEL_X, y, PANEL_WIDTH, 16).build());
+        y += 22;
+        addRenderableWidget(Button.builder(Component.translatable("hud.edit.dimensional_mana.page_toggles"),
+                button -> switchPage(Page.TOGGLES)).bounds(PANEL_X, y, 82, 16).build());
+        addRenderableWidget(Button.builder(Component.translatable("gui.done"),
+                button -> onClose()).bounds(PANEL_X + 86, y, 82, 16).build());
+        refreshScaleLabel();
+    }
+
+    private void initTogglePage() {
+        int y = 14;
         for (ToggleEntry entry : toggles) {
-            // r218 修复崩溃：原来用 CycleButton.builder(显示函数) 建按钮却<b>没登记候选值</b>，
-            // 原版构造器校验值列表非空，一进界面就抛 IllegalStateException: No values for cycle button
-            // （用户在模组列表点「配置」看到的那一屏报错）。改成 booleanBuilder：开/关两个值齐全。
             addRenderableWidget(CycleButton.booleanBuilder(
                             Component.translatable("hud.edit.dimensional_mana.off"),
                             Component.translatable("hud.edit.dimensional_mana.on"))
                     .withInitialValue(entry.value().get())
-                    .create(8, y, PANEL_WIDTH, 14, Component.translatable(entry.nameKey()),
+                    .create(PANEL_X, y, PANEL_WIDTH, 14, Component.translatable(entry.nameKey()),
                             (button, value) -> {
                                 entry.value().set(value);
                                 saveAll();
                             }));
             y += ROW_HEIGHT;
         }
-        y += 4;
-        // 魔素数字大小：-/+ 两个步进按钮夹一个只读的当前值。
-        addRenderableWidget(Button.builder(Component.literal("−"), button -> adjustManaScale(-0.05))
-                .bounds(8, y, 20, 16).build());
-        manaScaleValue = Button.builder(Component.empty(), button -> { }).bounds(32, y, 68, 16).build();
-        manaScaleValue.active = false;
-        addRenderableWidget(manaScaleValue);
-        addRenderableWidget(Button.builder(Component.literal("＋"), button -> adjustManaScale(0.05))
-                .bounds(104, y, 20, 16).build());
-        y += 20;
-        // 恢复默认与完成并排一行，小屏（高度 216）也不会溢出。
-        addRenderableWidget(Button.builder(Component.translatable("hud.edit.dimensional_mana.reset"),
-                button -> resetPositions()).bounds(8, y, 82, 16).build());
+        addRenderableWidget(Button.builder(Component.translatable("hud.edit.dimensional_mana.page_layout"),
+                button -> switchPage(Page.LAYOUT)).bounds(PANEL_X, 176, 82, 16).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.done"),
-                button -> onClose()).bounds(94, y, 82, 16).build());
-        refreshManaScaleLabel();
+                button -> onClose()).bounds(PANEL_X + 86, 176, 82, 16).build());
+        addRenderableWidget(Button.builder(Component.translatable("hud.edit.dimensional_mana.reset_toggles"),
+                button -> {
+                    for (ToggleEntry entry : toggles) entry.value().set(true);
+                    saveAll();
+                    rebuildWidgets();
+                }).bounds(PANEL_X, 196, PANEL_WIDTH, 16).build());
     }
 
-    private void adjustManaScale(double delta) {
-        double next = Mth.clamp(ClientManaConfig.MANA_TEXT_SCALE.get() + delta, 0.25, 2.0);
-        ClientManaConfig.MANA_TEXT_SCALE.set(Math.round(next * 100.0) / 100.0);
-        ClientManaConfig.SPEC.save();
-        refreshManaScaleLabel();
+    private void switchPage(Page next) {
+        saveAll();
+        if (next == page) return;
+        minecraft.setScreen(next == Page.LAYOUT ? new HudConfigScreen(parent) : HudConfigScreen.toggles(parent));
     }
 
-    private void refreshManaScaleLabel() {
-        if (manaScaleValue != null) {
-            manaScaleValue.setMessage(Component.translatable("hud.edit.dimensional_mana.mana_scale_value",
-                    String.format(java.util.Locale.ROOT, "%.2f", ClientManaConfig.MANA_TEXT_SCALE.get())));
-        }
+    private void adjustScale(double delta) {
+        HudConfig.setScale(selected, HudConfig.scale(selected) + delta);
+        saveAll();
+        refreshScaleLabel();
+    }
+
+    private void refreshScaleLabel() {
+        if (scaleButton == null) return;
+        scaleButton.setMessage(Component.translatable("hud.edit.dimensional_mana.scale_value",
+                Component.translatable(selected.nameKey), HudConfig.formatScale(selected)));
     }
 
     private static void saveAll() {
         HudConfig.SPEC.save();
-        ClientManaConfig.SPEC.save();
         AppraisalConfig.SPEC.save();
     }
 
-    // ---------------------------------------------------------------- 位置换算
+    // ---------------------------------------------------------------- 部件几何
 
-    /** 元素中心点（GUI 像素坐标）；与各处 HUD 渲染的取位置方式一一对应。 */
-    private int[] centerOf(Element element) {
-        return switch (element) {
-            case MANA_ORB -> new int[]{
-                    Mth.clamp(ClientManaConfig.HUD_X_FROM_LEFT.get(), 28, Math.max(28, width - 28)),
-                    height - Mth.clamp(ClientManaConfig.HUD_Y_FROM_BOTTOM.get(), 30, Math.max(30, height - 30))};
-            case RES_CORE -> new int[]{
-                    width - Mth.clamp(HudConfig.RES_X_FROM_RIGHT.get(), 20, Math.max(20, width - 20)),
-                    height - Mth.clamp(HudConfig.RES_Y_FROM_BOTTOM.get(), 20, Math.max(20, height - 20))};
-            case APPRAISAL -> new int[]{
-                    width / 2 + Mth.clamp(AppraisalConfig.HUD_OFFSET_X.get(),
-                            -width / 2 + 20, Math.max(-width / 2 + 20, width / 2 - 20)),
-                    height / 2 + Mth.clamp(AppraisalConfig.HUD_OFFSET_Y.get(),
-                            -height / 2 + 12, Math.max(-height / 2 + 12, height / 2 - 12))};
+    /** 部件预览框的半宽（未缩放）。 */
+    private static int halfWidth(HudConfig.Part part) {
+        return switch (part) {
+            case MANA_ICON -> 22;
+            case MANA_TEXT -> 27;
+            case SPELL_HUD -> 34;
+            case RES_ICON -> 21;
+            case RES_LABEL -> 34;
+            case APPRAISAL -> 63;
+            case SCANLINE -> 42;
         };
     }
 
-    private int halfWidthOf(Element element) {
-        return switch (element) {
-            case MANA_ORB -> 26;
-            case RES_CORE -> 24;
-            case APPRAISAL -> 68;
+    private static int halfHeight(HudConfig.Part part) {
+        return switch (part) {
+            case MANA_ICON -> 22;
+            case MANA_TEXT -> 11;
+            case SPELL_HUD -> 16;
+            case RES_ICON -> 21;
+            case RES_LABEL -> 8;
+            case APPRAISAL -> 26;
+            case SCANLINE -> 23;
         };
     }
 
-    private int halfHeightOf(Element element) {
-        return switch (element) {
-            case MANA_ORB -> 26;
-            case RES_CORE -> 24;
-            case APPRAISAL -> 24;
-        };
+    /** 部件当前占据的矩形：{left, top, right, bottom}。 */
+    private int[] box(HudConfig.Part part) {
+        int cx = HudConfig.anchorX(part, width, height);
+        int cy = HudConfig.anchorY(part, width, height);
+        double scale = HudConfig.scale(part);
+        int hw = (int)Math.round(halfWidth(part) * scale);
+        int hh = (int)Math.round(halfHeight(part) * scale);
+        return new int[]{cx - hw, cy - hh, cx + hw, cy + hh};
     }
 
-    private void storeCenter(Element element, int cx, int cy) {
-        switch (element) {
-            case MANA_ORB -> {
-                ClientManaConfig.HUD_X_FROM_LEFT.set(Mth.clamp(cx, 28, Math.max(28, width - 28)));
-                ClientManaConfig.HUD_Y_FROM_BOTTOM.set(
-                        Mth.clamp(height - cy, 30, Math.max(30, height - 30)));
-            }
-            case RES_CORE -> {
-                HudConfig.RES_X_FROM_RIGHT.set(Mth.clamp(width - cx, 20, Math.max(20, width - 20)));
-                HudConfig.RES_Y_FROM_BOTTOM.set(Mth.clamp(height - cy, 20, Math.max(20, height - 20)));
-            }
-            case APPRAISAL -> {
-                AppraisalConfig.HUD_OFFSET_X.set(
-                        Mth.clamp(cx - width / 2, -width / 2 + 20, Math.max(-width / 2 + 20, width / 2 - 20)));
-                AppraisalConfig.HUD_OFFSET_Y.set(
-                        Mth.clamp(cy - height / 2, -height / 2 + 12, Math.max(-height / 2 + 12, height / 2 - 12)));
-            }
-        }
-    }
-
-    /** 命中测试：重叠时优先小块（鉴定面板 > 共鸣核心 > 魔素球）。 */
-    private Element elementAt(double mouseX, double mouseY) {
-        for (Element element : new Element[]{Element.APPRAISAL, Element.RES_CORE, Element.MANA_ORB}) {
-            int[] c = centerOf(element);
-            if (Math.abs(mouseX - c[0]) <= halfWidthOf(element)
-                    && Math.abs(mouseY - c[1]) <= halfHeightOf(element)) {
-                return element;
-            }
+    private HudConfig.Part partAt(double mouseX, double mouseY) {
+        HudConfig.Part[] values = HudConfig.Part.values();
+        for (int i = values.length - 1; i >= 0; i--) {
+            int[] b = box(values[i]);
+            if (mouseX >= b[0] && mouseX <= b[2] && mouseY >= b[1] && mouseY <= b[3]) return values[i];
         }
         return null;
+    }
+
+    /** 这个部件当前是不是被显示开关关掉了（关掉的部件在画布上画淡一点）。 */
+    private static boolean enabled(HudConfig.Part part) {
+        return switch (part) {
+            case MANA_TEXT -> HudConfig.SHOW_MANA_NUMBER.get();
+            case SPELL_HUD -> HudConfig.SHOW_SPELL_HUD.get();
+            case RES_LABEL -> HudConfig.SHOW_RES_LABEL.get();
+            case APPRAISAL -> AppraisalConfig.SHOW_TARGET_BARS.get();
+            case SCANLINE -> AppraisalConfig.SHOW_SCANLINE.get();
+            case MANA_ICON, RES_ICON -> true;
+        };
     }
 
     // ---------------------------------------------------------------- 交互
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // 先让按钮吃掉点击；落在空白处又压住虚线框时开始拖拽。
         if (super.mouseClicked(mouseX, mouseY, button)) return true;
-        if (button == 0) {
-            Element hit = elementAt(mouseX, mouseY);
-            if (hit != null) {
-                dragging = hit;
-                int[] c = centerOf(hit);
-                dragOffsetX = (int)mouseX - c[0];
-                dragOffsetY = (int)mouseY - c[1];
-                return true;
-            }
-        }
-        return false;
+        if (page != Page.LAYOUT || button != 0) return false;
+        HudConfig.Part hit = partAt(mouseX, mouseY);
+        if (hit == null) return false;
+        selected = hit;
+        refreshScaleLabel();
+        dragging = hit;
+        dragStartMouseX = mouseX;
+        dragStartMouseY = mouseY;
+        dragStartDx = HudConfig.dx(hit);
+        dragStartDy = HudConfig.dy(hit);
+        return true;
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (dragging != null) {
-            storeCenter(dragging, (int)mouseX - dragOffsetX, (int)mouseY - dragOffsetY);
+            // 偏移直接按「鼠标相对按下时的位移」累加，屏幕边缘夹紧也不会粘住。
+            HudConfig.setDx(dragging, dragStartDx + (int)Math.round(mouseX - dragStartMouseX));
+            HudConfig.setDy(dragging, dragStartDy + (int)Math.round(mouseY - dragStartMouseY));
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
@@ -219,16 +259,23 @@ public final class HudConfigScreen extends Screen {
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
-    private void resetPositions() {
-        ClientManaConfig.HUD_X_FROM_LEFT.set(35);
-        ClientManaConfig.HUD_Y_FROM_BOTTOM.set(62);
-        HudConfig.RES_X_FROM_RIGHT.set(30);
-        HudConfig.RES_Y_FROM_BOTTOM.set(30);
-        AppraisalConfig.HUD_OFFSET_X.set(12);
-        AppraisalConfig.HUD_OFFSET_Y.set(0);
-        ClientManaConfig.MANA_TEXT_SCALE.set(0.65);
-        saveAll();
-        refreshManaScaleLabel();
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (page == Page.LAYOUT && scrollY != 0.0D) {
+            HudConfig.Part hovered = partAt(mouseX, mouseY);
+            if (hovered != null) {
+                selected = hovered;
+                adjustScale(scrollY > 0 ? 0.05D : -0.05D);
+                return true;
+            }
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
+    /** 从暂停菜单打开时不额外接管暂停状态。 */
+    @Override
+    public boolean isPauseScreen() {
+        return false;
     }
 
     // ---------------------------------------------------------------- 渲染
@@ -237,54 +284,94 @@ public final class HudConfigScreen extends Screen {
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         // 只压暗一层半透明、不画模糊背景：背后的真实 HUD 要能看见。
         graphics.fill(0, 0, width, height, 0x99101010);
+        if (page != Page.LAYOUT) return;
+        // 画布画在按钮下面：按钮永远盖住虚线框，不会点不到。
+        graphics.fill(width / 2 - 5, height / 2, width / 2 + 6, height / 2 + 1, 0x55FFFFFF);
+        graphics.fill(width / 2, height / 2 - 5, width / 2 + 1, height / 2 + 6, 0x55FFFFFF);
+        HudConfig.Part hover = partAt(mouseX, mouseY);
+        for (HudConfig.Part part : HudConfig.Part.values()) {
+            renderPart(graphics, part, part == dragging || part == hover, part == selected);
+        }
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         super.render(graphics, mouseX, mouseY, delta);
-        // 准心参考点。
-        graphics.fill(width / 2 - 5, height / 2, width / 2 + 6, height / 2 + 1, 0x55FFFFFF);
-        graphics.fill(width / 2, height / 2 - 5, width / 2 + 1, height / 2 + 6, 0x55FFFFFF);
-        Element hover = elementAt(mouseX, mouseY);
-        for (Element element : Element.values()) {
-            renderElementFrame(graphics, element, element == dragging || element == hover);
-        }
-        graphics.drawCenteredString(font, Component.translatable("hud.edit.dimensional_mana.hint"),
-                width / 2, 6, 0xFFE8D8A0);
+        Component hint = Component.translatable(page == Page.LAYOUT
+                ? "hud.edit.dimensional_mana.hint_layout"
+                : "hud.edit.dimensional_mana.hint_toggles");
+        graphics.drawCenteredString(font, hint, width / 2, 5, 0xFFE8D8A0);
     }
 
-    private void renderElementFrame(GuiGraphics graphics, Element element, boolean highlight) {
-        int[] c = centerOf(element);
-        int hw = halfWidthOf(element);
-        int hh = halfHeightOf(element);
-        int left = c[0] - hw, top = c[1] - hh, right = c[0] + hw, bottom = c[1] + hh;
-        int color = highlight ? 0xE0FFD060 : 0x90B8C8E8;
-        dashedRect(graphics, left, top, right, bottom, color);
-        if (element == Element.MANA_ORB) {
-            // 魔素球示意：蓝底圆盘 + 金色斗气圈；数字随开关走。
-            disc(graphics, c[0], c[1], 17, 0x55203A6E);
-            ring(graphics, c[0], c[1], 21, 0x66FFC84A);
-            if (HudConfig.SHOW_MANA_NUMBER.get()) {
-                graphics.drawCenteredString(font, "128", c[0], c[1] - 6, 0xA0FFFFFF);
-                graphics.drawCenteredString(font, "/ 300", c[0], c[1] + 3, 0x80BED5FF);
-            }
-        } else if (element == Element.RES_CORE) {
-            disc(graphics, c[0], c[1], 15, 0x55121A33);
-            ring(graphics, c[0], c[1], 15, 0x666FD3FF);
-            if (HudConfig.SHOW_RES_LABEL.get()) {
-                graphics.drawString(font, "75%", c[0] - 24, c[1] - 26, 0x909FC7FF, false);
-            }
-        } else {
-            // 鉴定面板示意：名称行 + 三条进度条。
-            graphics.fill(left + 4, top + 4, right - 4, top + 9, 0x40202A44);
-            graphics.fill(left + 4, top + 12, left + 60, top + 16, 0x40202A44);
-            graphics.fill(left + 4, top + 19, left + 48, top + 23, 0x40202A44);
-            graphics.fill(left + 4, top + 26, left + 64, top + 30, 0x40202A44);
-            graphics.drawString(font, "88 / 100", left + 8, top + 12, 0x60FFFFFF, false);
-        }
-        graphics.drawCenteredString(font, Component.translatable(element.nameKey), c[0],
-                Math.max(2, top - 11), highlight ? 0xFFFFE08A : 0xB0C8D8E8);
+    private void renderPart(GuiGraphics graphics, HudConfig.Part part, boolean highlight, boolean selected) {
+        int[] b = box(part);
+        int cx = (b[0] + b[2]) / 2;
+        int cy = (b[1] + b[3]) / 2;
+        double scale = HudConfig.scale(part);
+        boolean on = enabled(part);
+        int alpha = on ? 0xFF : 0x60;
+        int boxColor = selected ? 0xF0FFD060 : highlight ? 0xD0FFE9A0 : 0x80B8C8E8;
+        dashedRect(graphics, b[0], b[1], b[2], b[3], boxColor);
+        preview(graphics, part, cx, cy, scale, alpha);
+        Component name = Component.translatable(part.nameKey);
+        int nameY = Math.max(2, b[1] - 10);
+        graphics.drawCenteredString(font, name, cx, nameY, (selected ? 0xFFFFE08A : 0xB0C8D8E8) & (on ? 0xFFFFFFFF : 0x80FFFFFF));
     }
+
+    /** 每个部件的示意图形：只求一眼能认出来，不追求和真实 HUD 完全一致。 */
+    private void preview(GuiGraphics graphics, HudConfig.Part part, int cx, int cy, double scale, int alpha) {
+        int body = (alpha << 24) | 0x00BED5FF;
+        int fill = (0x40 * alpha / 0xFF) << 24 | 0x00203250;
+        int accent = (alpha << 24) | 0x00FFC84A;
+        switch (part) {
+            case MANA_ICON -> {
+                disc(graphics, cx, cy, (int)Math.round(17 * scale), (0x90 * alpha / 0xFF) << 24 | 0x00101629);
+                ring(graphics, cx, cy, (int)Math.round(21 * scale), accent);
+            }
+            case MANA_TEXT -> {
+                graphics.drawCenteredString(font, "128", cx, cy - 8, body);
+                graphics.drawCenteredString(font, "/ 300", cx, cy + 1, body);
+            }
+            case SPELL_HUD -> {
+                int side = (int)Math.round(20 * scale);
+                graphics.fill(cx - side, cy - side / 2 - 2, cx - side + 2 * side, cy + side / 2 + 2, fill);
+                graphics.renderOutline(cx - side, cy - side / 2 - 2, 2 * side, side + 4, body);
+                graphics.drawString(font, "火球术", cx + side - (int)Math.round(6 * scale), cy - 4, body, false);
+            }
+            case RES_ICON -> {
+                disc(graphics, cx, cy, (int)Math.round(13 * scale), (0x90 * alpha / 0xFF) << 24 | 0x00121A33);
+                ring(graphics, cx, cy, (int)Math.round(15 * scale), body);
+            }
+            case RES_LABEL -> graphics.drawCenteredString(font, "75%", cx, cy - 4, body);
+            case APPRAISAL -> {
+                int hw = (int)Math.round(60 * scale);
+                int hh = (int)Math.round(23 * scale);
+                graphics.fill(cx - hw, cy - hh, cx + hw, cy + hh, (0x66 * alpha / 0xFF) << 24 | 0x0010141C);
+                graphics.renderOutline(cx - hw, cy - hh, 2 * hw, 2 * hh, body);
+                graphics.fill(cx - hw + 5, cy - hh + 6, cx - hw + 5 + (int)Math.round(46 * scale), cy - hh + 9, body);
+                graphics.fill(cx - hw + 5, cy - hh + 16, cx - hw + 5 + (int)Math.round(38 * scale), cy - hh + 19, body);
+                graphics.fill(cx - hw + 5, cy - hh + 26, cx - hw + 5 + (int)Math.round(54 * scale), cy - hh + 29, body);
+            }
+            case SCANLINE -> {
+                int hw = (int)Math.round(42 * scale);
+                int hh = (int)Math.round(23 * scale);
+                graphics.fill(cx - hw, cy - hh, cx + hw, cy + hh, (0x88 * alpha / 0xFF) << 24);
+                graphics.renderOutline(cx - hw, cy - hh, 2 * hw, 2 * hh, body);
+                for (int i = 0; i < 3; i++) {
+                    int y = cy - hh + 7 + i * 7;
+                    graphics.fill(cx - hw + 4, y, cx + hw - 4, y + 1, body);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onClose() {
+        saveAll();
+        minecraft.setScreen(parent);
+    }
+
+    // ---------------------------------------------------------------- 小工具
 
     private static void dashedRect(GuiGraphics graphics, int left, int top, int right, int bottom, int color) {
         for (int x = left; x < right; x += 4) {
@@ -298,6 +385,7 @@ public final class HudConfigScreen extends Screen {
     }
 
     private static void disc(GuiGraphics graphics, int cx, int cy, int radius, int color) {
+        if (radius <= 0) return;
         for (int y = -radius; y <= radius; y++) {
             int half = (int)Math.floor(Math.sqrt((double)radius * radius - y * y));
             graphics.fill(cx - half, cy + y, cx + half + 1, cy + y + 1, color);
@@ -305,6 +393,7 @@ public final class HudConfigScreen extends Screen {
     }
 
     private static void ring(GuiGraphics graphics, int cx, int cy, int radius, int color) {
+        if (radius <= 0) return;
         int steps = Math.max(36, radius * 6);
         for (int i = 0; i < steps; i++) {
             double angle = Math.PI * 2.0 * i / steps;
@@ -312,17 +401,5 @@ public final class HudConfigScreen extends Screen {
             int y = (int)Math.round(cy + Math.sin(angle) * radius);
             graphics.fill(x - 1, y - 1, x + 2, y + 2, color);
         }
-    }
-
-    @Override
-    public void onClose() {
-        saveAll();
-        minecraft.setScreen(parent);
-    }
-
-    /** 从暂停菜单打开时不额外接管暂停状态。 */
-    @Override
-    public boolean isPauseScreen() {
-        return false;
     }
 }

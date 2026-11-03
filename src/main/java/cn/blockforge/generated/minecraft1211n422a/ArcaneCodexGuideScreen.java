@@ -38,7 +38,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
     private static final int RECIPE_ENTRIES_PER_PAGE = 18;
     private static final List<GuidePage> PAGES = List.of(
             page("basics", 8), page("crystals", 9), page("furnaces", 9), page("processor", 13),
-            page("grinding", 8), page("potions", 9), page("exploration", 8), page("enchantments", 12),
+            page("grinding", 8), page("potions", 13), page("exploration", 8), page("enchantments", 12),
             page("magic_equipment", 12), page("progression", 9), page("magic_system", 8), page("schools", 13),
             page("media", 8), page("element_talents", 5), page("element_talents_more", 5),
             page("implemented_spells", 6), page("implemented_spells_more", 6),
@@ -53,7 +53,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
             page("new_light_shelter_rift", 9), page("new_poison_pair", 9), page("new_sound_bells", 9),
             page("achievements", 9), page("adventurer_trade", 9), page("element_plating", 10),
             page("furnace_link", 9), page("mob_combat", 11), page("relics", 18), page("battle_qi_parry", 8),
-            page("plants", 18)
+            page("plants", 18), page("mana_stone", 6)
     );
     /**
      * 章节里按 id 引用页面，不再手写页码：页码一改就容易对不上，之前“元素镀层”那一页
@@ -77,7 +77,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
             chapter("recipes", Items.KNOWLEDGE_BOOK),
             chapter("bestiary", Items.SLIME_BALL),
             chapter("exploration", Items.SPYGLASS, "exploration", "living_casters", "adventurer_trade",
-                    "mob_combat"),
+                    "mob_combat", "mana_stone"),
             chapter("progression", Items.EXPERIENCE_BOTTLE, "enchantments", "magic_equipment", "progression",
                     "insight", "achievements", "relics", "battle_qi_parry")
     );
@@ -1055,6 +1055,41 @@ public final class ArcaneCodexGuideScreen extends Screen {
                     Component.translatable("gui.dimensional_mana.guide.recipe.brewing_poison_iii_note"),
                     GeneratedMod.MOD_ID + ":manual/brewing/poison_iii"));
         }
+        // r268 魔蚀线：剧毒药水 + 魔蚀蜘蛛眼 → 魔蚀药水Ⅰ；继续喂眼逐级升到Ⅳ；红石延长到 2 分钟。
+        ItemStack erosionEye = modStack(GeneratedMod.CORRUPTED_SPIDER_EYE_ID, 1);
+        ItemStack poisonBase = PotionContents.createItemStack(Items.POTION, Potions.POISON);
+        ItemStack erosionI = PotionContents.createItemStack(Items.POTION, GeneratedMod.MAGIC_EROSION_POTIONS.get(0));
+        ItemStack erosionII = PotionContents.createItemStack(Items.POTION, GeneratedMod.MAGIC_EROSION_POTIONS.get(1));
+        ItemStack erosionLongI = PotionContents.createItemStack(Items.POTION, GeneratedMod.LONG_MAGIC_EROSION_POTIONS.get(0));
+        if (!erosionEye.isEmpty() && !erosionI.isEmpty() && !erosionII.isEmpty() && !erosionLongI.isEmpty()) {
+            recipes.add(new GuideRecipe(erosionI, List.of(single(erosionEye), single(poisonBase)),
+                    1, 2, "brewing", "alchemy", "brewing",
+                    Component.translatable("gui.dimensional_mana.guide.recipe.brewing_erosion_note"),
+                    GeneratedMod.MOD_ID + ":manual/brewing/magic_erosion"));
+            recipes.add(new GuideRecipe(erosionII, List.of(single(erosionEye), single(erosionI)),
+                    1, 2, "brewing", "alchemy", "brewing",
+                    Component.translatable("gui.dimensional_mana.guide.recipe.brewing_erosion_note"),
+                    GeneratedMod.MOD_ID + ":manual/brewing/magic_erosion_up"));
+            recipes.add(new GuideRecipe(erosionLongI, List.of(single(new ItemStack(Items.REDSTONE)), single(erosionI)),
+                    1, 2, "brewing", "alchemy", "brewing",
+                    Component.translatable("gui.dimensional_mana.guide.recipe.brewing_erosion_long_note"),
+                    GeneratedMod.MOD_ID + ":manual/brewing/magic_erosion_long"));
+        }
+        // r268 蔽魔线：魔素调和剂 + 畸变魔晶片 → 蔽魔药水；红石延长到 3 分钟。
+        ItemStack veilShard = modStack(DistortedCrystalShardEntity.ITEM_ID, 1);
+        ItemStack veilHarmonizer = modStack("mana_harmonizer", 1);
+        ItemStack veil = PotionContents.createItemStack(Items.POTION, GeneratedMod.PSEUDOMANA_VEIL_POTION);
+        ItemStack veilLong = PotionContents.createItemStack(Items.POTION, GeneratedMod.LONG_PSEUDOMANA_VEIL_POTION);
+        if (!veilShard.isEmpty() && !veilHarmonizer.isEmpty() && !veil.isEmpty() && !veilLong.isEmpty()) {
+            recipes.add(new GuideRecipe(veil, List.of(single(veilShard), single(veilHarmonizer)),
+                    1, 2, "brewing", "alchemy", "brewing",
+                    Component.translatable("gui.dimensional_mana.guide.recipe.brewing_veil_note"),
+                    GeneratedMod.MOD_ID + ":manual/brewing/pseudomana_veil"));
+            recipes.add(new GuideRecipe(veilLong, List.of(single(new ItemStack(Items.REDSTONE)), single(veil)),
+                    1, 2, "brewing", "alchemy", "brewing",
+                    Component.translatable("gui.dimensional_mana.guide.recipe.brewing_veil_long_note"),
+                    GeneratedMod.MOD_ID + ":manual/brewing/pseudomana_veil_long"));
+        }
         ItemStack thickPotion = PotionContents.createItemStack(Items.POTION, Potions.THICK);
         List<GuideIngredient> harmonizerIngredients =
                 List.of(single(modStack("lesser_mana_crystal_dust", 1)), single(thickPotion));
@@ -1068,6 +1103,16 @@ public final class ArcaneCodexGuideScreen extends Screen {
                 ManaPlants.HEALING_DRAUGHT, "brewing_restelia_note");
         addPlantBrewing(recipes, "lumelia", ManaPlants.LUMELIA_POWDER, harmonizer,
                 ManaPlants.FULL_HEALING_DRAUGHT, "brewing_lumelia_note");
+        // 升华药水：附魔金苹果放在上方材料槽，完全回复药剂放在下方药水槽（一次酿三瓶）。
+        ItemStack ascension = modStack(AscensionPotionItem.ITEM_ID, 1);
+        ItemStack fullDraught = modStack(ManaPlants.FULL_HEALING_DRAUGHT, 1);
+        if (!ascension.isEmpty() && !fullDraught.isEmpty()) {
+            recipes.add(new GuideRecipe(ascension,
+                    List.of(single(new ItemStack(Items.ENCHANTED_GOLDEN_APPLE)), single(fullDraught)),
+                    1, 2, "brewing", "alchemy", "brewing",
+                    Component.translatable("gui.dimensional_mana.guide.recipe.brewing_ascension_note"),
+                    GeneratedMod.MOD_ID + ":manual/brewing/ascension"));
+        }
         // 蕾薇莉亚粉末 + 任意补魔剂 → 同一瓶强化版；图鉴里摆下级补魔剂作代表。
         ItemStack lesserPotion = modStack("lesser_mana_potion", 1);
         ItemStack leviliaPowder = modStack(ManaPlants.LEVILIA_POWDER, 1);

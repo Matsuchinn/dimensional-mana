@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building_blocks",
+  "pattern": [
+    "P"
+  ],
+  "key": {
+    "P": {
+      "item": "dimensional_mana:erosion_planks"
+    }
+  },
+  "result": {
+    "id": "dimensional_mana:erosion_button",
+    "count": 1
+  }
+}

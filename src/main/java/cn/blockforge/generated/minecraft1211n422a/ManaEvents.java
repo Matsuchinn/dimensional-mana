@@ -55,21 +55,25 @@ public final class ManaEvents {
         SpellData.migrateSpellSkillRewards(player);
         NewSpellSystem.clearDragonSlow(player);
         var root = player.getPersistentData().getCompound("DimensionalMana");
-        if (!root.getBoolean("receivedArcaneCodex")) {
-            root.putBoolean("receivedArcaneCodex", true);
-            ItemStack book = new ItemStack(GeneratedMod.MOD_ITEMS.get("arcane_codex").get());
-            if (!player.getInventory().add(book)) player.drop(book, false);
-            player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
-                    "message.dimensional_mana.arcane_codex_received",
-                    net.minecraft.network.chat.Component.keybind("key.dimensional_mana.open_codex")), false);
-        }
-        // 战斗手册和万法知识之书一起发：第一次进世界两本都进背包，以后不再重复发。
-        if (!root.getBoolean("receivedCombatCodex")) {
-            root.putBoolean("receivedCombatCodex", true);
-            ItemStack codex = new ItemStack(GeneratedMod.MOD_ITEMS.get(CombatCodexItem.ITEM_ID).get());
-            if (!player.getInventory().add(codex)) player.drop(codex, false);
-            player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
-                    "message.dimensional_mana.combat_codex_received"), false);
+        // r289：新玩家先在反虚空领域拾取两本悬浮书，避免登录瞬间直接塞进背包。
+        // 反虚空流程失败时（例如世界数据包被禁用）由 AntiVoidSystem 自己保底发书。
+        if (!AntiVoidSystem.introQueued(player)) {
+            if (!root.getBoolean("receivedArcaneCodex")) {
+                root.putBoolean("receivedArcaneCodex", true);
+                ItemStack book = new ItemStack(GeneratedMod.MOD_ITEMS.get("arcane_codex").get());
+                if (!player.getInventory().add(book)) player.drop(book, false);
+                player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
+                        "message.dimensional_mana.arcane_codex_received",
+                        net.minecraft.network.chat.Component.keybind("key.dimensional_mana.open_codex")), false);
+            }
+            // 战斗手册和万法知识之书一起发：第一次进世界两本都进背包，以后不再重复发。
+            if (!root.getBoolean("receivedCombatCodex")) {
+                root.putBoolean("receivedCombatCodex", true);
+                ItemStack codex = new ItemStack(GeneratedMod.MOD_ITEMS.get(CombatCodexItem.ITEM_ID).get());
+                if (!player.getInventory().add(codex)) player.drop(codex, false);
+                player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
+                        "message.dimensional_mana.combat_codex_received"), false);
+            }
         }
         QiSyncPayload.send(player);
         MagicProgression.awardAdvancement(player, "root");
@@ -477,6 +481,8 @@ public final class ManaEvents {
             BattleQiParry.tick(serverPlayer);
             // 斗气技能：拔刀斩蓄力、剑士护符加速到期、自然斗气恢复。
             QiSkills.tick(serverPlayer);
+            // 古代魔法祭坛：每 5 秒把附近已登记的祭坛推给客户端画光晕（附近没有就零流量）。
+            if (serverPlayer.tickCount % 100 == 0) AncientAltarData.syncTo(serverPlayer);
         }
         if (living instanceof ServerPlayer corePlayer) ResonanceCore.tick(corePlayer);
         if (living instanceof Player player) {

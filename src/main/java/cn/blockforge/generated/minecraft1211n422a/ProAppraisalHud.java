@@ -64,20 +64,26 @@ public final class ProAppraisalHud {
         Font font = minecraft.font;
         int screenWidth = graphics.guiWidth();
         int screenHeight = graphics.guiHeight();
-        int centerX = screenWidth / 2;
-        int centerY = screenHeight / 2;
+        int centerX = HudConfig.anchorX(HudConfig.Part.APPRAISAL, screenWidth, screenHeight);
+        int centerY = HudConfig.anchorY(HudConfig.Part.APPRAISAL, screenWidth, screenHeight);
 
         if (!ClientProAppraisalState.active()) {
             // 魔素不够：整块面板都不画，只在准心下面留一句失败提示，别挡住准心。
             drawCentered(graphics, font,
                     Component.translatable("hud.dimensional_mana.appraisal.analysis_failed").getString(),
-                    centerX, centerY + 14, FAIL_COLOR);
+                    screenWidth / 2, screenHeight / 2 + 14, FAIL_COLOR);
             return;
         }
         if (ClientProAppraisalState.entityId() < 0) return;
+        HudConfig.pushScaled(graphics, centerX, centerY, HudConfig.scale(HudConfig.Part.APPRAISAL));
         renderTargetPanel(graphics, font, screenWidth, screenHeight, centerX, centerY);
+        HudConfig.popScaled(graphics);
         if (AppraisalConfig.SHOW_SCANLINE.get()) {
-            renderScanline(graphics, font, screenWidth, screenHeight);
+            int scanX = HudConfig.anchorX(HudConfig.Part.SCANLINE, screenWidth, screenHeight);
+            int scanY = HudConfig.anchorY(HudConfig.Part.SCANLINE, screenWidth, screenHeight);
+            HudConfig.pushScaled(graphics, scanX, scanY, HudConfig.scale(HudConfig.Part.SCANLINE));
+            renderScanline(graphics, font, scanX, scanY);
+            HudConfig.popScaled(graphics);
         }
     }
 
@@ -157,9 +163,9 @@ public final class ProAppraisalHud {
         int panelWidth = contentWidth + PADDING_X * 2;
         int panelHeight = contentHeight + PADDING_Y * 2;
 
-        int panelX = placeX(centerX, screenWidth, panelWidth);
-        int panelY = centerY + AppraisalConfig.HUD_OFFSET_Y.get() - panelHeight / 2;
-        panelY = clamp(panelY, SCREEN_MARGIN, screenHeight - panelHeight - SCREEN_MARGIN);
+        // 面板位置以「面板中心」为准：默认在准心右边 76 像素，玩家可以在 HUD 编辑器里拖到任意地方。
+        int panelX = clamp(centerX - panelWidth / 2, SCREEN_MARGIN, screenWidth - panelWidth - SCREEN_MARGIN);
+        int panelY = clamp(centerY - panelHeight / 2, SCREEN_MARGIN, screenHeight - panelHeight - SCREEN_MARGIN);
 
         graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, PANEL_BACKGROUND);
         graphics.renderOutline(panelX, panelY, panelWidth, panelHeight, PANEL_BORDER);
@@ -184,21 +190,6 @@ public final class ProAppraisalHud {
         }
     }
 
-    /**
-     * 面板横向位置：默认贴在准心右侧，右侧没地方就翻到左侧，两边都不够就夹在屏幕内。
-     * 开了扫描小窗时右边还要再让出小窗的宽度。
-     */
-    private static int placeX(int centerX, int screenWidth, int panelWidth) {
-        int offset = Math.max(0, AppraisalConfig.HUD_OFFSET_X.get());
-        int reservedRight = AppraisalConfig.SHOW_SCANLINE.get() ? SCANLINE_WIDTH + 14 : 0;
-        int maxLeft = screenWidth - panelWidth - SCREEN_MARGIN;
-        int x = centerX + offset;
-        if (x + panelWidth > maxLeft - reservedRight) {
-            x = centerX - offset - panelWidth;
-        }
-        return clamp(x, SCREEN_MARGIN, Math.max(SCREEN_MARGIN, maxLeft));
-    }
-
     private static int drawStatRow(GuiGraphics graphics, Font font, int x, int y, int barOffset, int valueOffset,
                                    String label, String value, double ratio, int barColor) {
         graphics.drawString(font, label, x, y, LABEL_COLOR, true);
@@ -213,10 +204,10 @@ public final class ProAppraisalHud {
         if (filled > 0) graphics.fill(x, y, x + filled, y + BAR_HEIGHT, color);
     }
 
-    /** 屏幕右侧的时间轴小窗：三条曲线 + 一条循环扫过的竖线。 */
-    private static void renderScanline(GuiGraphics graphics, Font font, int screenWidth, int screenHeight) {
-        int left = screenWidth - SCANLINE_WIDTH - 12;
-        int top = screenHeight / 2 - SCANLINE_HEIGHT / 2;
+    /** 时间轴小窗：三条曲线 + 一条循环扫过的竖线，以 {@code (centerX, centerY)} 为中心。 */
+    private static void renderScanline(GuiGraphics graphics, Font font, int centerX, int centerY) {
+        int left = centerX - SCANLINE_WIDTH / 2;
+        int top = centerY - SCANLINE_HEIGHT / 2;
         graphics.fill(left, top, left + SCANLINE_WIDTH, top + SCANLINE_HEIGHT, 0x88000000);
         graphics.renderOutline(left, top, SCANLINE_WIDTH, SCANLINE_HEIGHT, 0xFF79E8FF);
         int innerLeft = left + 3;

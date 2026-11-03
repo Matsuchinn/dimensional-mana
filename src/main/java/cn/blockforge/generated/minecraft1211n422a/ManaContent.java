@@ -55,6 +55,8 @@ public final class ManaContent {
         String id = state.getBlock().builtInRegistryHolder().key().location().toString();
         for (Map.Entry<String, Double> tier : MOD_BASE_VALUES.entrySet()) {
             if (id.contains(tier.getKey() + "_mana_crystal_ore")) return tier.getValue();
+            // r282：一块魔晶块 = 9 颗成品魔晶，含量按 9 倍算。
+            if (id.contains(tier.getKey() + "_mana_crystal_block")) return tier.getValue() * 9.0;
         }
         if (id.equals(GeneratedMod.MOD_ID + ":special_mana_crystal_cluster")) return 12000.0;
         if (id.equals(GeneratedMod.MOD_ID + ":pure_liquid_mana")) return 12000.0;
@@ -69,6 +71,7 @@ public final class ManaContent {
         for (Map.Entry<String, Double> tier : MOD_BASE_VALUES.entrySet()) {
             if (!path.contains(tier.getKey())) continue;
             if (path.endsWith("_dust")) return tier.getValue() / 4.0;
+            if (path.endsWith("_mana_crystal_block")) return tier.getValue() * 9.0;
             // 原矿、矿块、成品魔晶、补魔剂均按对应级别计量。
             return tier.getValue();
         }

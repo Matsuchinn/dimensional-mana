@@ -1538,6 +1538,54 @@
           "decay_seconds": 0.18
         }
       ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/rift/anti_void_arrive.ogg",
+      "license": "CC0-1.0",
+      "changes": "合成：低频扫频轰鸣、时变带通气流、失谐和弦垫、泛音钟群、碎光泛音簇；叠加 Kenney 冲击采样；反馈延时混响、限幅、淡入淡出、Vorbis 编码",
+      "duration_seconds": 6.0,
+      "sha256": "52fa433c9000e9f7b9373ebeadb5e64919a6de160e3c16a19ed1feeccf551393",
+      "note": "史诗级降临：低频轰鸣 → 上升气流 → 大调和弦 → 钟群炸开 → 长尾散尽",
+      "layers": [
+        {
+          "source": "synth",
+          "file": "anti_void_arrive（本脚本合成）",
+          "delay_seconds": 0,
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/rift/anti_void_return.ogg",
+      "license": "CC0-1.0",
+      "changes": "合成：低频扫频轰鸣、时变带通气流、失谐和弦垫、泛音钟群、碎光泛音簇；叠加 Kenney 冲击采样；反馈延时混响、限幅、淡入淡出、Vorbis 编码",
+      "duration_seconds": 4.2,
+      "sha256": "fd67c8e15d8e37eafed68698bf3cfc14f1523e98229dd06c1ec5c920a1b2c36f",
+      "note": "重返：更暗更短的轰鸣与和弦，末尾留一层碎光",
+      "layers": [
+        {
+          "source": "synth",
+          "file": "anti_void_return（本脚本合成）",
+          "delay_seconds": 0,
+          "gain": 1
+        }
+      ]
+    },
+    {
+      "file": "assets/dimensional_mana/sounds/rift/anti_void_leave.ogg",
+      "license": "CC0-1.0",
+      "changes": "合成：低频扫频轰鸣、时变带通气流、失谐和弦垫、泛音钟群、碎光泛音簇；叠加 Kenney 冲击采样；反馈延时混响、限幅、淡入淡出、Vorbis 编码",
+      "duration_seconds": 4.6,
+      "sha256": "fbbedd3791ac69c4c6b53ae726f87e48c3e1d868f3cf3995a1c96cec41f73feb",
+      "note": "离开：气流转为上行、和声与钟声一路向上",
+      "layers": [
+        {
+          "source": "synth",
+          "file": "anti_void_leave（本脚本合成）",
+          "delay_seconds": 0,
+          "gain": 1
+        }
+      ]
     }
   ]
 }

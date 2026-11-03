@@ -2,6 +2,8 @@ package cn.blockforge.generated.minecraft1211n422a;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -28,6 +30,20 @@ public record SteleResearchActionPayload(BlockPos pos) implements CustomPacketPa
             }
             SteleResearchData.ResearchResult result = SteleResearchData.research(player);
             if (result.success()) {
+                // r289：祭坛石碑研读时有 10% 概率补回丢失的一本初始书。
+                if (player.getRandom().nextFloat() < 0.10F) {
+                    boolean missingArcane = !ArcaneCodexItem.hasAccess(player);
+                    boolean missingCombat = !CombatCodexItem.hasAccess(player);
+                    if (missingArcane || missingCombat) {
+                        String id = missingArcane && missingCombat
+                                ? (player.getRandom().nextBoolean() ? "arcane_codex" : CombatCodexItem.ITEM_ID)
+                                : (missingArcane ? "arcane_codex" : CombatCodexItem.ITEM_ID);
+                        ItemStack recovered = new ItemStack(GeneratedMod.MOD_ITEMS.get(id).get());
+                        if (!player.getInventory().add(recovered)) player.drop(recovered, false);
+                        player.displayClientMessage(Component.translatable(
+                                "message.dimensional_mana.stele_codex_recovered", recovered.getHoverName()), false);
+                    }
+                }
                 MagicProgression.awardAdvancement(player, "first_stele_research");
                 player.serverLevel().sendParticles(ParticleTypes.ENCHANT,
                         pos.getX() + 0.5, pos.getY() + 1.25, pos.getZ() + 0.5,

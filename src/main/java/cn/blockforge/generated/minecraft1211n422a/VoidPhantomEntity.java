@@ -34,7 +34,7 @@ import java.util.UUID;
  *   <li>生命 10、移速 0.4，只会近战，每一口 8 点奥术伤害，<b>自己扣 1 点血</b>；</li>
  *   <li>死亡时对周围 4 格炸一圈 16 点奥术伤害，并把<b>生前打出的总伤害的一半</b>
  *       回喂给 32 格内的本体；</li>
- *   <li>最多同时存在 8 个（限制写在本体 {@link VoidShadeEntity#MAX_PHANTOMS} 那边），
+ *   <li>最多同时存在 4 个（限制写在本体 {@link VoidShadeEntity#MAX_PHANTOMS} 那边），
  *       本体开了眼睛状态时不再产生新的幻影。</li>
  * </ul>
  *

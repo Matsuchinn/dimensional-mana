@@ -1,29 +1,32 @@
 {
   "ambientocclusion": false,
   "render_type": "minecraft:cutout",
+  "display": {
+    "gui": {"translation": [0, 2, 0], "scale": [0.8, 0.8, 0.8]}
+  },
   "textures": {
     "particle": "dimensional_mana:block/special_mana_crystal_cluster",
     "cross": "dimensional_mana:block/special_mana_crystal_cluster"
   },
   "elements": [
     {
-      "from": [3, -4, 7.5],
-      "to": [13, 12, 8.5],
-      "rotation": {"origin": [8, 4, 8], "axis": "y", "angle": 45, "rescale": true},
+      "from": [3, 0, 7.5],
+      "to": [13, 11, 8.5],
+      "rotation": {"origin": [8, 0, 8], "axis": "y", "angle": 45, "rescale": true},
       "shade": false,
       "faces": {
-        "north": {"uv": [3, 0, 13, 16], "texture": "#cross"},
-        "south": {"uv": [3, 0, 13, 16], "texture": "#cross"}
+        "north": {"uv": [3, 2, 13, 13], "texture": "#cross"},
+        "south": {"uv": [3, 2, 13, 13], "texture": "#cross"}
       }
     },
     {
-      "from": [7.5, -4, 3],
-      "to": [8.5, 12, 13],
-      "rotation": {"origin": [8, 4, 8], "axis": "y", "angle": 45, "rescale": true},
+      "from": [7.5, 0, 3],
+      "to": [8.5, 11, 13],
+      "rotation": {"origin": [8, 0, 8], "axis": "y", "angle": 45, "rescale": true},
       "shade": false,
       "faces": {
-        "east": {"uv": [3, 0, 13, 16], "texture": "#cross"},
-        "west": {"uv": [3, 0, 13, 16], "texture": "#cross"}
+        "east": {"uv": [3, 2, 13, 13], "texture": "#cross"},
+        "west": {"uv": [3, 2, 13, 13], "texture": "#cross"}
       }
     }
   ]

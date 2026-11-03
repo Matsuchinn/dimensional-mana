@@ -1,4 +1,10 @@
 {
   "replace": false,
-  "values": ["dimensional_mana:supreme_mana_crystal_ore", "dimensional_mana:special_mana_crystal_cluster"]
+  "values": [
+    "dimensional_mana:supreme_mana_crystal_ore",
+    "dimensional_mana:special_mana_crystal_cluster",
+    "dimensional_mana:supreme_mana_crystal_block",
+    "dimensional_mana:special_mana_crystal_block",
+    "dimensional_mana:raw_supreme_mana_crystal_block"
+  ]
 }

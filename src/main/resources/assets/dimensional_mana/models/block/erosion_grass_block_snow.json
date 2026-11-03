@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "particle": "dimensional_mana:block/erosion_dirt",
+    "bottom": "dimensional_mana:block/erosion_dirt",
+    "side": "dimensional_mana:block/erosion_grass_side",
+    "top": "dimensional_mana:block/erosion_grass_top"
+  }
+}

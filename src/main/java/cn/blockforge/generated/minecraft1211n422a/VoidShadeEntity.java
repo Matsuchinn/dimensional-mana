@@ -15,8 +15,8 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
@@ -49,7 +49,8 @@ import java.util.List;
  *       10000 魔素 / 2000 斗气，两边都是每秒 20 点恢复；</li>
  *   <li><b>不怕水</b>：重写 {@link #isSensitiveToWater()} 返回 false，雨天和泡水都不再掉血、不再逃跑；</li>
  *   <li><b>末影凝视</b>：被激怒之后还敢跟它对视的玩家 / 生物，瞬间吃黑暗 8 秒、缓慢 III 8 秒、虚弱 II 8 秒
- *       （{@link #tickGazePenalty()}）；</li>
+ *       （{@link #tickGazePenalty()}）；头上扣着雕刻南瓜（与原版末影人同一套规矩）或者自己身上
+ *       挂着光元素附着的，豁免这套负面状态（{@link #gazeExempt(LivingEntity)}）；</li>
  *   <li><b>虚无幻影</b>：每次挨打，在原地留一个 {@link VoidPhantomEntity}（最多 8 个，内置 20 刻冷却）；
  *       幻影死掉会自爆，并把生前打出的伤害的一半回喂给本体；</li>
  *   <li><b>魔能爆</b>：8~64 格内、魔素够 500 时站定蓄力 2 秒，然后打出一条 64 格、<b>无视方块</b>的
@@ -78,8 +79,15 @@ public final class VoidShadeEntity extends EnderMan implements ManaRegenSource {
     public static final float MELEE_PHYSICAL = 8.0F;
     public static final float MELEE_ARCANE = 36.0F;
 
-    /** 场上最多同时存在多少个虚无幻影。 */
-    public static final int MAX_PHANTOMS = 8;
+    /**
+     * 场上最多同时存在多少个虚无幻影：4 个（设计稿的硬上限）。
+     *
+     * <p>只数 32 格内的活幻影是不够的——幻影会追着玩家跑出这个圈，本体转头又撕新的出来，
+     * 于是看起来像「无限分身」。所以计数半径放到 64 格，攒满 4 个就彻底不再生成。</p>
+     */
+    public static final int MAX_PHANTOMS = 4;
+    /** 数幻影时看多远：追出去的分身也要算进上限。 */
+    public static final double PHANTOM_COUNT_RADIUS = 64.0D;
     /** 幻影生成冷却：20 刻（设计稿要求必须有 Tick 冷却）。 */
     public static final int PHANTOM_COOLDOWN_TICKS = 20;
 
@@ -116,7 +124,7 @@ public final class VoidShadeEntity extends EnderMan implements ManaRegenSource {
     public static final float EYE_COUNTER_ARCANE = 32.0F;
     public static final double EYE_COUNTER_LIFESTEAL = 0.25D;
 
-    /** 凝视惩罚：黑暗 / 缓慢 III / 虚弱 II，各 160 刻。 */
+    /** 凝视惩罚：黑暗 / 缓慢 III / 虚弱 II，各 160 刻；南瓜头与光附着豁免（{@link #gazeExempt(LivingEntity)}）。 */
     public static final int GAZE_EFFECT_TICKS = 160;
     public static final int GAZE_SLOWNESS_AMPLIFIER = 2;
     public static final int GAZE_WEAKNESS_AMPLIFIER = 1;
@@ -538,7 +546,7 @@ public final class VoidShadeEntity extends EnderMan implements ManaRegenSource {
     public void spawnPhantom() {
         if (level().isClientSide || hasEyes()) return;
         if (phantomCooldown > 0) return;
-        if (nearbyPhantoms(32.0D).size() >= MAX_PHANTOMS) return;
+        if (nearbyPhantoms(PHANTOM_COUNT_RADIUS).size() >= MAX_PHANTOMS) return;
         if (!(level() instanceof ServerLevel serverLevel)) return;
         VoidPhantomEntity phantom = GeneratedMod.VOID_PHANTOM.get().create(serverLevel);
         if (phantom == null) return;
@@ -632,12 +640,15 @@ public final class VoidShadeEntity extends EnderMan implements ManaRegenSource {
             if (entity == this || !viewer.isAlive()) continue;
             if (entity instanceof MagicEyeEntity || entity instanceof VoidPhantomEntity) continue;
             if (!staringAtMe(viewer)) continue;
-            if (!enraged && viewer instanceof Mob mob) {
-                // 生物敢瞪它：直接当成宣战。
-                setTarget(mob);
+            // r285：只有玩家瞪它才算宣战。以前随便一只敌对生物（变异体、骷髅……）扫过来
+            // 都会被它当成挑衅，结果它整天跟别的怪打成一团，玩家反倒没人管。
+            if (!enraged && viewer instanceof Player player) {
+                setTarget(player);
                 enraged = true;
             }
             if (!enraged) continue;
+            // 豁免：雕刻南瓜头挡住「对上眼」，光元素附着扛住虚空侵蚀——都不吃这套负面状态。
+            if (gazeExempt(viewer)) continue;
             viewer.addEffect(new MobEffectInstance(MobEffects.DARKNESS, GAZE_EFFECT_TICKS, 0, false, true));
             viewer.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, GAZE_EFFECT_TICKS,
                     GAZE_SLOWNESS_AMPLIFIER, false, true));
@@ -651,6 +662,24 @@ public final class VoidShadeEntity extends EnderMan implements ManaRegenSource {
                         SoundEvents.ENDERMAN_STARE, SoundSource.HOSTILE, 1.0F, 0.55F);
             }
         }
+    }
+
+    /**
+     * 凝视豁免：两种情况不吃凝视的负面状态——
+     *
+     * <ul>
+     *   <li><b>雕刻南瓜头</b>：头上扣着南瓜就算没跟它对眼，跟原版末影人（以及它继承来的
+     *       {@code isLookingAtMe}）用的是同一件道具、同一套规矩；</li>
+     *   <li><b>光元素附着</b>：自己身上挂着 {@link ElementType#LIGHT} 附着（光球、曜光裂界、
+     *       日光环境附着等都能挂上）的，虚空侵蚀压不住光，凝视同样豁免。</li>
+     * </ul>
+     *
+     * <p>只挡 {@link #tickGazePenalty()} 这套黑暗 / 缓慢 / 虚弱；它继承原版的「对视激怒」本来
+     * 就认南瓜头，光附着则不改激怒——带光的人瞪它，它照样会记住是谁在跟它对视。</p>
+     */
+    private static boolean gazeExempt(LivingEntity viewer) {
+        if (viewer.getItemBySlot(EquipmentSlot.HEAD).is(Items.CARVED_PUMPKIN)) return true;
+        return viewer.hasEffect(GeneratedMod.elementEffect(ElementType.LIGHT));
     }
 
     private boolean staringAtMe(LivingEntity viewer) {

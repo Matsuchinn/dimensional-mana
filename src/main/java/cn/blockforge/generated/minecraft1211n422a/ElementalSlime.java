@@ -873,6 +873,23 @@ public final class ElementalSlime extends Slime {
         return false;
     }
 
+    /**
+     * 铁傀儡的「只打该打的」：普通元素史莱姆它绝不主动招惹，
+     * 只有自带领地意识的雷、火、金、毒、魔素五种会被它当成威胁。
+     *
+     * <p>原版铁傀儡的索敌条件只看"对方是不是敌对生物（Enemy）"，而元素史莱姆继承了
+     * {@link Slime}，全都算 Enemy，于是水、冰、木这些与世无争的史莱姆站在村里
+     * 也会被铁傀儡追着打。这里在 NeoForge 统一发事件的 {@code Mob#setTarget} 上否掉，
+     * 拦得住原版和任何模组的索敌 Goal。见 {@link ElementalSlimeTerritoryGoal#toleranceTicks}。</p>
+     */
+    public static void onChangeTarget(net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent event) {
+        if (!(event.getEntity() instanceof IronGolem golem)) return;
+        if (golem.level().isClientSide) return;
+        if (!(event.getNewAboutToBeSetTarget() instanceof ElementalSlime slime)) return;
+        if (ElementalSlimeTerritoryGoal.toleranceTicks(slime.variant()) > 0) return;
+        event.setCanceled(true);
+    }
+
     boolean validTerritoryTarget(LivingEntity target) {
         if (target == null || target == this || !target.isAlive() || isTamed()) return false;
         if (isGoblinAlly()) return goblinAllyTarget(target);

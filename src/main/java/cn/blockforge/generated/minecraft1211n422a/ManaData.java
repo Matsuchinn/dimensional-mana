@@ -343,6 +343,19 @@ public final class ManaData {
         increaseBaseMaxMana(player, points);
     }
 
+    /** 反虚空回溯之门使用的永久惩罚：按基础魔素上限百分比削减，返回实际削减量。 */
+    public static double reduceBaseMaxManaPercent(Player player, double percent) {
+        CompoundTag t = tag(player);
+        double oldBase = t.getDouble("baseMaxMana");
+        double clampedPercent = Math.max(0.0D, Math.min(0.99D, percent));
+        double newBase = Math.max(1.0D, oldBase * (1.0D - clampedPercent));
+        double reduced = oldBase - newBase;
+        t.putDouble("baseMaxMana", newBase);
+        t.putDouble("maxMana", get(player).maxMana());
+        setMana(player, t.getDouble("mana"), true);
+        return reduced;
+    }
+
     public static void increaseBaseMaxMana(Player player, double points) {
         CompoundTag t = tag(player);
         double oldMax = t.getDouble("baseMaxMana");

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:blasting",
+  "ingredient": {
+    "item": "dimensional_mana:erosion_stone"
+  },
+  "result": {
+    "id": "dimensional_mana:smooth_erosion_stone",
+    "count": 1
+  },
+  "experience": 0.1,
+  "cookingtime": 100
+}

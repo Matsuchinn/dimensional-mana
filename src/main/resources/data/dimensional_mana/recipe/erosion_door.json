@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building_blocks",
+  "pattern": [
+    "PP",
+    "PP",
+    "PP"
+  ],
+  "key": {
+    "P": {
+      "item": "dimensional_mana:erosion_planks"
+    }
+  },
+  "result": {
+    "id": "dimensional_mana:erosion_door",
+    "count": 3
+  }
+}

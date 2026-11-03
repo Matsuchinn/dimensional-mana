@@ -720,6 +720,19 @@ public final class CorruptedWeaverEntity extends Spider {
         if (isBombJumping() && onGround() && tickCount > 5) setBombJumping(false);
     }
 
+    /**
+     * 免疫摔落伤害。
+     *
+     * <p>织网者本来就会主动「冲天一跳」（8~16 格时高跳喷毒），以前跳上矿柱顶再掉下来
+     * 会摔掉小半管血，看起来像是被地形卡着扣血。它又没有翅膀，跳得高是技能，不该付摔落费。
+     * 注意只免疫摔落：岩浆、窒息、火焰照常结算。</p>
+     */
+    @Override
+    public boolean causeFallDamage(float fallDistance, float multiplier,
+                                   net.minecraft.world.damagesource.DamageSource source) {
+        return false;
+    }
+
     /** 客户端：身上时不时冒一点魔晶紫尘，眼睛发紫光的感觉靠贴图。 */
     private void clientParticles() {
         if (random.nextInt(5) != 0) return;

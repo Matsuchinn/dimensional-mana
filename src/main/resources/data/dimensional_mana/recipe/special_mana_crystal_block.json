@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building_blocks",
+  "pattern": [
+    "CCC",
+    "CCC",
+    "CCC"
+  ],
+  "key": {
+    "C": {
+      "item": "dimensional_mana:special_mana_crystal"
+    }
+  },
+  "result": {
+    "id": "dimensional_mana:special_mana_crystal_block",
+    "count": 1
+  }
+}

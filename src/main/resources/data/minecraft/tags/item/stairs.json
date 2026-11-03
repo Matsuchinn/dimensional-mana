@@ -1,0 +1,10 @@
+{
+  "values": [
+    "dimensional_mana:erosion_stairs",
+    "dimensional_mana:erosion_stone_stairs",
+    "dimensional_mana:smooth_erosion_stone_stairs",
+    "dimensional_mana:erosion_stone_brick_stairs",
+    "dimensional_mana:erosion_cobblestone_stairs"
+  ],
+  "replace": false
+}

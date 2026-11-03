@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "dimensional_mana:block/erosion_stone_slab"
+    },
+    "type=double": {
+      "model": "minecraft:block/stone"
+    },
+    "type=top": {
+      "model": "dimensional_mana:block/erosion_stone_slab_top"
+    }
+  }
+}

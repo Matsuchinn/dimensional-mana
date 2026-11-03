@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building_blocks",
+  "pattern": [
+    "S  ",
+    "SS ",
+    "SSS"
+  ],
+  "key": {
+    "S": {
+      "item": "dimensional_mana:smooth_erosion_stone"
+    }
+  },
+  "result": {
+    "id": "dimensional_mana:smooth_erosion_stone_stairs",
+    "count": 4
+  }
+}

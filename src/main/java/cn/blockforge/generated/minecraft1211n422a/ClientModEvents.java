@@ -1,6 +1,7 @@
 package cn.blockforge.generated.minecraft1211n422a;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.shaders.FogShape;
 import net.minecraft.client.Minecraft;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
@@ -15,6 +16,8 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.neoforged.bus.api.IEventBus;
+import net.minecraft.client.renderer.ItemBlockRenderTypes;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.item.ItemProperties;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -104,11 +107,16 @@ public final class ClientModEvents {
         modBus.addListener(ClientModEvents::registerMagicModels);
         modBus.addListener(ClientModEvents::mapMagicModels);
         modBus.addListener(ClientModEvents::registerItemColors);
+        modBus.addListener(ClientModEvents::registerBlockColors);
+        modBus.addListener(ClientModEvents::registerParticles);
+        modBus.addListener(ClientModEvents::registerDimensionEffects);
         modBus.addListener(ClientModEvents::clientSetup);
         NeoForge.EVENT_BUS.addListener(ClientModEvents::addEffectTooltips);
         NeoForge.EVENT_BUS.addListener(ClientModEvents::clientTick);
         NeoForge.EVENT_BUS.addListener(ClientModEvents::interactionKey);
         NeoForge.EVENT_BUS.addListener(ClientModEvents::movementInput);
+        NeoForge.EVENT_BUS.addListener(ClientModEvents::antiVoidFogColor);
+        NeoForge.EVENT_BUS.addListener(ClientModEvents::antiVoidFogDistance);
         NeoForge.EVENT_BUS.addListener(ClientSpellVisuals::tick);
         NeoForge.EVENT_BUS.addListener(ClientSpellVisuals::render);
         NeoForge.EVENT_BUS.addListener(ClientParryVisuals::tick);
@@ -123,6 +131,7 @@ public final class ClientModEvents {
         NeoForge.EVENT_BUS.addListener(SwordmasterVisuals::tick);
         NeoForge.EVENT_BUS.addListener(ClientManaSenseState::tick);
         NeoForge.EVENT_BUS.addListener(ClientManaRadarState::tick);
+        NeoForge.EVENT_BUS.addListener(ClientAltarAuraState::tick);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event)
                 -> {
             ClientResonanceCoreState.clear();
@@ -131,6 +140,7 @@ public final class ClientModEvents {
             // 退出世界时把鉴定 HUD 的数据清干净，免得下次进服先闪一帧上一个存档的目标。
             ClientProAppraisalState.clear();
             ClientQiState.clear();
+            ClientAltarAuraState.clear();
             ClientMagicCirclePayloadHandler.clearPendingRemote();
             qiCastHeld = false;
             qiCastSuppressed = false;
@@ -139,26 +149,27 @@ public final class ClientModEvents {
         NeoForge.EVENT_BUS.addListener(SwordmasterVisuals::render);
         NeoForge.EVENT_BUS.addListener(ClientManaSenseState::render);
         NeoForge.EVENT_BUS.addListener(ClientManaRadarState::render);
+        NeoForge.EVENT_BUS.addListener(ClientAltarAuraState::render);
         NeoForge.EVENT_BUS.addListener(InventoryGlowEffects::render);
     }
 
     /**
-     * 登记客户端配置与模组列表里的「配置」入口（HUD 可视化编辑器）。
+     * 登记客户端配置与模组列表里的「配置」入口。
      *
-     * <p>这里引用了 {@code Screen}、{@code IConfigScreenFactory} 这类只允许在客户端加载的类，
+     * <p>入口先开 {@link ModConfigHubScreen}：HUD 位置/大小、显示开关、以及全部 toml 配置文件
+     * （NeoForge 的标准 {@code ConfigurationScreen}）都在里面，不再只有 HUD 一项。
+     * 这里引用了 {@code Screen}、{@code IConfigScreenFactory} 这类只允许在客户端加载的类，
      * 所以必须待在 {@link ClientModEvents} 里、由主类在 {@code Dist.CLIENT} 分支调用——
      * 放进主类构造函数会让专用服务器在建模组实例时报 DISTXFORM 崩溃。</p>
      */
     public static void registerConfigs(net.neoforged.fml.ModContainer container) {
         container.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT,
-                ClientManaConfig.SPEC, "dimensional_mana-client.toml");
-        container.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT,
                 HudConfig.SPEC, "dimensional_mana-hud.toml");
         container.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT,
                 RenderCompatConfig.SPEC, "dimensional_mana-rendercompat.toml");
-        // 模组列表里点「配置」直接进 HUD 可视化编辑器（IConfigScreenFactory 是 NeoForge 的扩展点）。
+        // 模组列表里点「配置」→ 配置入口（HUD 可视化编辑 + 全部配置文件）。
         container.registerExtensionPoint(net.neoforged.neoforge.client.gui.IConfigScreenFactory.class,
-                (modContainer, parent) -> new HudConfigScreen(parent));
+                ModConfigHubScreen::new);
     }
 
     private static ModelResourceLocation inventoryModel(String id) {
@@ -174,7 +185,14 @@ public final class ClientModEvents {
     /** 客户端初始化：登记物品图标的帧动画属性，时间点必须早于模型烘焙。 */
     private static void clientSetup(FMLClientSetupEvent event) {
         ClientItemAnimations.register(event);
-        event.enqueueWork(ClientModEvents::registerGoblinItemProperties);
+        event.enqueueWork(() -> {
+            registerGoblinItemProperties();
+            // 反虚空的膜、星穹框和两扇能量门使用半透明渲染层；贴图本身仍保持像素风方块质感。
+            ItemBlockRenderTypes.setRenderLayer(GeneratedMod.MOD_BLOCKS.get("membrane").get(), RenderType.translucent());
+            ItemBlockRenderTypes.setRenderLayer(GeneratedMod.MOD_BLOCKS.get("astral_rift_frame").get(), RenderType.translucent());
+            ItemBlockRenderTypes.setRenderLayer(GeneratedMod.MOD_BLOCKS.get("rift_gate_crimson").get(), RenderType.translucent());
+            ItemBlockRenderTypes.setRenderLayer(GeneratedMod.MOD_BLOCKS.get("rift_gate_azure").get(), RenderType.translucent());
+        });
     }
 
     /**
@@ -638,6 +656,72 @@ public final class ClientModEvents {
         event.register(relicColor, relics.toArray(new net.minecraft.world.level.ItemLike[0]));
     }
 
+    /**
+     * r276：给「绿油油」的两种植物套一层群系滤镜。
+     *
+     * <p>瑞斯特莉亚和卢梅莉亚的贴图本身是固定的嫩绿色，可它们靠魔素浓度生长，在蚀魔荒原
+     * （浓度 13.5 上下）会成片出现——一片紫灰的荒原上冒出满地荧光绿，特别出戏。
+     * 这里给它们注册<b>方块染色</b>（模型里 cross 的 tintindex 是 0），颜色取原版草方块用的
+     * {@link net.minecraft.client.renderer.BiomeColors#getAverageGrassColor}：
+     * 在荒原里自动变成群系配置的浅紫草色，在其他群系里则是当地草色，和原版短草一个逻辑。
+     * 物品栏 / 手持时没有世界坐标，返回 -1（不染色），保留贴图原色好认。</p>
+     */
+    private static void registerBlockColors(net.neoforged.neoforge.client.event.RegisterColorHandlersEvent.Block event) {
+        net.minecraft.client.color.block.BlockColor biomeGrass = (state, level, pos, tintIndex) -> {
+            if (tintIndex != 0 || level == null || pos == null) return -1;
+            return net.minecraft.client.renderer.BiomeColors.getAverageGrassColor(level, pos);
+        };
+        event.register(biomeGrass,
+                GeneratedMod.MOD_BLOCKS.get(ManaPlants.Kind.RESTELIA.id()).get(),
+                GeneratedMod.MOD_BLOCKS.get(ManaPlants.Kind.LUMELIA.id()).get());
+    }
+
+    /** r271：蚀魔荒原的落叶粒子。贴图帧表在 assets/dimensional_mana/particles/erosion_leaf.json。 */
+    private static void registerParticles(net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent event) {
+        event.registerSpriteSet(ErosionWasteland.EROSION_LEAF.get(),
+                sprites -> (options, level, x, y, z, xo, yo, zo) ->
+                        new ErosionLeafParticle(level, x, y, z, sprites));
+        // r290：膜面水波纹——8 帧动画贴图 + 代码放大淡出（AntiVoidSystem#membraneRipple 负责发射）。
+        // r291：粒子登记挪到 GeneratedMod.MEMBRANE_RIPPLE（在注册窗口内完成，见那里的注释）。
+        event.registerSpriteSet(GeneratedMod.MEMBRANE_RIPPLE.get(),
+                sprites -> (options, level, x, y, z, xo, yo, zo) ->
+                        new MembraneRippleParticle(level, x, y, z, sprites));
+    }
+
+    /**
+     * r290：给反虚空注册自定义维度特效（id 要和 data/dimensional_mana/dimension_type/anti_void.json
+     * 里 "effects" 字段一致）。没有这一步，客户端会沿用 minecraft:the_end 的黑色虚空天空，
+     * 渲染距离外一圈永远是漆黑一片。
+     */
+    private static void registerDimensionEffects(
+            net.neoforged.neoforge.client.event.RegisterDimensionSpecialEffectsEvent event) {
+        event.register(ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "anti_void"),
+                new AntiVoidDimensionEffects());
+    }
+
+    private static boolean isAntiVoidCamera(net.minecraft.client.Camera camera) {
+        net.minecraft.world.entity.Entity entity = camera.getEntity();
+        return entity != null && entity.level().dimension().equals(AntiVoidSystem.ANTI_VOID);
+    }
+
+    /** 光影通常会接管天空和雾；这里把反虚空的背景色固定为纯白。 */
+    private static void antiVoidFogColor(
+            net.neoforged.neoforge.client.event.ViewportEvent.ComputeFogColor event) {
+        if (!isAntiVoidCamera(event.getCamera())) return;
+        event.setRed(1.0F);
+        event.setGreen(1.0F);
+        event.setBlue(1.0F);
+    }
+
+    /** 用白色近距离球形雾幕遮住光影天空，保留门和脚下膜面的可见距离。 */
+    private static void antiVoidFogDistance(
+            net.neoforged.neoforge.client.event.ViewportEvent.RenderFog event) {
+        if (!isAntiVoidCamera(event.getCamera())) return;
+        event.setNearPlaneDistance(4.0F);
+        event.setFarPlaneDistance(96.0F);
+        event.setFogShape(FogShape.SPHERE);
+    }
+
     private static void registerScreens(RegisterMenuScreensEvent event) {
         event.register(GeneratedMod.GRINDER_MENU.get(), GrinderScreen::new);
         event.register(GeneratedMod.MANA_FORGE_MENU.get(), ManaFurnaceScreen::new);
@@ -700,11 +784,13 @@ public final class ClientModEvents {
     private static void renderManaHud(GuiGraphics graphics) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null || minecraft.options.hideGui) return;
+        int guiWidth = graphics.guiWidth();
+        int guiHeight = graphics.guiHeight();
 
-        int centerX = Math.max(28, Math.min(graphics.guiWidth() - 28, ClientManaConfig.HUD_X_FROM_LEFT.get()));
-        int centerY = Math.max(30, Math.min(graphics.guiHeight() - 30,
-                graphics.guiHeight() - ClientManaConfig.HUD_Y_FROM_BOTTOM.get()));
-        int radius = 17;
+        // 魔素球（图标）与魔素数字（文字）是两块独立的部件，位置和大小各调各的。
+        int centerX = HudConfig.anchorX(HudConfig.Part.MANA_ICON, guiWidth, guiHeight);
+        int centerY = HudConfig.anchorY(HudConfig.Part.MANA_ICON, guiWidth, guiHeight);
+        int radius = HudConfig.ORB_RADIUS;
         double maxMana = Math.max(1.0, ClientManaState.maxMana());
         double manaRatio = Math.max(0.0, ClientManaState.mana() / maxMana);
         double safeRatio = Math.max(1.0, ClientManaState.overchargeSafeRatio());
@@ -718,6 +804,7 @@ public final class ClientModEvents {
         int overloadRgb = Mth.hsvToRgb(overloadHue, 0.72F, 1.0F);
         int overloadColor = 0xE8000000 | overloadRgb;
 
+        HudConfig.pushScaled(graphics, centerX, centerY, HudConfig.scale(HudConfig.Part.MANA_ICON));
         drawDisc(graphics, centerX + 2, centerY + 2, radius + 2, 0x78000000);
         drawDisc(graphics, centerX, centerY, radius + 1, overloaded ? 0xFF2A1638 : 0xFF101629);
         for (int y = -radius; y <= radius; y++) {
@@ -742,19 +829,27 @@ public final class ClientModEvents {
             drawBattleQiRing(graphics, centerX, centerY, radius + 7, excessRatio, 0xFF40243C, 0xFFFF67DB);
         }
         if (ClientManaState.exhausted()) drawBattleQiRing(graphics, centerX, centerY, radius + 1, 1.0, 0xFFFF4050, 0xFFFF4050);
+        HudConfig.popScaled(graphics);
 
-        double textScale = ClientManaConfig.MANA_TEXT_SCALE.get();
         int manaTextColor = overloaded ? 0xFF000000 | overloadRgb
                 : overchargeFill > 0.0 ? 0xFFBFFFF9 : 0xFFFFFFFF;
         if (HudConfig.SHOW_MANA_NUMBER.get()) {
+            int textX = HudConfig.anchorX(HudConfig.Part.MANA_TEXT, guiWidth, guiHeight);
+            int textY = HudConfig.anchorY(HudConfig.Part.MANA_TEXT, guiWidth, guiHeight);
+            double textScale = HudConfig.scale(HudConfig.Part.MANA_TEXT);
             drawScaledCenteredString(graphics, minecraft, String.format("%.0f", ClientManaState.mana()),
-                    centerX, centerY - 5, manaTextColor, textScale);
+                    textX, textY - 5, manaTextColor, textScale);
             drawScaledCenteredString(graphics, minecraft, "/ " + String.format("%.0f", ClientManaState.maxMana()),
-                    centerX, centerY + 5, overloaded ? 0xFFFFFFFF : 0xFFBED5FF, textScale);
+                    textX, textY + 5, overloaded ? 0xFFFFFFFF : 0xFFBED5FF, textScale);
         }
         if (HudConfig.SHOW_SPELL_HUD.get()) {
-            renderSelectedSpellHud(graphics, minecraft, centerX + radius + 13, centerY - 12);
-            renderQiSlotIcon(graphics, minecraft, centerX + radius + 13, centerY - 12);
+            // 法术信息块：以图标中心为锚点，整块（含技能名、吟唱条、斗气图标）一起缩放。
+            int spellX = HudConfig.anchorX(HudConfig.Part.SPELL_HUD, guiWidth, guiHeight);
+            int spellY = HudConfig.anchorY(HudConfig.Part.SPELL_HUD, guiWidth, guiHeight);
+            HudConfig.pushScaled(graphics, spellX, spellY, HudConfig.scale(HudConfig.Part.SPELL_HUD));
+            renderSelectedSpellHud(graphics, minecraft, spellX - 10, spellY - 10);
+            renderQiSlotIcon(graphics, minecraft, spellX - 10, spellY - 10);
+            HudConfig.popScaled(graphics);
         }
     }
 

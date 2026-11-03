@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:smelting",
+  "ingredient": {
+    "item": "dimensional_mana:raw_medium_mana_crystal_block"
+  },
+  "result": {
+    "id": "dimensional_mana:medium_mana_crystal_block"
+  },
+  "experience": 4.5,
+  "cookingtime": 320
+}

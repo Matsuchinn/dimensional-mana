@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:smelting",
+  "ingredient": {
+    "tag": "dimensional_mana:recyclable_iron_gear"
+  },
+  "result": {
+    "id": "minecraft:raw_iron",
+    "count": 1
+  },
+  "experience": 0.35,
+  "cookingtime": 200
+}

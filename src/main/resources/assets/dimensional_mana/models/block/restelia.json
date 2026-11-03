@@ -1,6 +1,5 @@
 {
-  "parent": "minecraft:block/cross",
-  "render_type": "minecraft:cutout",
+  "parent": "dimensional_mana:block/tinted_plant_cross",
   "textures": {
     "cross": "dimensional_mana:block/restelia"
   }

@@ -1,21 +1,135 @@
 {
   "variants": {
-    "wall_mounted=false": {
-      "model": "dimensional_mana:block/lumelia"
-    },
-    "wall_mounted=true,facing=north": {
+    "above=false,below=false,wall_mounted=false": [
+      {
+        "model": "dimensional_mana:block/lumelia",
+        "y": 0
+      },
+      {
+        "model": "dimensional_mana:block/lumelia",
+        "y": 90
+      },
+      {
+        "model": "dimensional_mana:block/lumelia",
+        "y": 180
+      },
+      {
+        "model": "dimensional_mana:block/lumelia",
+        "y": 270
+      }
+    ],
+    "above=true,below=false,wall_mounted=false": [
+      {
+        "model": "dimensional_mana:block/lumelia_bottom",
+        "y": 0
+      },
+      {
+        "model": "dimensional_mana:block/lumelia_bottom",
+        "y": 90
+      },
+      {
+        "model": "dimensional_mana:block/lumelia_bottom",
+        "y": 180
+      },
+      {
+        "model": "dimensional_mana:block/lumelia_bottom",
+        "y": 270
+      }
+    ],
+    "above=true,below=true,wall_mounted=false": [
+      {
+        "model": "dimensional_mana:block/lumelia_middle",
+        "y": 0
+      },
+      {
+        "model": "dimensional_mana:block/lumelia_middle",
+        "y": 90
+      },
+      {
+        "model": "dimensional_mana:block/lumelia_middle",
+        "y": 180
+      },
+      {
+        "model": "dimensional_mana:block/lumelia_middle",
+        "y": 270
+      }
+    ],
+    "above=false,below=true,wall_mounted=false": [
+      {
+        "model": "dimensional_mana:block/lumelia_top",
+        "y": 0
+      },
+      {
+        "model": "dimensional_mana:block/lumelia_top",
+        "y": 90
+      },
+      {
+        "model": "dimensional_mana:block/lumelia_top",
+        "y": 180
+      },
+      {
+        "model": "dimensional_mana:block/lumelia_top",
+        "y": 270
+      }
+    ],
+    "above=false,below=false,wall_mounted=true,facing=north": {
       "model": "dimensional_mana:block/lumelia_wall"
     },
-    "wall_mounted=true,facing=east": {
+    "above=false,below=false,wall_mounted=true,facing=east": {
       "model": "dimensional_mana:block/lumelia_wall",
       "y": 90
     },
-    "wall_mounted=true,facing=south": {
+    "above=false,below=false,wall_mounted=true,facing=south": {
       "model": "dimensional_mana:block/lumelia_wall",
       "y": 180
     },
-    "wall_mounted=true,facing=west": {
+    "above=false,below=false,wall_mounted=true,facing=west": {
       "model": "dimensional_mana:block/lumelia_wall",
+      "y": 270
+    },
+    "above=true,below=false,wall_mounted=true,facing=north": {
+      "model": "dimensional_mana:block/lumelia_wall_bottom"
+    },
+    "above=true,below=false,wall_mounted=true,facing=east": {
+      "model": "dimensional_mana:block/lumelia_wall_bottom",
+      "y": 90
+    },
+    "above=true,below=false,wall_mounted=true,facing=south": {
+      "model": "dimensional_mana:block/lumelia_wall_bottom",
+      "y": 180
+    },
+    "above=true,below=false,wall_mounted=true,facing=west": {
+      "model": "dimensional_mana:block/lumelia_wall_bottom",
+      "y": 270
+    },
+    "above=true,below=true,wall_mounted=true,facing=north": {
+      "model": "dimensional_mana:block/lumelia_wall_middle"
+    },
+    "above=true,below=true,wall_mounted=true,facing=east": {
+      "model": "dimensional_mana:block/lumelia_wall_middle",
+      "y": 90
+    },
+    "above=true,below=true,wall_mounted=true,facing=south": {
+      "model": "dimensional_mana:block/lumelia_wall_middle",
+      "y": 180
+    },
+    "above=true,below=true,wall_mounted=true,facing=west": {
+      "model": "dimensional_mana:block/lumelia_wall_middle",
+      "y": 270
+    },
+    "above=false,below=true,wall_mounted=true,facing=north": {
+      "model": "dimensional_mana:block/lumelia_wall_top"
+    },
+    "above=false,below=true,wall_mounted=true,facing=east": {
+      "model": "dimensional_mana:block/lumelia_wall_top",
+      "y": 90
+    },
+    "above=false,below=true,wall_mounted=true,facing=south": {
+      "model": "dimensional_mana:block/lumelia_wall_top",
+      "y": 180
+    },
+    "above=false,below=true,wall_mounted=true,facing=west": {
+      "model": "dimensional_mana:block/lumelia_wall_top",
       "y": 270
     }
   }

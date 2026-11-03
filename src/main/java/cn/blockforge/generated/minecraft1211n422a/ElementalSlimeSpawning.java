@@ -49,6 +49,9 @@ public final class ElementalSlimeSpawning {
 
     public static void tickLevel(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
+        // r290：反虚空是「绝对纯净空间」，不允许任何生命。它的超平坦地形会被这套系统
+        // 误判成地下（头顶 256 格封印层挡着视线），兜底规则于是刷出土元素史莱姆——整段跳过。
+        if (level.dimension().equals(AntiVoidSystem.ANTI_VOID)) return;
         WorldgenSpawnQueue.tick(level);
         if (level.getGameTime() % 20 != 0) return;
         for (ServerPlayer player : level.players()) {
@@ -434,6 +437,8 @@ public final class ElementalSlimeSpawning {
                               boolean fluidSurface, boolean airborne) {
         // 野外刷怪的统一闸门：环境刷新、音乐/雷击/魔晶洞穴补刷全都从这里过。
         if (!SpawnControl.hostileSpawningAllowed(level)) return;
+        // r290：连雷击、爆炸这类「声音召怪」的旁路也一并封死——反虚空里任何途径都不许出史莱姆。
+        if (level.dimension().equals(AntiVoidSystem.ANTI_VOID)) return;
         for (int i = 0; i < count; i++) {
             ElementalSlime slime = GeneratedMod.elementalSlimeType(variant).create(level);
             if (slime == null) continue;

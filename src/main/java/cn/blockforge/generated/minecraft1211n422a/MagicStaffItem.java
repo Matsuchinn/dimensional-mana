@@ -16,7 +16,7 @@ import net.minecraft.world.item.component.ItemAttributeModifiers;
 
 import java.util.List;
 
-/** 可手持的通用法杖；双持时只采用加成更高的一把，避免属性重复叠加。 */
+/** 可手持的粗制魔晶魔杖（原「通用法杖」）；双持时只采用加成更高的一把，避免属性重复叠加。 */
 public final class MagicStaffItem extends Item {
     private static final ResourceLocation SPELL_POWER_MODIFIER = ResourceLocation.fromNamespaceAndPath(
             GeneratedMod.MOD_ID, "held_staff_spell_power");
@@ -69,14 +69,14 @@ public final class MagicStaffItem extends Item {
         return stack.getItem() instanceof MagicStaffItem staff ? staff.stats : StaffStats.NONE;
     }
 
-    /** 成功施法后消耗实际提供加成的法杖 1 点耐久。 */
-    public static void damageHeldStaff(LivingEntity caster) {
+    /** 成功施法后消耗实际提供加成的法杖耐久；磨损量按法术品级结算（初级 1 / 中级 4 / 高级 16）。 */
+    public static void damageHeldStaff(LivingEntity caster, int amount) {
         ItemStack main = caster.getMainHandItem();
         ItemStack off = caster.getOffhandItem();
         ItemStack chosen = stats(main).spellDamage() >= stats(off).spellDamage() ? main : off;
         if (!(chosen.getItem() instanceof MagicStaffItem) || !(caster.level() instanceof net.minecraft.server.level.ServerLevel)) return;
         EquipmentSlot slot = chosen == main ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND;
-        chosen.hurtAndBreak(1, caster, slot);
+        chosen.hurtAndBreak(amount, caster, slot);
     }
 
     @Override

@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": {
+    "item": "dimensional_mana:erosion_cobblestone"
+  },
+  "result": {
+    "id": "dimensional_mana:erosion_cobblestone_wall",
+    "count": 1
+  }
+}

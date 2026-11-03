@@ -1,0 +1,15 @@
+{
+  "structures": [
+    {
+      "structure": "dimensional_mana:open_air_mana_crystal_cluster",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "minecraft:random_spread",
+    "salt": 20280614,
+    "spacing": 26,
+    "separation": 10,
+    "frequency": 1.0
+  }
+}

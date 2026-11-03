@@ -1,0 +1,18 @@
+{
+  "values": [
+    "dimensional_mana:erosion_log",
+    "dimensional_mana:stripped_erosion_log",
+    "dimensional_mana:erosion_planks",
+    "dimensional_mana:erosion_slab",
+    "dimensional_mana:erosion_stairs",
+    "dimensional_mana:erosion_fence",
+    "dimensional_mana:erosion_fence_gate",
+    "dimensional_mana:erosion_button",
+    "dimensional_mana:erosion_pressure_plate",
+    "dimensional_mana:erosion_door",
+    "dimensional_mana:erosion_trapdoor",
+    "dimensional_mana:erosion_leaves",
+    "dimensional_mana:erosion_sapling"
+  ],
+  "replace": false
+}

@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "dimensional_mana:rough_cloth_helmet",
+    "dimensional_mana:rough_cloth_chestplate",
+    "dimensional_mana:rough_cloth_leggings",
+    "dimensional_mana:rough_cloth_boots"
+  ]
+}

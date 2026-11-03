@@ -45,8 +45,6 @@ public class ManaPlantBlock extends BushBlock {
     private static final VoxelShape SHAPE = Block.box(2.0, 0.0, 2.0, 14.0, 13.0, 14.0);
     /** 触碰超过 5 秒（100 刻）之后开始每秒掉血；血越少咬得越狠。 */
     private static final int BLOOD_BITE_TICKS = 100;
-    /** 卢梅莉亚最多向上攀三格。 */
-    private static final int LUMELIA_MAX_HEIGHT = 3;
 
     private final ManaPlants.Kind kind;
 
@@ -173,20 +171,6 @@ public class ManaPlantBlock extends BushBlock {
             player.displayClientMessage(Component.translatable(
                     "message.dimensional_mana.vesper_unknown").withStyle(ChatFormatting.DARK_PURPLE), false);
         }
-    }
-
-    /** 卢梅莉亚顺着自己往上攀：随机刻长高一格，最高三格。 */
-    @Override
-    protected void randomTick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
-        super.randomTick(state, level, pos, random);
-        if (kind != ManaPlants.Kind.LUMELIA) return;
-        int height = 1;
-        while (height < LUMELIA_MAX_HEIGHT && level.getBlockState(pos.below(height)).is(this)) height++;
-        if (height >= LUMELIA_MAX_HEIGHT) return;
-        if (random.nextFloat() > 0.35F) return;
-        BlockPos above = pos.above();
-        if (!level.getBlockState(above).canBeReplaced()) return;
-        level.setBlock(above, defaultBlockState(), Block.UPDATE_CLIENTS);
     }
 
     /** 会发光的两种植物在夜里飘一点微光，远远就能看见。 */

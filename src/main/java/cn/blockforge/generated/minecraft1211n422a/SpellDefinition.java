@@ -158,6 +158,8 @@ public enum SpellDefinition {
                 || this == RADIANT_RIFT || this == VENOM_NIGHT || this == SOUL_CHORD;
     }
     public String grade() { return isIntermediate() ? "medium" : isAdvanced() ? "advanced" : "lesser"; }
+    /** 一次成功施法对粗制法杖造成的耐久磨损：初级 1、中级 4、高级 16。 */
+    public int staffWearCost() { return isAdvanced() ? 16 : isIntermediate() ? 4 : 1; }
     /** 奥术没有元素媒介：中级及以上改用同品级奥术碎片，初级奥术仍不消耗碎片。 */
     public String elementFragmentId() {
         ElementType element = element();

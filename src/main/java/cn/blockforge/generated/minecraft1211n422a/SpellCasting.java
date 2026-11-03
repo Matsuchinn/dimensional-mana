@@ -310,6 +310,8 @@ public final class SpellCasting {
             return;
         }
         syncMana(player);
+        // r268 蔽魔药水：释放法术即撕碎假面（读条一开始就破，不等到落点结算）。
+        PseudomanaVeilEffect.breakVeil(player);
         // 魔法大师披风：施法成功时按概率在身边召出一颗魔素凝聚球（披风自己的开关关掉时不触发）。
         if (player.getRandom().nextFloat() < MagicEquipment.manaOrbChance(player)) ManaOrb.summon(player);
         // 大师施法手套：每 5 次施法为一个小循环，第 5 次的伤害必定暴击。
@@ -494,7 +496,7 @@ public final class SpellCasting {
             return;
         }
         apply(player, spell, targets);
-        MagicStaffItem.damageHeldStaff(player);
+        MagicStaffItem.damageHeldStaff(player, spell.staffWearCost());
         MagicProgression.recordSpellCast(player);
         if (learning) {
             int progress = SpellData.recordLearningSuccess(player, spell);

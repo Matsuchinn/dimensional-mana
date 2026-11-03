@@ -1,0 +1,19 @@
+{
+  "type": "dimensional_mana:anti_void",
+  "generator": {
+    "type": "minecraft:flat",
+    "settings": {
+      "layers": [
+        { "block": "dimensional_mana:anti_void_block", "height": 1 },
+        { "block": "minecraft:air", "height": 159 },
+        { "block": "dimensional_mana:membrane", "height": 1 },
+        { "block": "minecraft:air", "height": 159 },
+        { "block": "dimensional_mana:anti_void_block", "height": 16 }
+      ],
+      "biome": "dimensional_mana:anti_void",
+      "features": false,
+      "lakes": false,
+      "structure_overrides": []
+    }
+  }
+}

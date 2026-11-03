@@ -146,6 +146,12 @@ public final class CrystallizedZombie extends Zombie {
         return false;
     }
 
+    /** r271：蚀魔荒原白天也要成群刷——晶化体质不怕太阳，和魔蚀骸骨同一套逻辑。 */
+    @Override
+    protected boolean isSunBurnTick() {
+        return false;
+    }
+
     @Override
     protected void populateDefaultEquipmentSlots(RandomSource randomSource, DifficultyInstance difficulty) {
         // 晶化行尸不生成自带装备。

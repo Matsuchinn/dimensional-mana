@@ -100,7 +100,34 @@ public final class DimensionalManaJeiPlugin implements IModPlugin {
                 List.of(net.minecraft.world.item.alchemy.PotionContents.createItemStack(
                         net.minecraft.world.item.Items.POTION, net.minecraft.world.item.alchemy.Potions.THICK)),
                 harmonizer));
+        // r268 魔蚀线：剧毒药水 + 魔蚀蜘蛛眼 → 魔蚀Ⅰ；喂眼逐级升到Ⅳ；红石延长到 2 分钟。
+        ItemStack erosionEye = item(GeneratedMod.CORRUPTED_SPIDER_EYE_ID);
+        ItemStack poisonBottle = net.minecraft.world.item.alchemy.PotionContents.createItemStack(
+                net.minecraft.world.item.Items.POTION, net.minecraft.world.item.alchemy.Potions.POISON);
+        ItemStack erosionI = potion(GeneratedMod.MAGIC_EROSION_POTIONS.get(0));
+        ItemStack erosionII = potion(GeneratedMod.MAGIC_EROSION_POTIONS.get(1));
+        ItemStack erosionLongI = potion(GeneratedMod.LONG_MAGIC_EROSION_POTIONS.get(0));
+        recipes.add(factory.createBrewingRecipe(List.of(erosionEye), List.of(poisonBottle), erosionI));
+        recipes.add(factory.createBrewingRecipe(List.of(erosionEye), List.of(erosionI), erosionII));
+        recipes.add(factory.createBrewingRecipe(
+                List.of(new ItemStack(net.minecraft.world.item.Items.REDSTONE)), List.of(erosionI), erosionLongI));
+        // r268 蔽魔线：畸变魔晶片 + 魔素调和剂 → 蔽魔药水；红石延长到 3 分钟。
+        ItemStack veil = potion(GeneratedMod.PSEUDOMANA_VEIL_POTION);
+        ItemStack veilLong = potion(GeneratedMod.LONG_PSEUDOMANA_VEIL_POTION);
+        recipes.add(factory.createBrewingRecipe(List.of(item(DistortedCrystalShardEntity.ITEM_ID)),
+                List.of(harmonizer), veil));
+        recipes.add(factory.createBrewingRecipe(
+                List.of(new ItemStack(net.minecraft.world.item.Items.REDSTONE)), List.of(veil), veilLong));
+        // 升华药水：顶部附魔金苹果 + 完全回复药剂 → 升华药水（不可延长、不可喷溅）。
+        recipes.add(factory.createBrewingRecipe(
+                List.of(new ItemStack(net.minecraft.world.item.Items.ENCHANTED_GOLDEN_APPLE)),
+                List.of(item(ManaPlants.FULL_HEALING_DRAUGHT)), item(AscensionPotionItem.ITEM_ID)));
         return recipes;
+    }
+
+    private static ItemStack potion(net.minecraft.core.Holder<net.minecraft.world.item.alchemy.Potion> holder) {
+        return net.minecraft.world.item.alchemy.PotionContents.createItemStack(
+                net.minecraft.world.item.Items.POTION, holder);
     }
 
     private static ItemStack item(String id) {

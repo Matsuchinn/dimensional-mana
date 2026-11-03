@@ -1584,5 +1584,23 @@
         "pitch": 0.4
       }
     ]
+  },
+  "anti_void_arrive": {
+    "subtitle": "subtitles.dimensional_mana.anti_void_arrive",
+    "sounds": [
+      "dimensional_mana:rift/anti_void_arrive"
+    ]
+  },
+  "anti_void_return": {
+    "subtitle": "subtitles.dimensional_mana.anti_void_return",
+    "sounds": [
+      "dimensional_mana:rift/anti_void_return"
+    ]
+  },
+  "anti_void_leave": {
+    "subtitle": "subtitles.dimensional_mana.anti_void_leave",
+    "sounds": [
+      "dimensional_mana:rift/anti_void_leave"
+    ]
   }
 }

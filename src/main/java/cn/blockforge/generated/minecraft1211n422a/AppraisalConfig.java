@@ -5,8 +5,9 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 /**
  * 专业鉴定眼镜的魔素消耗、雷达扫描参数与 HUD 排布开关。
  *
- * <p>玩家反馈「信息太多、想自己调」的部分都放在这里：哪些条目要显示、
- * 提示文字往哪偏、抗性最多列几条，都能在 {@code config/dimensional_mana-appraisal.toml} 里改。</p>
+ * <p>玩家反馈「信息太多、想自己调」的部分都放在这里：哪些条目要显示、抗性最多列几条，
+ * 都能在 {@code config/dimensional_mana-appraisal.toml} 里改。面板的位置和大小不在这里——
+ * 那属于 HUD 排版，统一放在 {@link HudConfig} 并由可视化编辑器拖拽调整。</p>
  */
 public final class AppraisalConfig {
     public static final ModConfigSpec SPEC;
@@ -25,8 +26,6 @@ public final class AppraisalConfig {
     public static final ModConfigSpec.BooleanValue SHOW_SKILL_LINE;
     public static final ModConfigSpec.BooleanValue SHOW_SCANLINE;
     public static final ModConfigSpec.BooleanValue SHOW_RADAR;
-    public static final ModConfigSpec.IntValue HUD_OFFSET_X;
-    public static final ModConfigSpec.IntValue HUD_OFFSET_Y;
     public static final ModConfigSpec.IntValue MAX_RESISTANCE_ENTRIES;
 
     static {
@@ -89,14 +88,6 @@ public final class AppraisalConfig {
         SHOW_RADAR = b.comment("允许使用主动扫描的轮廓光（关闭后按键不生效、也不扣魔素）。")
                 .translation("config.dimensional_mana.appraisal_hud.show_radar")
                 .define("show_radar", true);
-        HUD_OFFSET_X = b.comment("目标面板距离准心向右的像素偏移（默认 12）。",
-                        "右边放不下时面板会自动翻到准心左侧。")
-                .translation("config.dimensional_mana.appraisal_hud.hud_offset_x")
-                .defineInRange("hud_offset_x", 12, -400, 400);
-        HUD_OFFSET_Y = b.comment("目标面板相对准心的上下微调（默认 0 = 上下居中）。",
-                        "负数往上、正数往下；面板本来就以准心为中心，不需要再手动挪。")
-                .translation("config.dimensional_mana.appraisal_hud.hud_offset_y")
-                .defineInRange("hud_offset_y", 0, -400, 400);
         MAX_RESISTANCE_ENTRIES = b.comment("抗性 / 易伤每行最多列几条（默认 3），超出部分用「+N」表示。")
                 .translation("config.dimensional_mana.appraisal_hud.max_resistance_entries")
                 .defineInRange("max_resistance_entries", 3, 1, 12);

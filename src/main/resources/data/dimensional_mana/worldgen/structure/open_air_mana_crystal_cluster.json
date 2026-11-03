@@ -1,0 +1,7 @@
+{
+  "type": "dimensional_mana:open_air_mana_crystal_cluster",
+  "biomes": "#dimensional_mana:has_structure/open_air_mana_crystal_cluster",
+  "step": "surface_structures",
+  "spawn_overrides": {},
+  "terrain_adaptation": "beard_thin"
+}

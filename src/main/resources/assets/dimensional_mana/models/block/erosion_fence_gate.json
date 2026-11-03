@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/template_fence_gate",
+  "textures": {
+    "texture": "dimensional_mana:block/erosion_planks"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "dimensional_mana:block/erosion_slab"
+    },
+    "type=double": {
+      "model": "dimensional_mana:block/erosion_planks"
+    },
+    "type=top": {
+      "model": "dimensional_mana:block/erosion_slab_top"
+    }
+  }
+}

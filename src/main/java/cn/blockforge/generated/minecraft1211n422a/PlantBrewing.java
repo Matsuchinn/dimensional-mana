@@ -3,6 +3,7 @@ package cn.blockforge.generated.minecraft1211n422a;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.alchemy.PotionBrewing;
 import net.neoforged.neoforge.common.brewing.IBrewingRecipe;
 import net.neoforged.neoforge.event.brewing.RegisterBrewingRecipesEvent;
@@ -20,6 +21,8 @@ public final class PlantBrewing {
         builder.addRecipe(new Draught(ManaPlants.RESTELIA_POWDER, ManaPlants.HEALING_DRAUGHT));
         builder.addRecipe(new Draught(ManaPlants.LUMELIA_POWDER, ManaPlants.FULL_HEALING_DRAUGHT));
         builder.addRecipe(new Fortify());
+        // 升华药水：顶部附魔金苹果，下方三瓶完全回复药剂，一次酿三瓶。
+        builder.addRecipe(new Ascension());
     }
 
     /** 魔素调和剂 + 粉末 → 药剂。 */
@@ -38,6 +41,30 @@ public final class PlantBrewing {
         public ItemStack getOutput(ItemStack input, ItemStack ingredient) {
             if (!isInput(input) || !isIngredient(ingredient)) return ItemStack.EMPTY;
             return new ItemStack(GeneratedMod.MOD_ITEMS.get(draughtId).get());
+        }
+    }
+
+    /**
+     * 升华药水：顶部附魔金苹果，下方三瓶完全回复药剂，一次酿三瓶。
+     *
+     * <p>输入是模组自己的药剂物品而不是原版药水容器，所以红石延长、火药喷溅、龙息滞留
+     * 这些原版「按药水容器」的配方天然套不上——正好满足「不可延长、不可喷溅」。</p>
+     */
+    private record Ascension() implements IBrewingRecipe {
+        @Override
+        public boolean isInput(ItemStack input) {
+            return input.is(GeneratedMod.MOD_ITEMS.get(ManaPlants.FULL_HEALING_DRAUGHT).get());
+        }
+
+        @Override
+        public boolean isIngredient(ItemStack ingredient) {
+            return ingredient.is(Items.ENCHANTED_GOLDEN_APPLE);
+        }
+
+        @Override
+        public ItemStack getOutput(ItemStack input, ItemStack ingredient) {
+            if (!isInput(input) || !isIngredient(ingredient)) return ItemStack.EMPTY;
+            return new ItemStack(GeneratedMod.MOD_ITEMS.get(AscensionPotionItem.ITEM_ID).get());
         }
     }
 

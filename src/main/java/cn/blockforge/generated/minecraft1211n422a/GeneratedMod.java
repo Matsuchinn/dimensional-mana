@@ -116,6 +116,15 @@ public final class GeneratedMod {
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES = DeferredRegister.create(Registries.ENTITY_TYPE, MOD_ID);
     public static final DeferredRegister<StructureType<?>> STRUCTURE_TYPES = DeferredRegister.create(Registries.STRUCTURE_TYPE, MOD_ID);
     public static final DeferredRegister<StructurePieceType> STRUCTURE_PIECES = DeferredRegister.create(Registries.STRUCTURE_PIECE, MOD_ID);
+    /**
+     * 群系来源类型注册表。r286 用它挂 {@link WastelandOverlayBiomeSource}——
+     * 世界预设里 {@code "type": "dimensional_mana:wasteland_overlay"} 那句就是在这里查到的。
+     */
+    public static final DeferredRegister<com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.biome.BiomeSource>> BIOME_SOURCES =
+            DeferredRegister.create(BuiltInRegistries.BIOME_SOURCE, MOD_ID);
+    public static final DeferredHolder<com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.biome.BiomeSource>,
+            com.mojang.serialization.MapCodec<WastelandOverlayBiomeSource>> WASTELAND_OVERLAY_BIOME_SOURCE =
+            BIOME_SOURCES.register("wasteland_overlay", () -> WastelandOverlayBiomeSource.CODEC);
 
     public static final Map<String, DeferredBlock<Block>> MOD_BLOCKS = new LinkedHashMap<>();
     public static final Map<String, DeferredItem<? extends Item>> MOD_ITEMS = new LinkedHashMap<>();
@@ -169,6 +178,25 @@ public final class GeneratedMod {
             () -> new ArcaneReactionEffect(MobEffectCategory.NEUTRAL, 0xC85BFF));
     public static final DeferredHolder<MobEffect, MobEffect> ARCANE_ECHO = EFFECTS.register("arcane_echo",
             () -> new ArcaneReactionEffect(MobEffectCategory.NEUTRAL, 0xF074FF));
+    /** 蔽魔：一层骗过魔素感知的假面，敌对生物不会主动锁定持有者；攻击、施法、挨打即碎。 */
+    public static final DeferredHolder<MobEffect, MobEffect> PSEUDOMANA_VEIL = EFFECTS.register("pseudomana_veil",
+            PseudomanaVeilEffect::new);
+    /** 魔石病：无变种生物在高魔素区滞留 120 秒中招；金苹果喂食可治愈（见 {@link ManaStoneSystem}）。 */
+    public static final DeferredHolder<MobEffect, MobEffect> MANA_STONE_DISEASE = EFFECTS.register("mana_stone_disease",
+            ManaStoneDiseaseEffect::new);
+    /** 升华药水的六个状态：生命跃迁、神圣庇护、破灭之力、生命涌动、死斗意志、药效反噬。 */
+    public static final DeferredHolder<MobEffect, MobEffect> ASCENSION = EFFECTS.register("ascension",
+            AscensionEffect.Ascension::new);
+    public static final DeferredHolder<MobEffect, MobEffect> ASCENSION_WARD = EFFECTS.register("ascension_ward",
+            AscensionEffect.Ward::new);
+    public static final DeferredHolder<MobEffect, MobEffect> ASCENSION_MIGHT = EFFECTS.register("ascension_might",
+            AscensionEffect.Might::new);
+    public static final DeferredHolder<MobEffect, MobEffect> ASCENSION_REBIRTH = EFFECTS.register("ascension_rebirth",
+            AscensionEffect.Rebirth::new);
+    public static final DeferredHolder<MobEffect, MobEffect> ASCENSION_DEATHWARD = EFFECTS.register("ascension_deathward",
+            AscensionEffect.Deathward::new);
+    public static final DeferredHolder<MobEffect, MobEffect> ASCENSION_BACKLASH = EFFECTS.register("ascension_backlash",
+            AscensionEffect.Backlash::new);
     /**
      * 剧毒Ⅲ药水：中毒 III，持续 18 秒（360 tick）。
      * 名称显式写成 poison_iii，客户端就会去找 item.minecraft.potion.effect.poison_iii 这几个翻译键，
@@ -176,6 +204,36 @@ public final class GeneratedMod {
      */
     public static final DeferredHolder<Potion, Potion> POISON_III = POTIONS.register("poison_iii",
             () -> new Potion("poison_iii", new MobEffectInstance(MobEffects.POISON, 18 * 20, 2)));
+
+    // ── 魔蚀药水线（r268）───────────────────────────────────────────────────
+    // 四档等级对应魔蚀效果的 amplifier 0~3（发作间隔 30/26/22/18 刻），
+    // 普通版 1 分钟、红石延长版 2 分钟；喷溅 / 滞留走原版容器配方，自动套用。
+
+    /** 魔蚀药水等级的展示名后缀：Ⅰ~Ⅳ。 */
+    public static final List<String> EROSION_TIERS = List.of("i", "ii", "iii", "iv");
+
+    /** 普通版魔蚀药水Ⅰ~Ⅳ（60 秒）。 */
+    public static final List<DeferredHolder<Potion, Potion>> MAGIC_EROSION_POTIONS = registerErosionPotions(false);
+    /** 红石延长版魔蚀药水Ⅰ~Ⅳ（120 秒）。 */
+    public static final List<DeferredHolder<Potion, Potion>> LONG_MAGIC_EROSION_POTIONS = registerErosionPotions(true);
+
+    private static List<DeferredHolder<Potion, Potion>> registerErosionPotions(boolean extended) {
+        List<DeferredHolder<Potion, Potion>> out = new ArrayList<>(4);
+        for (int tier = 0; tier < 4; tier++) {
+            String id = (extended ? "long_magic_erosion_" : "magic_erosion_") + EROSION_TIERS.get(tier);
+            // 循环变量不能直接被 lambda 捕获，拷一份定值进去。
+            final int level = tier;
+            out.add(POTIONS.register(id, () -> new Potion(id,
+                    new MobEffectInstance(MAGIC_EROSION, (extended ? 120 : 60) * 20, level))));
+        }
+        return List.copyOf(out);
+    }
+
+    /** 蔽魔药水（60 秒）与红石延长版（180 秒）。 */
+    public static final DeferredHolder<Potion, Potion> PSEUDOMANA_VEIL_POTION = POTIONS.register("pseudomana_veil",
+            () -> new Potion("pseudomana_veil", new MobEffectInstance(PSEUDOMANA_VEIL, 60 * 20)));
+    public static final DeferredHolder<Potion, Potion> LONG_PSEUDOMANA_VEIL_POTION = POTIONS.register("long_pseudomana_veil",
+            () -> new Potion("long_pseudomana_veil", new MobEffectInstance(PSEUDOMANA_VEIL, 180 * 20)));
     public static final DeferredHolder<SoundEvent, SoundEvent> MANA_FORGE_BURN = SOUNDS.register("mana_forge_burn",
             () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "mana_forge_burn")));
     public static final DeferredHolder<SoundEvent, SoundEvent> PROFESSIONAL_FURNACE_BURN = SOUNDS.register("professional_furnace_burn",
@@ -195,6 +253,19 @@ public final class GeneratedMod {
      */
     public static final DeferredHolder<SoundEvent, SoundEvent> PARRY_PERFECT = SOUNDS.register("parry_perfect",
             () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "parry_perfect")));
+    /**
+     * 反虚空领域的三个史诗级转场音效：第一次降临、之后每次回到反虚空、离开反虚空。
+     *
+     * <p>音源是 CC0 素材（Kenney Sci-Fi Sounds）叠层合成的，许可记录在 {@code SOUND_SOURCES.json}。
+     * 播放逻辑在 {@link AntiVoidSystem}：换维度时客户端还在读图，所以由服务端排队、
+     * 等玩家真正落地之后再发 {@code playNotifySound}。</p>
+     */
+    public static final DeferredHolder<SoundEvent, SoundEvent> ANTI_VOID_ARRIVE = SOUNDS.register("anti_void_arrive",
+            () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "anti_void_arrive")));
+    public static final DeferredHolder<SoundEvent, SoundEvent> ANTI_VOID_RETURN = SOUNDS.register("anti_void_return",
+            () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "anti_void_return")));
+    public static final DeferredHolder<SoundEvent, SoundEvent> ANTI_VOID_LEAVE = SOUNDS.register("anti_void_leave",
+            () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "anti_void_leave")));
     /**
      * 十二种元素史莱姆各一套叫声：蹦跳、落地、受伤、死亡和随机环境音共用。
      * 音色在 sounds.json 里由「原版史莱姆软音 + 对应元素法术音」叠加，无需额外音频文件。
@@ -371,6 +442,37 @@ public final class GeneratedMod {
     /** 五种魔法植物：区块生成时就按群系、高度与地表浓度种下。 */
     public static final DeferredHolder<Feature<?>, Feature<NoneFeatureConfiguration>> MANA_PLANTS = FEATURES.register(
             "mana_plants", ManaPlantFeature::new);
+    /** r271：蚀魔荒原地表改造——把表层土 / 石染成秽蚀土、秽蚀草块与蚀脉石。 */
+    public static final DeferredHolder<Feature<?>, Feature<NoneFeatureConfiguration>> EROSION_SURFACE = FEATURES.register(
+            "erosion_surface", ErosionSurfaceFeature::new);
+    /**
+     * r277：蚀纹木的树特征——先查地面和周围有没有别的树，再交给原版树特征摆放，
+     * 顺便把树高抬到 7～12 格。原来的 JSON 树配置还留在
+     * {@code data/dimensional_mana/worldgen/configured_feature/erosion_tree.json}，只有 type 变了。
+     */
+    public static final DeferredHolder<Feature<?>, Feature<NoneFeatureConfiguration>> EROSION_TREE_FEATURE = FEATURES.register(
+            "erosion_tree", ErosionTreeFeature::new);
+    /** r271：粒子注册表（荒原落叶 erosion_leaf）。 */
+    public static final DeferredRegister<net.minecraft.core.particles.ParticleType<?>> PARTICLE_TYPES =
+            DeferredRegister.create(net.minecraft.core.registries.Registries.PARTICLE_TYPE, MOD_ID);
+    /**
+     * r291：膜面水波粒子（改在这里注册，修 r290 启动崩溃）。
+     *
+     * <p>原先这个登记写在 {@link AntiVoidSystem} 的静态字段里，而那个类要等游戏事件
+     * （或客户端粒子 provider 注册）才被 JVM 加载——那时 NeoForge 的 RegisterEvent
+     * 早已触发、注册窗口关闭，于是抛出 "Cannot register new entries to
+     * DeferredRegister after RegisterEvent has been fired." 直接崩溃。
+     * 所有 DeferredRegister 登记必须发生在模组主类加载期间，这里就是那个时机。</p>
+     *
+     * <p>粒子本身：贴图是一张 8 帧的竖向动画条
+     * （assets/dimensional_mana/particles/membrane_ripple.json +
+     * textures/particle/membrane_ripple.png.mcmeta），由 {@link MembraneRippleParticle}
+     * 一边播放帧动画、一边放大淡出，形成扩散的同心圆涟漪。</p>
+     */
+    public static final DeferredHolder<net.minecraft.core.particles.ParticleType<?>,
+            net.minecraft.core.particles.SimpleParticleType> MEMBRANE_RIPPLE =
+            PARTICLE_TYPES.register("membrane_ripple",
+                    () -> new net.minecraft.core.particles.SimpleParticleType(true));
     public static final DeferredHolder<EntityType<?>, EntityType<WanderingWitch>> WANDERING_WITCH = ENTITY_TYPES.register(
             "wandering_witch", () -> EntityType.Builder.of(WanderingWitch::new, MobCategory.MONSTER)
                     .sized(0.6F, 1.95F).clientTrackingRange(8).build(MOD_ID + ":wandering_witch"));
@@ -408,10 +510,16 @@ public final class GeneratedMod {
     public static final DeferredHolder<EntityType<?>, EntityType<WanderingSwordmaster>> WANDERING_SWORDMASTER = ENTITY_TYPES.register(
             "wandering_swordmaster", () -> EntityType.Builder.<WanderingSwordmaster>of(WanderingSwordmaster::new, MobCategory.CREATURE)
                     .sized(0.65F, 1.9F).clientTrackingRange(10).build(MOD_ID + ":wandering_swordmaster"));
-    /** 魔蚀织网者：魔晶化的蜘蛛，尺寸沿用原版蜘蛛。 */
+    /**
+     * 魔蚀织网者：魔晶化的蜘蛛。
+     *
+     * <p>r285：碰撞箱从原版蜘蛛的 1.4 缩到 1.2（高度不变）。1.4 宽的身体在矿簇那种
+     * 一格一格拼出来的地形里很容易一半卡进矿柱或粗制魔晶块，一落地就窒息掉血；
+     * 缩窄之后 1 格宽的缝也挤得过去，模型仍是原版蜘蛛骨架，1.2 的箱子看着并不瘦。</p>
+     */
     public static final DeferredHolder<EntityType<?>, EntityType<CorruptedWeaverEntity>> CORRUPTED_WEAVER = ENTITY_TYPES.register(
             "corrupted_weaver", () -> EntityType.Builder.<CorruptedWeaverEntity>of(CorruptedWeaverEntity::new, MobCategory.MONSTER)
-                    .sized(1.4F, 0.9F).clientTrackingRange(10).build(MOD_ID + ":corrupted_weaver"));
+                    .sized(1.2F, 0.9F).clientTrackingRange(10).build(MOD_ID + ":corrupted_weaver"));
     /** 蛛丝球：抛物线的黏丝团，落点铺网。 */
     public static final DeferredHolder<EntityType<?>, EntityType<WebProjectileEntity>> WEB_PROJECTILE = ENTITY_TYPES.register(
             "web_projectile", () -> EntityType.Builder.<WebProjectileEntity>of(WebProjectileEntity::new, MobCategory.MISC)
@@ -438,6 +546,14 @@ public final class GeneratedMod {
             STRUCTURE_TYPES.register("goblin_camp", () -> () -> GoblinCampStructure.CODEC);
     public static final DeferredHolder<StructurePieceType, StructurePieceType> GOBLIN_CAMP_PIECE =
             STRUCTURE_PIECES.register("goblin_camp", () -> (StructurePieceType.ContextlessType)GoblinCampPiece::new);
+
+    /** r282：露天魔晶矿簇（四种形态、浓度 ≥14 才生成，/locate 可以直接搜到）。 */
+    public static final DeferredHolder<StructureType<?>, StructureType<OpenAirManaCrystalClusterStructure>>
+            OPEN_AIR_MANA_CRYSTAL_CLUSTER_STRUCTURE_TYPE = STRUCTURE_TYPES.register(
+            "open_air_mana_crystal_cluster", () -> () -> OpenAirManaCrystalClusterStructure.CODEC);
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> OPEN_AIR_MANA_CRYSTAL_CLUSTER_PIECE =
+            STRUCTURE_PIECES.register("open_air_mana_crystal_cluster",
+                    () -> (StructurePieceType.ContextlessType)OpenAirManaCrystalClusterPiece::new);
 
     public static final DeferredHolder<FluidType, FluidType> PURE_LIQUID_MANA_TYPE = FLUID_TYPES.register("pure_liquid_mana",
             () -> new FluidType(FluidType.Properties.create()
@@ -468,6 +584,18 @@ public final class GeneratedMod {
         ore("advanced_mana_crystal_ore", 5.0F, 5, 9, Rarity.RARE);
         ore("supreme_mana_crystal_ore", 6.0F, 6, 11, Rarity.EPIC);
         cluster("special_mana_crystal_cluster", 7.0F, 13, Rarity.EPIC);
+        // r282：魔晶块分两套，和原版「粗铁块 / 铁块」一一对应——
+        //   raw_*_mana_crystal_block：9 颗原矿压成，**自然生成在露天魔晶矿簇里的就是它**；
+        //   *_mana_crystal_block：9 颗炼好的成品魔晶压成，只能由玩家合成。
+        rawCrystalBlock("raw_lesser_mana_crystal_block", 3.5F, 3, Rarity.COMMON);
+        rawCrystalBlock("raw_medium_mana_crystal_block", 4.0F, 4, Rarity.UNCOMMON);
+        rawCrystalBlock("raw_advanced_mana_crystal_block", 4.5F, 5, Rarity.RARE);
+        rawCrystalBlock("raw_supreme_mana_crystal_block", 5.0F, 6, Rarity.EPIC);
+        crystalBlock("lesser_mana_crystal_block", 4.0F, 5, Rarity.COMMON);
+        crystalBlock("medium_mana_crystal_block", 4.5F, 7, Rarity.UNCOMMON);
+        crystalBlock("advanced_mana_crystal_block", 5.0F, 9, Rarity.RARE);
+        crystalBlock("supreme_mana_crystal_block", 5.5F, 11, Rarity.EPIC);
+        crystalBlock("special_mana_crystal_block", 6.0F, 13, Rarity.EPIC);
         device("mana_forge", () -> new ManaFurnaceBlock(BlockBehaviour.Properties.of().strength(8.0F, 1200.0F)
                 .sound(SoundType.DEEPSLATE).lightLevel(state -> state.getValue(AbstractFurnaceBlock.LIT) ? 10 : 0),
                 ManaCookingRecipe.FurnaceKind.MANA_FORGE), Rarity.RARE);
@@ -529,11 +657,13 @@ public final class GeneratedMod {
                 new Item.Properties().stacksTo(1).rarity(Rarity.EPIC), MagicTrinketItem.Kind.ANCIENT_CASKET)));
         magicItem("greater_magic_etching", ITEMS.register("greater_magic_etching", () -> new MagicTrinketItem(
                 new Item.Properties().stacksTo(1).rarity(Rarity.EPIC), MagicTrinketItem.Kind.GREATER_MAGIC_ETCHING)));
+        // 粗制法杖系列：耐久统一 100，施法磨损按法术品级 1/4/16 结算（SpellDefinition#staffWearCost）。
+        // 这批是入门货，后续版本会另开一档正式的魔杖工艺。
         magicStaff("lesser_general_staff", 100, Rarity.COMMON, 2, 8, 0.05, 0.04, 0.05);
-        magicStaff("medium_general_staff", 200, Rarity.UNCOMMON, 6, 16, 0.10, 0.08, 0.10);
-        magicStaff("advanced_general_staff", 300, Rarity.RARE, 12, 32, 0.15, 0.12, 0.15);
-        magicStaff("supreme_general_staff", 400, Rarity.EPIC, 24, 64, 0.20, 0.16, 0.20);
-        magicStaff("special_general_staff", 500, Rarity.EPIC, 48, 128, 0.25, 0.20, 0.25);
+        magicStaff("medium_general_staff", 100, Rarity.UNCOMMON, 6, 16, 0.10, 0.08, 0.10);
+        magicStaff("advanced_general_staff", 100, Rarity.RARE, 12, 32, 0.15, 0.12, 0.15);
+        magicStaff("supreme_general_staff", 100, Rarity.EPIC, 24, 64, 0.20, 0.16, 0.20);
+        magicStaff("special_general_staff", 100, Rarity.EPIC, 48, 128, 0.25, 0.20, 0.25);
         magicItem("magic_amulet", ITEMS.register("magic_amulet", () -> new MagicAccessoryItem(
                 new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON), MagicAccessoryItem.Kind.AMULET)));
         magicItem("wisdom_ring", ITEMS.register("wisdom_ring", () -> new MagicAccessoryItem(
@@ -551,6 +681,9 @@ public final class GeneratedMod {
                 new BlankSpellScrollItem(new Item.Properties().stacksTo(16).rarity(Rarity.COMMON))));
         magicItem("element_resonance_stone", ITEMS.register("element_resonance_stone", () ->
                 new ElementResonanceStoneItem(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC))));
+        // 升华药水：酿造台里用「附魔金苹果 + 3 瓶完全回复药剂」一次酿三瓶，进「次元物语：魔法」页。
+        magicItem(AscensionPotionItem.ITEM_ID, ITEMS.register(AscensionPotionItem.ITEM_ID, () ->
+                new AscensionPotionItem(new Item.Properties().stacksTo(16).rarity(Rarity.EPIC))));
         for (ElementType element : ElementType.values()) {
             for (String grade : FRAGMENT_GRADES) magicFragment(element.fragmentId(grade), grade, element.translationKey());
             magicItem(element.scrollId(), ITEMS.register(element.scrollId(), () ->
@@ -649,6 +782,8 @@ public final class GeneratedMod {
         registerCorruptedWeaver();
         registerSwordmaster();
         registerVoidShade();
+        // r271：蚀魔荒原——方块 / 物品 / 粒子一次挂齐。
+        ErosionWasteland.registerItems();
     }
 
     /**
@@ -867,6 +1002,39 @@ public final class GeneratedMod {
         MOD_ITEMS.put(EtchedSlateItem.ITEM_ID, ITEMS.register(EtchedSlateItem.ITEM_ID, () ->
                 new EtchedSlateItem(new Item.Properties().stacksTo(16).rarity(Rarity.RARE))));
         ARCANE_ITEM_IDS.add(EtchedSlateItem.ITEM_ID);
+
+        // r289：反虚空领域。反虚空方块和两种门没有物品形态，膜与星穹裂隙框只能通过指令/稀有途径获得。
+        DeferredBlock<Block> antiVoid = BLOCKS.register("anti_void_block", () -> new AntiVoidBlock(
+                BlockBehaviour.Properties.of().mapColor(MapColor.NONE).lightLevel(state -> 0)
+                        .strength(-1.0F, 3_600_000.0F).noLootTable().noOcclusion().sound(SoundType.GLASS)));
+        MOD_BLOCKS.put("anti_void_block", antiVoid);
+
+        DeferredBlock<Block> membrane = BLOCKS.register("membrane", () -> new MembraneBlock(
+                BlockBehaviour.Properties.of().mapColor(MapColor.QUARTZ).lightLevel(state -> 8)
+                        .strength(-1.0F, 1_200.0F).noLootTable().noOcclusion().sound(SoundType.GLASS)));
+        MOD_BLOCKS.put("membrane", membrane);
+        MOD_ITEMS.put("membrane", ITEMS.register("membrane", () -> new BlockItem(membrane.get(),
+                new Item.Properties().rarity(Rarity.EPIC))));
+
+        // r290：星之间隙（原名“星穹裂隙框”）——门本身：16 帧流光动画贴图、发光 12 级、无碰撞直接穿行。
+        DeferredBlock<Block> astralFrame = BLOCKS.register("astral_rift_frame", () -> new AstralRiftFrameBlock(
+                BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).lightLevel(state -> 12)
+                        .strength(20.0F, 720.0F)
+                        .requiresCorrectToolForDrops().noOcclusion().sound(SoundType.METAL)));
+        MOD_BLOCKS.put("astral_rift_frame", astralFrame);
+        MOD_ITEMS.put("astral_rift_frame", ITEMS.register("astral_rift_frame", () -> new BlockItem(astralFrame.get(),
+                new Item.Properties().rarity(Rarity.EPIC))));
+
+        DeferredBlock<Block> crimsonGate = BLOCKS.register("rift_gate_crimson", () -> new RiftGateBlock(
+                BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_RED).lightLevel(state -> 6)
+                        .strength(-1.0F, 3_600_000.0F).noLootTable().noOcclusion().sound(SoundType.AMETHYST),
+                RiftGateBlock.Kind.CRIMSON));
+        MOD_BLOCKS.put("rift_gate_crimson", crimsonGate);
+        DeferredBlock<Block> azureGate = BLOCKS.register("rift_gate_azure", () -> new RiftGateBlock(
+                BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_LIGHT_BLUE).lightLevel(state -> 8)
+                        .strength(-1.0F, 3_600_000.0F).noLootTable().noOcclusion().sound(SoundType.AMETHYST),
+                RiftGateBlock.Kind.AZURE));
+        MOD_BLOCKS.put("rift_gate_azure", azureGate);
     }
 
     /** 魔导调试棒的物品实例；方块交互时用来判断手里拿的是不是它。 */
@@ -902,11 +1070,29 @@ public final class GeneratedMod {
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> MAGIC_CREATIVE_TAB = CREATIVE_TABS.register("magic", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.dimensional_mana.magic"))
             .icon(() -> new ItemStack(MOD_ITEMS.get("element_resonance_stone").get()))
-            .displayItems((parameters, output) -> orderedMagicItemIds().forEach(id -> {
-                DeferredItem<? extends Item> item = MOD_ITEMS.get(id);
-                if (item != null) output.accept(item.get());
-            }))
+            .displayItems((parameters, output) -> {
+                orderedMagicItemIds().forEach(id -> {
+                    DeferredItem<? extends Item> item = MOD_ITEMS.get(id);
+                    if (item != null) output.accept(item.get());
+                });
+                // r268 起，酿造出来的药水物品统一摆这一页：普通 → 喷溅 → 滞留，按配方顺序排。
+                for (net.minecraft.core.Holder<Potion> potion : brewedPotionLine()) {
+                    output.accept(PotionContents.createItemStack(Items.POTION, potion));
+                    output.accept(PotionContents.createItemStack(Items.SPLASH_POTION, potion));
+                    output.accept(PotionContents.createItemStack(Items.LINGERING_POTION, potion));
+                }
+            })
             .build());
+
+    /** 魔法创造页收尾的药水清单：魔蚀Ⅰ~Ⅳ、长效魔蚀Ⅰ~Ⅳ、蔽魔、长效蔽魔。 */
+    public static List<net.minecraft.core.Holder<Potion>> brewedPotionLine() {
+        List<net.minecraft.core.Holder<Potion>> line = new ArrayList<>();
+        line.addAll(MAGIC_EROSION_POTIONS);
+        line.addAll(LONG_MAGIC_EROSION_POTIONS);
+        line.add(PSEUDOMANA_VEIL_POTION);
+        line.add(LONG_PSEUDOMANA_VEIL_POTION);
+        return line;
+    }
 
     /** 「次元物语：斗气」：物理 / 剑士路线的全部物品。 */
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> BATTLE_QI_CREATIVE_TAB = CREATIVE_TABS.register(
@@ -1064,10 +1250,14 @@ public final class GeneratedMod {
         LOOT_CONDITIONS.register(modBus);
         CREATIVE_TABS.register(modBus);
         FEATURES.register(modBus);
+        PARTICLE_TYPES.register(modBus);
         ENTITY_TYPES.register(modBus);
         STRUCTURE_TYPES.register(modBus);
         STRUCTURE_PIECES.register(modBus);
+        BIOME_SOURCES.register(modBus);
         SpellAttributes.ATTRIBUTES.register(modBus);
+        // r271：变异生物白天也能自然刷出（SpawnPlacements 用「不看光照」的怪物规则）。
+        modBus.addListener(ErosionWastelandSpawning::registerSpawnPlacements);
         modBus.addListener(this::createEntityAttributes);
         modBus.addListener((net.neoforged.fml.event.config.ModConfigEvent.Reloading event) -> MobProfile.invalidate());
         modBus.addListener((net.neoforged.fml.event.config.ModConfigEvent.Loading event) -> MobProfile.invalidate());
@@ -1076,6 +1266,7 @@ public final class GeneratedMod {
         modBus.addListener(AppraisalSyncPayload::register);
         modBus.addListener(ProAppraisalPayload::register);
         modBus.addListener(ManaRadarPayload::register);
+        modBus.addListener(AltarAuraPayload::register);
         modBus.addListener(ProgressSyncPayload::register);
         modBus.addListener(UpgradeSkillPayload::register);
         modBus.addListener(OpenCodexGuidePayload::register);
@@ -1113,6 +1304,17 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(DragonRevival::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(DragonRevival::onHeal);
         NeoForge.EVENT_BUS.addListener(DragonRevival::onEntityTick);
+        // r289：反虚空领域的首次降生、重生门、膜波纹与边界封印。
+        NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onPlayerLogin);
+        NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onServerTick);
+        NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onRespawnPosition);
+        NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onLivingDeath);
+        NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onClone);
+        NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onEntityTick);
+        NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onFinalizeSpawn);
+        // r290：最后一道闸——任何经任何途径进入反虚空的生物都在这里被拦下（含土史莱姆 bug 的旁路）。
+        NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onEntityJoin);
+        NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onBlockBreak);
         NeoForge.EVENT_BUS.addListener(events::onJoin);
         NeoForge.EVENT_BUS.addListener(events::onLogin);
         NeoForge.EVENT_BUS.addListener(events::onLogout);
@@ -1161,6 +1363,13 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(RelicEffects::onEffectApplicable);
         NeoForge.EVENT_BUS.addListener(RelicEffects::onEffectAdded);
         NeoForge.EVENT_BUS.addListener(RelicEffects::onLivingChangeTarget);
+        // r268 蔽魔药水：挡主动索敌（含魔素变异体）+ 攻击 / 受伤即破隐。
+        NeoForge.EVENT_BUS.addListener(PseudomanaVeilEvents::onChangeTarget);
+        NeoForge.EVENT_BUS.addListener(PseudomanaVeilEvents::onIncomingDamage);
+        // r285 铁傀儡不再主动打没有领地意识的元素史莱姆。
+        NeoForge.EVENT_BUS.addListener(ElementalSlime::onChangeTarget);
+        // r285 魔素变异体之间不误伤：被波及的那只改为按伤害 25% 回血。
+        NeoForge.EVENT_BUS.addListener(ManaMutantAlliance::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(RelicEffects::onVillagerInteract);
         NeoForge.EVENT_BUS.addListener(RelicEffects::onItemEntityJoin);
         NeoForge.EVENT_BUS.addListener(RelicEffects::onLevelTick);
@@ -1173,6 +1382,13 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::tickLevel);
         NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::tickLevel);
         NeoForge.EVENT_BUS.addListener(GoblinSpawning::tickLevel);
+        // r276：蚀魔荒原白天的小股变异体补刷（原版刷怪器白天基本不出手）。
+        NeoForge.EVENT_BUS.addListener(ErosionWastelandSpawning::tickLevel);
+        // r280：高魔素区驻留机制——有变种的 10 秒变异、没变种的 120 秒得魔石病；
+        // 金苹果喂食治疗（救村民拿交易折扣）、病死额外掉魔晶粉。
+        NeoForge.EVENT_BUS.addListener(ManaStoneSystem::tickLevel);
+        NeoForge.EVENT_BUS.addListener(ManaStoneSystem::onEntityInteract);
+        NeoForge.EVENT_BUS.addListener(ManaStoneSystem::onLivingDeath);
         NeoForge.EVENT_BUS.addListener(GoblinSpawning::onChunkLoad);
         NeoForge.EVENT_BUS.addListener(GoblinSpawning::onServerStopped);
         NeoForge.EVENT_BUS.addListener(GoblinSpawning::onLivingDeath);
@@ -1183,6 +1399,10 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::onExplosion);
         NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::onSound);
         NeoForge.EVENT_BUS.addListener(AdventurerSpawning::onChunkLoad);
+        NeoForge.EVENT_BUS.addListener(AncientAltarData::onChunkLoad);
+        // r282：露天魔晶矿簇——区块加载补登记（浓度 +4.00 / 粒子 / 变异体回血都靠这张表）。
+        NeoForge.EVENT_BUS.addListener(CrystalClusterData::onChunkLoad);
+        NeoForge.EVENT_BUS.addListener(CrystalClusterData::tickLevel);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::heal);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::effectRemoved);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::effectExpired);
@@ -1225,6 +1445,11 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(PlantEvents::onEffectExpired);
         NeoForge.EVENT_BUS.addListener(PlantEvents::onUseFinish);
         NeoForge.EVENT_BUS.addListener(ElementPlating::onTooltip);
+        // 升华药水：神圣庇护拦负面、破灭之力加伤害、死斗意志拒绝死亡、药效到期转反噬。
+        NeoForge.EVENT_BUS.addListener(AscensionEvents::onEffectApplicable);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOW, AscensionEvents::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, AscensionEvents::onFatalDamage);
+        NeoForge.EVENT_BUS.addListener(AscensionEvents::onEffectExpired);
         NeoForge.EVENT_BUS.addListener(MagicCircleProjectionEvents::onTooltip);
         NeoForge.EVENT_BUS.addListener(MagicCircleProjectionEvents::onRightClickBlock);
         NeoForge.EVENT_BUS.addListener(MagicCircleProjectionEvents::onRightClickItem);
@@ -1405,6 +1630,24 @@ public final class GeneratedMod {
                 .sound(SoundType.STONE).lightLevel(s -> light), rarity);
     }
 
+    /**
+     * r282：魔晶块。整块就是一块可以当建筑材料的结晶方块，用紫水晶的声音和挖取要求，
+     * 掉落自己、能熔炼成对应成品魔晶（配方在 data 里）。
+     */
+    private static void crystalBlock(String name, float hardness, int light, Rarity rarity) {
+        block(name, BlockBehaviour.Properties.of().strength(hardness, 6.0F).requiresCorrectToolForDrops()
+                .sound(SoundType.AMETHYST).lightLevel(s -> light), rarity);
+    }
+
+    /**
+     * r282：粗制魔晶块。还没炼过的原矿压成的整块，硬度低一点、光也弱一档，
+     * 音效沿用石质（原版粗铁块也是石头声音）。
+     */
+    private static void rawCrystalBlock(String name, float hardness, int light, Rarity rarity) {
+        block(name, BlockBehaviour.Properties.of().strength(hardness, 6.0F).requiresCorrectToolForDrops()
+                .sound(SoundType.STONE).lightLevel(s -> light), rarity);
+    }
+
     private static void device(String name, Supplier<Block> factory, Rarity rarity) {
         DeferredBlock<Block> holder = BLOCKS.register(name, factory);
         MOD_BLOCKS.put(name, holder);
@@ -1446,5 +1689,33 @@ public final class GeneratedMod {
         // 剧毒Ⅱ药水 + 特级魔晶粉 → 剧毒Ⅲ药水（中毒 III，18 秒）。
         event.getBuilder().addMix(Potions.STRONG_POISON,
                 MOD_ITEMS.get("special_mana_crystal_dust").get(), POISON_III);
+
+        // ── r268：魔蚀药水线 ──
+        // 基础：1 个魔蚀蜘蛛眼 + 剧毒药水 → 魔蚀药水Ⅰ；带红石底（延长的剧毒药水）直接出延长版Ⅰ。
+        Item erosionEye = MOD_ITEMS.get(CORRUPTED_SPIDER_EYE_ID).get();
+        event.getBuilder().addMix(Potions.POISON, erosionEye, MAGIC_EROSION_POTIONS.get(0));
+        // 剧毒Ⅱ药水（强化版）也算「剧毒药水」打底，别让玩家换瓶子重酿。
+        event.getBuilder().addMix(Potions.STRONG_POISON, erosionEye, MAGIC_EROSION_POTIONS.get(0));
+        event.getBuilder().addMix(Potions.LONG_POISON, erosionEye, LONG_MAGIC_EROSION_POTIONS.get(0));
+        // 升级：继续加魔蚀蜘蛛眼，Ⅰ→Ⅱ→Ⅲ→Ⅳ（最高 4 级）；延长版同样逐级升。
+        for (int tier = 0; tier + 1 < 4; tier++) {
+            event.getBuilder().addMix(MAGIC_EROSION_POTIONS.get(tier), erosionEye, MAGIC_EROSION_POTIONS.get(tier + 1));
+            event.getBuilder().addMix(LONG_MAGIC_EROSION_POTIONS.get(tier), erosionEye,
+                    LONG_MAGIC_EROSION_POTIONS.get(tier + 1));
+        }
+        // 红石：任何等级延长到 2 分钟；喷溅 / 滞留走原版火药、龙息容器配方，自动套用。
+        for (int tier = 0; tier < 4; tier++) {
+            event.getBuilder().addMix(MAGIC_EROSION_POTIONS.get(tier), Items.REDSTONE,
+                    LONG_MAGIC_EROSION_POTIONS.get(tier));
+        }
+
+        // ── r268：蔽魔药水线 ──
+        // 基础：1 个畸变魔晶片 + 魔素调和剂 → 1 分钟蔽魔药水（调和剂不是药水，走通用配方接口）。
+        event.getBuilder().addRecipe(
+                Ingredient.of(MOD_ITEMS.get("mana_harmonizer").get()),
+                Ingredient.of(MOD_ITEMS.get(DistortedCrystalShardEntity.ITEM_ID).get()),
+                PotionContents.createItemStack(Items.POTION, PSEUDOMANA_VEIL_POTION));
+        // 红石：延长到 3 分钟；喷溅 / 滞留同样自动。
+        event.getBuilder().addMix(PSEUDOMANA_VEIL_POTION, Items.REDSTONE, LONG_PSEUDOMANA_VEIL_POTION);
     }
 }

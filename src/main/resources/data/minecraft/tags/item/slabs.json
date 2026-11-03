@@ -1,0 +1,10 @@
+{
+  "values": [
+    "dimensional_mana:erosion_slab",
+    "dimensional_mana:erosion_stone_slab",
+    "dimensional_mana:smooth_erosion_stone_slab",
+    "dimensional_mana:erosion_stone_brick_slab",
+    "dimensional_mana:erosion_cobblestone_slab"
+  ],
+  "replace": false
+}

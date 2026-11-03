@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/leaves",
+  "textures": {
+    "all": "dimensional_mana:block/erosion_leaves"
+  },
+  "render_type": "minecraft:cutout_mipped"
+}

@@ -26,12 +26,16 @@ public final class ResonanceCoreHud {
 
         int width = graphics.guiWidth();
         int height = graphics.guiHeight();
-        int centerX = width - HudConfig.RES_X_FROM_RIGHT.get();
-        int centerY = height - HudConfig.RES_Y_FROM_BOTTOM.get();
+        // 核心图标与旁边的文字是两块独立部件，各自有位置和缩放。
+        int centerX = HudConfig.anchorX(HudConfig.Part.RES_ICON, width, height);
+        int centerY = HudConfig.anchorY(HudConfig.Part.RES_ICON, width, height);
+        int labelX = HudConfig.anchorX(HudConfig.Part.RES_LABEL, width, height);
+        int labelY = HudConfig.anchorY(HudConfig.Part.RES_LABEL, width, height);
         int elementColor = ResonanceCore.elementColor(ClientResonanceCoreState.element());
         boolean full = ClientResonanceCoreState.ready();
         long time = minecraft.level == null ? 0L : minecraft.level.getGameTime();
 
+        HudConfig.pushScaled(graphics, centerX, centerY, HudConfig.scale(HudConfig.Part.RES_ICON));
         // 底环：深蓝底盘 + 充能进度环。满充时改为元素色，并加一圈呼吸光晕。
         drawDisc(graphics, centerX, centerY, 15, 0x9A0B1024);
         drawDisc(graphics, centerX, centerY, 13, 0xCC121A33);
@@ -61,6 +65,7 @@ public final class ResonanceCoreHud {
                 graphics.drawCenteredString(minecraft.font, seconds, centerX, centerY + 22, elementColor);
             }
         }
+        HudConfig.popScaled(graphics);
 
         // HUD 配置里关掉文字时只剩图标与充能环。
         if (HudConfig.SHOW_RES_LABEL.get()) {
@@ -74,7 +79,9 @@ public final class ResonanceCoreHud {
                 label = String.format("%.0f%%", ClientResonanceCoreState.charge());
             }
             int labelColor = resonanceTicks > 0 || full ? elementColor : 0xFF9FC7FF;
-            graphics.drawString(minecraft.font, label, centerX - 24, centerY - 26, labelColor, true);
+            HudConfig.pushScaled(graphics, labelX, labelY, HudConfig.scale(HudConfig.Part.RES_LABEL));
+            graphics.drawCenteredString(minecraft.font, label, labelX, labelY - 4, labelColor);
+            HudConfig.popScaled(graphics);
         }
 
         // 满充时在鼠标指针后面画同色拖影。

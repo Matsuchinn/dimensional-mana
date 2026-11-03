@@ -112,9 +112,31 @@ public final class ManaFurnaceBlockEntity extends AbstractFurnaceBlockEntity {
                 && result.is(GeneratedMod.MOD_ITEMS.get(ManaPlants.LUMELIA_POWDER).get())) {
             return LUMELIA_POWDER_LINK_MANA;
         }
+        int[] table = professional ? PROFESSIONAL_LINK_MANA : FORGE_LINK_MANA;
         int tier = crystalTier(result);
-        if (tier < 0) return plain;
-        return (professional ? PROFESSIONAL_LINK_MANA : FORGE_LINK_MANA)[tier];
+        if (tier >= 0) return table[tier];
+        // r283：粗制魔晶块能直接烧成整块魔晶，一块就是九颗，魔素自然也按九倍给。
+        int blockTier = crystalBlockTier(result);
+        if (blockTier >= 0) return table[blockTier] * 9;
+        return plain;
+    }
+
+    /** 成品魔晶块（含粗制块）对应 0~4 级，别的物品返回 -1。 */
+    public static int crystalBlockTier(ItemStack stack) {
+        if (stack.isEmpty()) return -1;
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        if (!id.getNamespace().equals(GeneratedMod.MOD_ID)) return -1;
+        String path = id.getPath();
+        if (!path.endsWith("_mana_crystal_block")) return -1;
+        if (path.startsWith("raw_")) path = path.substring(4);
+        return switch (path) {
+            case "lesser_mana_crystal_block" -> 0;
+            case "medium_mana_crystal_block" -> 1;
+            case "advanced_mana_crystal_block" -> 2;
+            case "supreme_mana_crystal_block" -> 3;
+            case "special_mana_crystal_block" -> 4;
+            default -> -1;
+        };
     }
 
     /** 0~4 对应下/中/高/极/特级魔晶，普通物品返回 -1。 */

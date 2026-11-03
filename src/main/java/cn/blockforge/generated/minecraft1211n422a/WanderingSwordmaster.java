@@ -23,6 +23,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.MoverType;
@@ -35,7 +36,11 @@ import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
+import net.minecraft.world.entity.animal.AbstractGolem;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.ZombifiedPiglin;
+import net.minecraft.world.entity.monster.piglin.AbstractPiglin;
+import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.ItemStack;
@@ -71,7 +76,9 @@ import java.util.UUID;
  *
  * <p>数值：150 生命、20 护甲、走速 0.3 / 追击 0.45、1000 魔素、6000 斗气（每秒回 10）。</p>
  *
- * <p>阵营：只对 {@link Enemy} 标记的敌对生物（亡灵、灾厄、本模组的变异怪）主动出手；
+ * <p>阵营（r269 起）：只对纯粹的敌对生物（亡灵、灾厄、本模组的变异怪与哥布林）主动出手；
+ * 猪灵族 / 僵尸猪灵 / 元素史莱姆这类中立生物绝不主动招惹——但玩家、村民、铁傀儡被它们打，
+ * 或雇主先动手时，剑士立刻反击（护主例外，见 {@link #isRetaliationTarget}）。
  * 玩家与中立生物不主动招惹，被打才会反击。雇佣后跟随雇主并保护他，见 {@link #hire(Player)}。</p>
  */
 public final class WanderingSwordmaster extends net.minecraft.world.entity.PathfinderMob
@@ -648,7 +655,11 @@ public final class WanderingSwordmaster extends net.minecraft.world.entity.Pathf
         tickGather();
         tickStuckEscape();
         // 先清掉已经失效的目标，再判断要不要脱战补血，免得拿一个死掉的目标当敌人。
-        if (getTarget() != null && !isValidTarget(getTarget(), false)) setTarget(null);
+        // r269：不是"见谁打谁"口径的目标（猪灵、元素史莱姆、动手的玩家），只要反击例外
+        // 还成立就继续保留；例外一消失就正常脱战。
+        LivingEntity held = getTarget();
+        if (held != null && (!isValidTarget(held, true)
+                || (!isHostileTarget(held) && !isRetaliationTarget(held)))) setTarget(null);
         tickPotionRecovery();
         if (--targetRefreshCooldown <= 0) {
             targetRefreshCooldown = 20;
@@ -1151,7 +1162,8 @@ public final class WanderingSwordmaster extends net.minecraft.world.entity.Pathf
     /** 冲刺每刻检查是否撞上目标：命中就结算 48 物理 + 击退 16 格 + 打掉一半斗气。 */
     private boolean checkChargeImpact() {
         LivingEntity target = actionTarget;
-        if (!isValidTarget(target, false)) return false;
+        // r269：动作进行中的目标已由锁定环节把关，这里用战斗上下文口径，护主例外目标也能正常撞中。
+        if (!isValidTarget(target, true)) return false;
         // 攻击距离延长 1 倍：命中半径 1.8 → 3.6 格，空中目标按三维距离一起算。
         if (distanceTo(target) > CHARGE_HIT_RADIUS + target.getBbWidth() * 0.5D) return false;
         // 撞上的这一刻停止冲刺。
@@ -1730,7 +1742,7 @@ public final class WanderingSwordmaster extends net.minecraft.world.entity.Pathf
         if (action == Action.CHARGE_SKILL && actionElapsed > CHARGE_WINDUP) {
             // 高智商追踪冲撞：每刻根据目标新位置微调方向，但真正移动的是剑士本人，不生成任何射线。
             LivingEntity target = actionTarget;
-            if (isValidTarget(target, false)) {
+            if (isValidTarget(target, true)) {
                 Vec3 predicted = target.getBoundingBox().getCenter()
                         .add(target.getDeltaMovement().scale(1.5D));
                 Vec3 correction = predicted.subtract(position().add(0.0D, getBbHeight() * 0.5D, 0.0D));
@@ -1960,7 +1972,7 @@ public final class WanderingSwordmaster extends net.minecraft.world.entity.Pathf
     }
 
     // ---------------------------------------------------------------- 目标
-    /** 目标选择入口：雇佣时优先雇主受到/发起的威胁，否则只打敌对生物。 */
+    /** 目标选择入口：雇佣时优先雇主受到/发起的威胁，其次护主例外，最后才按巡逻口径挑敌对生物。 */
     public LivingEntity findCombatTarget() {
         if (!(level() instanceof ServerLevel serverLevel)) return null;
         Player owner = owner();
@@ -1972,6 +1984,10 @@ public final class WanderingSwordmaster extends net.minecraft.world.entity.Pathf
             LivingEntity guard = findAttackerOf(owner);
             if (guard != null) return guard;
         }
+        // r269 护主例外：猪灵这类平时不主动打的中立生物，一旦在欺负玩家 / 村民 / 铁傀儡，
+        // 立刻视为敌对目标反击；这个优先级排在普通巡逻目标之前。
+        LivingEntity protect = findGuardTarget(serverLevel);
+        if (protect != null) return protect;
         double range = 48.0D;
         LivingEntity best = null;
         double bestDistance = range * range;
@@ -1997,14 +2013,97 @@ public final class WanderingSwordmaster extends net.minecraft.world.entity.Pathf
         return best;
     }
 
+    /** 护主扫描半径：剑士在这个范围内看到"中立生物欺负被保护者"就出手。 */
+    private static final double GUARD_RADIUS = 24.0D;
+    /** 反击例外的记忆窗口：例外条件瞬时中断（被击退、停顿）时，目标再多保留 5 秒。 */
+    private static final int COUNTER_MEMORY = 100;
+    private UUID counterTargetId;
+    private int counterTargetUntil;
+
+    /** 护主例外锁定：正在威胁玩家 / 村民 / 铁傀儡，但按巡逻口径不会主动打的生物。 */
+    private LivingEntity findGuardTarget(ServerLevel serverLevel) {
+        LivingEntity best = null;
+        double bestDistance = GUARD_RADIUS * GUARD_RADIUS;
+        for (Mob mob : serverLevel.getEntitiesOfClass(Mob.class,
+                getBoundingBox().inflate(GUARD_RADIUS),
+                m -> m != this && m.isAlive() && !(m instanceof WanderingSwordmaster)
+                        // 傀儡不打：铁傀儡追打玩家是它自己在执法，别把村庄守卫内讧起来。
+                        && !(m instanceof AbstractGolem)
+                        && !isHostileTarget(m) && isValidTarget(m, true))) {
+            if (!isThreateningGuarded(mob)) continue;
+            double distance = distanceToSqr(mob);
+            if (distance < bestDistance) { bestDistance = distance; best = mob; }
+        }
+        return best;
+    }
+
+    /** 这只生物现在是不是在欺负被保护者（追着打，或 5 秒内实际打伤过）。 */
+    private boolean isThreateningGuarded(Mob mob) {
+        Player owner = owner();
+        if (owner != null) {
+            if (mob.getTarget() == owner) return true;
+            if (owner.getLastHurtByMob() == mob) return true;
+            if (owner.getLastHurtMob() == mob) return true;   // 雇主先手打了它
+        }
+        if (level() instanceof ServerLevel serverLevel) {
+            for (LivingEntity guarded : serverLevel.getEntitiesOfClass(LivingEntity.class,
+                    getBoundingBox().inflate(GUARD_RADIUS), WanderingSwordmaster::isGuardedVictim)) {
+                if (mob.getTarget() == guarded || guarded.getLastHurtByMob() == mob) return true;
+            }
+        }
+        return false;
+    }
+
+    /** 被保护者：村庄里的玩家、村民、铁傀儡（雪傀儡也算村民一方的守卫）。 */
+    private static boolean isGuardedVictim(LivingEntity entity) {
+        if (entity instanceof Villager || entity instanceof AbstractGolem) return true;
+        return entity instanceof Player player && !player.isSpectator();
+    }
+
+    /**
+     * r269 反击例外：巡逻口径不该主动打的当前目标，什么时候允许继续打。
+     * 成立条件：打了剑士本人 / 打了雇主 / 被雇主先手打 / 正在欺负玩家、村民、铁傀儡。
+     * 条件成立时刷新 5 秒记忆，免得战斗中一次击退就把目标清空。
+     */
+    private boolean isRetaliationTarget(LivingEntity target) {
+        boolean live = false;
+        if (getLastHurtByMob() == target) live = true;                       // 它打了我
+        Player owner = owner();
+        if (owner != null && (owner.getLastHurtByMob() == target             // 它打了雇主
+                || owner.getLastHurtMob() == target)) live = true;           // 雇主打了它
+        if (!live && target instanceof Mob mob) live = isThreateningGuarded(mob);
+        if (live) {
+            counterTargetId = target.getUUID();
+            counterTargetUntil = tickCount + COUNTER_MEMORY;
+            return true;
+        }
+        return counterTargetId != null && target.getUUID().equals(counterTargetId)
+                && tickCount <= counterTargetUntil;
+    }
+
     private boolean isHostileTarget(LivingEntity candidate) {
         if (candidate == this || !candidate.isAlive() || candidate instanceof WanderingSwordmaster) return false;
+        // r269「不浪费时间」名单：猪灵族（含蛮兵）、僵尸猪灵、元素史莱姆平时绝不主动招惹，
+        // 只有在 {@link #isRetaliationTarget} 的护主 / 反击例外成立时才会交手。
+        if (isNonAggroNeutral(candidate)) return false;
         // 原版敌对怪走 Enemy；本模组哥布林不是 Enemy 接口，必须明确列入剑士的敌对阵营。
         return candidate instanceof Enemy || candidate instanceof Goblin
                 || candidate.getType().getCategory() == MobCategory.MONSTER;
     }
 
-    /** 能不能把这只生物当成目标。 */
+    /** 平时不主动攻击的中立生物：原版按 MONSTER 注册、但本质中立，最容易拖住剑士的时间。 */
+    public static boolean isNonAggroNeutral(LivingEntity entity) {
+        return entity instanceof AbstractPiglin || entity instanceof ZombifiedPiglin
+                || entity instanceof ElementalSlime;
+    }
+
+    /**
+     * 能不能把这只生物当成目标。
+     *
+     * @param hiredDefense false = 巡逻口径，只允许"见谁打谁"的纯敌对生物；
+     *                     true = 战斗上下文（已锁定目标的延续、护主 / 反击例外），
+     *                     中立生物在 {@link #isRetaliationTarget} 场景下也算合法目标。
+     */
     public boolean isValidTarget(LivingEntity candidate, boolean hiredDefense) {
         if (candidate == null || !candidate.isAlive() || candidate == this) return false;
         if (candidate instanceof WanderingSwordmaster) return false;

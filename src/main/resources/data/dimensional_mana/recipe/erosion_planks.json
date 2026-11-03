@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building_blocks",
+  "ingredients": [
+    {
+      "item": "dimensional_mana:erosion_log"
+    }
+  ],
+  "result": {
+    "id": "dimensional_mana:erosion_planks",
+    "count": 4
+  }
+}

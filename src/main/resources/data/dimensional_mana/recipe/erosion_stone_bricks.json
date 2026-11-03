@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building_blocks",
+  "pattern": [
+    "SS",
+    "SS"
+  ],
+  "key": {
+    "S": {
+      "item": "dimensional_mana:erosion_stone"
+    }
+  },
+  "result": {
+    "id": "dimensional_mana:erosion_stone_bricks",
+    "count": 4
+  }
+}

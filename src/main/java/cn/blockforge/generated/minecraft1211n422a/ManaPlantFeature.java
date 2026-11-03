@@ -1,6 +1,7 @@
 package cn.blockforge.generated.minecraft1211n422a;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.BiomeTags;
@@ -9,6 +10,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.feature.Feature;
@@ -30,6 +32,19 @@ public final class ManaPlantFeature extends Feature<NoneFeatureConfiguration> {
     private static final int ATTEMPTS = 4;
     /** 在 feature 原点附近多大范围里找地方，单位是格。 */
     private static final int SPREAD = 2;
+    /** 找岩壁的次数：地表那一株没种成，就再试几次“贴墙”的位置。 */
+    private static final int WALL_ATTEMPTS = 3;
+    /** 从地表往下一格一格找岩壁，最多向下找这么多格。 */
+    private static final int WALL_SCAN_DEPTH = 6;
+    /** 岩壁上垂下来的一串最多几段。 */
+    private static final int WALL_VINE_MAX = 3;
+    /**
+     * 贴墙形态允许的最低高度。
+     *
+     * <p>地面上的卢梅莉亚按设定只长在 100 格往上的地表，可荒原的断崖大多在 60～100 格之间，
+     * 照那条线走玩家永远见不到岩壁上的植株。贴墙这一种跟着崖壁走，从海平面往上都算数。</p>
+     */
+    private static final int WALL_MIN_Y = 62;
 
     public ManaPlantFeature() {
         super(NoneFeatureConfiguration.CODEC);
@@ -60,7 +75,72 @@ public final class ManaPlantFeature extends Feature<NoneFeatureConfiguration> {
             if (kind == null) continue;
             if (ManaPlants.place(level, kind, pos)) return true;
         }
+        // 地表没种成：再到附近的崖壁上挂一串卢梅莉亚。
+        return placeOnCliff(level, random, origin, seed, dimension);
+    }
+
+    /**
+     * 岩壁上的卢梅莉亚。
+     *
+     * <p>以前只在地表高度找位置，而“贴墙”那段代码虽然写好了，却永远没有调用者——荒原的断崖
+     * 上自然一株都长不出来。这里从地表往下扫几格，找“这一格是空的、背后是实心岩壁”的位置，
+     * 贴墙种下去；顺手顺着墙面往上接 1～3 段，标好 above/below，渲染出来就是一串垂下来的藤。</p>
+     *
+     * <p>只种卢梅莉亚：其他植物没有贴墙形态。</p>
+     */
+    private static boolean placeOnCliff(WorldGenLevel level, RandomSource random, BlockPos origin,
+                                        long seed, ResourceKey<Level> dimension) {
+        for (int attempt = 0; attempt < WALL_ATTEMPTS; attempt++) {
+            int x = origin.getX() + random.nextInt(SPREAD * 2 + 1) - SPREAD;
+            int z = origin.getZ() + random.nextInt(SPREAD * 2 + 1) - SPREAD;
+            if ((x >> 4) != (origin.getX() >> 4) || (z >> 4) != (origin.getZ() >> 4)) continue;
+            int top = level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
+            for (int drop = 0; drop < WALL_SCAN_DEPTH; drop++) {
+                BlockPos pos = new BlockPos(x, top - drop, z);
+                if (pos.getY() < WALL_MIN_Y) break;
+                BlockState here = level.getBlockState(pos);
+                if (!here.canBeReplaced() || !level.getFluidState(pos).isEmpty()) continue;
+                // 脚下有土的位置交给地上那套，免得把地面植株全变成贴墙形态。
+                if (ManaPlants.canPlantAt(level, pos)) continue;
+                Direction wall = ManaPlants.wallFacing(level, pos);
+                if (wall == null) continue;
+                Holder<Biome> biome = level.getBiome(pos);
+                if (!ManaPlants.Kind.LUMELIA.manaFits(ManaConcentration.surfaceAt(seed, dimension, biome, pos))) {
+                    continue;
+                }
+                int length = 1 + random.nextInt(WALL_VINE_MAX);
+                if (plantWallVine(level, pos, wall, length)) return true;
+            }
+        }
         return false;
+    }
+
+    /** 顺着同一面墙往上摆一串，最后统一按邻居重算 above/below，让它们接成一株。 */
+    private static boolean plantWallVine(WorldGenLevel level, BlockPos base, Direction wall, int length) {
+        int placed = 0;
+        for (int i = 0; i < length; i++) {
+            BlockPos pos = base.above(i);
+            BlockState here = level.getBlockState(pos);
+            if (!here.canBeReplaced() || !level.getFluidState(pos).isEmpty()) break;
+            if (ManaPlants.wallFacing(level, pos) != wall) break;
+            level.setBlock(pos, wallState().setValue(LumeliaPlantBlock.FACING, wall),
+                    Block.UPDATE_CLIENTS);
+            placed++;
+        }
+        if (placed == 0) return false;
+        for (int i = 0; i < placed; i++) {
+            BlockPos pos = base.above(i);
+            BlockState state = level.getBlockState(pos);
+            if (state.getBlock() instanceof LumeliaPlantBlock) {
+                level.setBlock(pos, LumeliaPlantBlock.stackState(state, level, pos), Block.UPDATE_CLIENTS);
+            }
+        }
+        return true;
+    }
+
+    private static BlockState wallState() {
+        return GeneratedMod.MOD_BLOCKS.get(ManaPlants.Kind.LUMELIA.id()).get().defaultBlockState()
+                .setValue(LumeliaPlantBlock.WALL_MOUNTED, true);
     }
 
     /** 按“条件符合 + 权重”抽一种植物；一株都不符合就返回 null。 */

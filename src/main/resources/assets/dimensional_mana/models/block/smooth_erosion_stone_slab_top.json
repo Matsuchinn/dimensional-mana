@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/slab_top",
+  "textures": {
+    "bottom": "dimensional_mana:block/smooth_erosion_stone",
+    "side": "dimensional_mana:block/smooth_erosion_stone",
+    "top": "dimensional_mana:block/smooth_erosion_stone"
+  }
+}

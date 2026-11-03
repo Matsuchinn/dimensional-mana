@@ -32,6 +32,7 @@ public final class ManaCommands {
                         .then(Commands.argument("player", EntityArgument.player())
                                 .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
                                 .executes(context -> showStatus(context.getSource(), EntityArgument.getPlayer(context, "player")))))
+                .then(antiVoidCommand())
                 .then(Commands.literal("combat")
                         .executes(context -> showCombat(context.getSource()))
                         .then(Commands.argument("target", EntityArgument.entity())
@@ -67,9 +68,95 @@ public final class ManaCommands {
                 .then(debugPlayerCommand("max_skills", ManaCommands::maxSkills))
                 .then(debugPlayerCommand("unlock_all", ManaCommands::unlockAll))
                 .then(magicCircleCommand())
+                .then(Commands.literal("locate_cluster")
+                        .executes(context -> locateCluster(context.getSource(), CrystalClusterLocator.DEFAULT_CELLS))
+                        .then(Commands.argument("radius", IntegerArgumentType.integer(1, CrystalClusterLocator.MAX_CELLS))
+                                .executes(context -> locateCluster(context.getSource(),
+                                        IntegerArgumentType.getInteger(context, "radius")))))
                 .then(cooldownCommand())
                 .then(manaCostCommand())
                 .then(spellCritCommand()));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> antiVoidCommand() {
+        return Commands.literal("antvoid")
+                .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .then(Commands.literal("enter").executes(context -> enterAntiVoid(context.getSource())))
+                .then(Commands.literal("deathgate").executes(context -> testDeathGate(context.getSource())))
+                .then(Commands.literal("resetintro").executes(context -> resetAntiVoidIntro(context.getSource())));
+    }
+
+    private static int enterAntiVoid(CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        ServerLevel level = source.getServer().getLevel(AntiVoidSystem.ANTI_VOID);
+        if (level == null) return 0;
+        player.teleportTo(level, 0.5D, AntiVoidSystem.FLOOR_Y, 0.5D, 0.0F, 0.0F);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.antvoid.enter"), false);
+        return 1;
+    }
+
+    private static int testDeathGate(CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        player.getPersistentData().putInt("AntiVoidGatePending", 1);
+        ServerLevel level = source.getServer().getLevel(AntiVoidSystem.ANTI_VOID);
+        if (level == null) return 0;
+        player.teleportTo(level, 0.5D, AntiVoidSystem.FLOOR_Y, 0.5D, 0.0F, 0.0F);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.antvoid.deathgate"), false);
+        return 1;
+    }
+
+    private static int resetAntiVoidIntro(CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        player.getPersistentData().remove("AntiVoidIntroDone");
+        player.getPersistentData().putInt("AntiVoidIntroPending", 1);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.antvoid.reset"), false);
+        return 1;
+    }
+
+    // ------------------------------------------------------------ 露天魔晶矿簇
+
+    /**
+     * /dimensional_mana locate_cluster [range]：找最近的露天魔晶矿簇并报坐标。
+     *
+     * <p>r283：不再调用原版的 {@code findNearestMapStructure}。那套搜索每试一个候选区块
+     * 都要读一次区块存档、够条件就直接生成区块，对这种只在荒原上出现的稀有结构来说
+     * 一次就能卡住好几秒。现在改走 {@link CrystalClusterLocator}：同一张结构网格，
+     * 但只在内存里算噪声，不碰存档、不生成区块。</p>
+     *
+     * <p>原版 {@code /locate structure dimensional_mana:open_air_mana_crystal_cluster}
+     * 也能用，只是它仍然走那套慢搜索 —— 想快就用这条。</p>
+     */
+    private static int locateCluster(CommandSourceStack source, int radiusCells) {
+        ServerLevel level = source.getLevel();
+        BlockPos origin;
+        try {
+            origin = source.getPlayerOrException().blockPosition();
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException ignored) {
+            origin = BlockPos.containing(source.getPosition());
+        }
+        int radius = Math.max(1, Math.min(CrystalClusterLocator.MAX_CELLS, radiusCells));
+        CrystalClusterLocator.Result result = CrystalClusterLocator.find(level, origin, radius);
+        if (!result.found()) {
+            if (result.timedOut()) {
+                source.sendFailure(Component.translatable("command.dimensional_mana.locate_cluster.timeout",
+                        radius).withStyle(ChatFormatting.GRAY));
+            } else {
+                source.sendFailure(Component.translatable("command.dimensional_mana.locate_cluster.none",
+                        radius).withStyle(ChatFormatting.GRAY));
+            }
+            return 0;
+        }
+        BlockPos found = result.pos();
+        int distance = (int) Math.sqrt(origin.distSqr(found));
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.locate_cluster.found",
+                found.getX(), found.getY(), found.getZ(), distance).withStyle(ChatFormatting.LIGHT_PURPLE), false);
+        // r285：顺手报一句形态。形态由种子 + 坐标定死，和真正生成时一致，
+        // 玩家跑过去看到的就是这一种，四种各 25%。
+        OpenAirManaCrystalClusterStructure.Variant variant =
+                OpenAirManaCrystalClusterStructure.Variant.at(level.getSeed(), found.getX(), found.getZ());
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.locate_cluster.form",
+                variant.displayName()).withStyle(ChatFormatting.GRAY), false);
+        return 1;
     }
 
     // ------------------------------------------------------------ 魔法阵绘制台
@@ -350,6 +437,8 @@ public final class ManaCommands {
         source.sendSuccess(() -> Component.literal("/dimensional_mana spell_crit set|clear|status [玩家] [百分比]")
                 .withStyle(ChatFormatting.RED), false);
         source.sendSuccess(() -> Component.literal("/dimensional_mana magiccircle register|status|list|unregister")
+                .withStyle(ChatFormatting.LIGHT_PURPLE), false);
+        source.sendSuccess(() -> Component.literal("/dimensional_mana locate_cluster [范围]")
                 .withStyle(ChatFormatting.LIGHT_PURPLE), false);
         source.sendSuccess(() -> Component.literal("/dimensional_mana combat [生物]")
                 .withStyle(ChatFormatting.GOLD), false);

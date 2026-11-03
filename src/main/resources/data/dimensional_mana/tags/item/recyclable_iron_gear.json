@@ -1,0 +1,12 @@
+{
+  "replace": false,
+  "values": [
+    "dimensional_mana:rough_iron_helmet",
+    "dimensional_mana:rough_iron_chestplate",
+    "dimensional_mana:rough_iron_leggings",
+    "dimensional_mana:rough_iron_boots",
+    "dimensional_mana:crude_iron_axe",
+    "dimensional_mana:crude_iron_cleaver",
+    "dimensional_mana:rough_buckler"
+  ]
+}

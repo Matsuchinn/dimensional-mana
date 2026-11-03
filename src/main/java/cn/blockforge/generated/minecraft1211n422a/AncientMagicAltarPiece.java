@@ -136,6 +136,10 @@ public final class AncientMagicAltarPiece extends StructurePiece {
         int witchCount = 1 + random.nextInt(3);
         int[][] spawnPoints = {{4, 5, 3}, {10, 5, 11}, {3, 5, 10}};
         for (int i = 0; i < witchCount; i++) spawnWitch(level, spawnPoints[i][0], spawnPoints[i][1], spawnPoints[i][2]);
+
+        // 登记这座祭坛的中心（平台面高度）：世界生成阶段不能写存档数据，先排队，
+        // 区块加载后由 WorldgenSpawnQueue 落进 AncientAltarData——浓度 +1.00 和光晕都靠它。
+        WorldgenSpawnQueue.queueAncientAltar(level.getLevel(), worldPos(7, 4, 7));
     }
 
     /** 门柱：底座、柱身、柱头、魂灯，四格高，站在入口两侧。 */

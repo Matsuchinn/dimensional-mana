@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/wall_inventory",
+  "textures": {
+    "wall": "dimensional_mana:block/erosion_stone_bricks"
+  }
+}

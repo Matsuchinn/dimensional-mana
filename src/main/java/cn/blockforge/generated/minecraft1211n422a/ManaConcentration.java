@@ -16,12 +16,17 @@ public final class ManaConcentration {
     public static double at(ServerLevel level, BlockPos pos) {
         DimensionProfile profile = profile(level);
         double smoothNoise = smoothValueNoise(level.getSeed() ^ profile.salt, pos.getX() / 16.0, pos.getZ() / 16.0);
-        double biomeShift = biomeShift(level.getBiome(pos), profile.variation);
-        double value = profile.average * (1.0 + smoothNoise * profile.variation + biomeShift);
+        double value = baseValue(level.getSeed(), profile, smoothNoise, level.getBiome(pos), pos);
 
         ManaCaveData caveData = ManaCaveData.get(level);
-        if (caveData.isNearCave(pos, 48)) value = Math.max(15.0, value);
+        double caveFloor = caveData.caveFloorAt(pos, 48, level.getSeed());
+        if (caveFloor >= 0.0) value = Math.max(caveFloor, value);
         else if (isInsideAmethystGeode(level, pos)) value = Math.max(12.0, value);
+        // 古代魔法祭坛：中央水平 12 格半径内再 +1.00。判定只看"在不在范围内"，
+        // 范围重叠的两座祭坛也只加这一次——该效果不可叠加。
+        if (AncientAltarData.isEmpowered(level, pos)) value += AncientAltarData.AURA_BONUS;
+        // r282：露天魔晶矿簇：8 格内 +4.00，同样是"在不在圈内"的判定，重叠不叠加。
+        if (CrystalClusterData.isEmpowered(level, pos)) value += CrystalClusterData.AURA_BONUS;
         return Math.max(0.0, value);
     }
 
@@ -34,8 +39,20 @@ public final class ManaConcentration {
     public static double surfaceAt(long seed, ResourceKey<Level> dimension, Holder<Biome> biome, BlockPos pos) {
         DimensionProfile profile = profile(dimension);
         double smoothNoise = smoothValueNoise(seed ^ profile.salt, pos.getX() / 16.0, pos.getZ() / 16.0);
-        double biomeShift = biomeShift(biome, profile.variation);
-        return Math.max(0.0, profile.average * (1.0 + smoothNoise * profile.variation + biomeShift));
+        return Math.max(0.0, baseValue(seed, profile, smoothNoise, biome, pos));
+    }
+
+    /**
+     * r271：环境基准浓度。蚀魔荒原不走「维度均值 × 群系偏移」那套，直接钉在
+     * 13.50 ± 2.00 —— 平滑噪声在这里当 ±2 的起伏用，保证同一张荒原里浓度
+     * 渐变但绝不超过设计稿给的区间；其他群系维持原公式。
+     */
+    private static double baseValue(long seed, DimensionProfile profile, double smoothNoise,
+                                    Holder<Biome> biome, BlockPos pos) {
+        if (CorruptedWastelandBiome.is(biome)) {
+            return CorruptedWastelandBiome.BASE_CONCENTRATION + smoothNoise * CorruptedWastelandBiome.VARIATION;
+        }
+        return profile.average * (1.0 + smoothNoise * profile.variation + biomeShift(biome, profile.variation));
     }
 
     public static double regenerationMultiplier(double concentration) {
@@ -96,13 +113,24 @@ public final class ManaConcentration {
     }
 
     private static double signed(long seed, int x, int z) {
+        return unitHash(seed, x, z) * 2.0 - 1.0;
+    }
+
+    /**
+     * 按 (seed, x, z) 掷一个稳定的 [0,1) 随机数。
+     *
+     * <p>r284 起露天魔晶矿簇"普通群系也低概率生成"用它掷骰子：同一个世界、同一格的
+     * 结果永远一样，所以世界生成和 {@code /dimensional_mana locate_cluster} 算出来的
+     * 是同一个答案，不会出现"指令说这里有、跑过去却空着"。</p>
+     */
+    public static double unitHash(long seed, int x, int z) {
         long mixed = seed ^ ((long)x * 341873128712L) ^ ((long)z * 132897987541L);
         mixed ^= mixed >>> 33;
         mixed *= 0xff51afd7ed558ccdL;
         mixed ^= mixed >>> 33;
         mixed *= 0xc4ceb9fe1a85ec53L;
         mixed ^= mixed >>> 33;
-        return toUnit(mixed) * 2.0 - 1.0;
+        return toUnit(mixed);
     }
 
     private static double toUnit(long value) {

@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/outer_stairs",
+  "textures": {
+    "bottom": "dimensional_mana:block/erosion_planks",
+    "side": "dimensional_mana:block/erosion_planks",
+    "top": "dimensional_mana:block/erosion_planks"
+  }
+}

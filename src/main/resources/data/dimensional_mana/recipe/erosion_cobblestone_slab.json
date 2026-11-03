@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building_blocks",
+  "pattern": [
+    "SSS"
+  ],
+  "key": {
+    "S": {
+      "item": "dimensional_mana:erosion_cobblestone"
+    }
+  },
+  "result": {
+    "id": "dimensional_mana:erosion_cobblestone_slab",
+    "count": 6
+  }
+}

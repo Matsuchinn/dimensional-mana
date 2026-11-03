@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building_blocks",
+  "pattern": [
+    "RRR",
+    "RRR",
+    "RRR"
+  ],
+  "key": {
+    "R": {
+      "item": "dimensional_mana:raw_lesser_mana_crystal"
+    }
+  },
+  "result": {
+    "id": "dimensional_mana:raw_lesser_mana_crystal_block",
+    "count": 1
+  }
+}

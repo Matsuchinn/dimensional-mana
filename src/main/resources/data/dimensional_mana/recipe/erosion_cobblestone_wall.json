@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building_blocks",
+  "pattern": [
+    "CCC",
+    "CCC"
+  ],
+  "key": {
+    "C": {
+      "item": "dimensional_mana:erosion_cobblestone"
+    }
+  },
+  "result": {
+    "id": "dimensional_mana:erosion_cobblestone_wall",
+    "count": 6
+  }
+}
