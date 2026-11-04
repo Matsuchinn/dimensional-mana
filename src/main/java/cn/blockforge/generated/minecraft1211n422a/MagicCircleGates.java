@@ -1,6 +1,7 @@
 package cn.blockforge.generated.minecraft1211n422a;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
@@ -155,6 +156,57 @@ public final class MagicCircleGates {
         };
     }
 
+    // ---------------------------------------------------------------- 判定明细文案
+
+    /** 判定明细的翻译键前缀：试运行预览里「[条件解析] #1 T — ……」那半句。 */
+    private static final String DETAIL_KEY = "message.dimensional_mana.magiccircle.gate.detail.";
+
+    /** 取一条判定明细（参数按语言文件里的 %1$s / %2$s 排）。 */
+    private static Component detail(String path, Object... args) {
+        return Component.translatable(DETAIL_KEY + path, args);
+    }
+
+    /**
+     * 阈值的可翻译写法（带单位）。
+     *
+     * <p>和 {@link #thresholdText} 的区别：这里返回 Component，单位也跟着语言走
+     * （中文「3 格」、英文「3 blocks」）；老的大白话解析句还在用 String 版。</p>
+     */
+    private static Component thresholdComponent(Domain domain, double value) {
+        return switch (domain) {
+            case LIFE, RESOURCE -> Component.literal(Math.round(value * 100.0) + "%");
+            case STATUS -> detail("threshold.seconds", String.format(Locale.ROOT, "%.1f", value));
+            case ENVIRONMENT -> Component.literal(String.valueOf((int) value));
+            case ACTION -> detail("threshold.blocks", (int) value);
+            case COUNT -> detail("threshold.count", (int) value);
+            case ATTACH -> detail("threshold.layers", (int) value);
+        };
+    }
+
+    /** 元素列的本地化名字（判定明细里「有火环境」的那个「火」）。 */
+    private static Component magicName(String elementItem) {
+        return MagicCirclePowders.displayName(elementItem);
+    }
+
+    /** 动作列的本地化名字（判定明细里「当前检测到 2 个举盾格挡的目标」）。 */
+    private static Component actionComponent(String name) {
+        String key = switch (name) {
+            case "金" -> "shield";
+            case "木" -> "eat";
+            case "火" -> "attack";
+            case "水" -> "swim";
+            case "冰" -> "sneak";
+            case "雷" -> "sprint";
+            case "毒" -> "hurt";
+            case "光" -> "look";
+            case "风" -> "fall";
+            case "土" -> "stand";
+            case "音" -> "jump";
+            default -> "other";
+        };
+        return detail("action.name." + key);
+    }
+
     // ---------------------------------------------------------------- 模式与比较符的存取
 
     public static final String MODE_GATE = "G";
@@ -237,8 +289,13 @@ public final class MagicCircleGates {
 
     // ---------------------------------------------------------------- 判定入口
 
-    /** 一次门控判定的完整结果；T/F 悬浮文字与试运行预览直接读它。 */
-    public record Verdict(boolean pass, int matched, String detail) {
+    /**
+     * 一次门控判定的完整结果；T/F 悬浮文字与试运行预览直接读它。
+     *
+     * <p>{@code detail} 是 {@link Component} 而不是拼好的字符串：试运行预览要跟着玩家语言走，
+     * 在服务端把中文拼死就再也翻不回来了。</p>
+     */
+    public record Verdict(boolean pass, int matched, Component detail) {
         public String mark() { return pass ? "T" : "F"; }
     }
 
@@ -246,7 +303,7 @@ public final class MagicCircleGates {
     public static Verdict evaluate(MagicCircleNetwork.Node node, ServerLevel level, Vec3 anchor, Player caster) {
         Domain domain = domainOf(node.semantic());
         if (domain == null) {
-            return new Verdict(true, 0, "没装语义粉：门控直接放行（装一种原版粉才有判定）");
+            return new Verdict(true, 0, detail("no_semantic"));
         }
         return evaluate(domain, node.element(), MagicCircleDecl.dyeTier(node.dye()),
                 operatorOf(domain, node.gate()), node.power(), level, anchor, caster);
@@ -257,7 +314,7 @@ public final class MagicCircleGates {
                                    Player caster) {
         Domain domain = domainOf(node.semantic());
         if (domain == null) {
-            return new Verdict(true, 0, "没装语义粉：门控直接放行（装一种原版粉才有判定）");
+            return new Verdict(true, 0, detail("no_semantic"));
         }
         return evaluate(domain, node.element(), MagicCircleDecl.dyeTier(node.dye()),
                 operatorOf(domain, node.gate()), node.power(), level, anchor, caster);
@@ -310,10 +367,10 @@ public final class MagicCircleGates {
             if (Double.isNaN(ratio)) continue;
             if (op.test(ratio, threshold)) matched++;
         }
-        String what = resource ? "魔素/斗气" : "生命值";
+        Component what = detail(resource ? "ratio.resource" : "ratio.health");
         return new Verdict(matched > 0, matched,
-                "当前检测到 " + matched + " 个" + what + "满足条件的目标 " + op.symbol() + " "
-                        + thresholdText(resource ? Domain.RESOURCE : Domain.LIFE, threshold));
+                detail("ratio", matched, what, op.symbol(),
+                        thresholdComponent(resource ? Domain.RESOURCE : Domain.LIFE, threshold)));
     }
 
     private static double healthRatio(LivingEntity living) {
@@ -345,7 +402,7 @@ public final class MagicCircleGates {
             if (seconds <= 0.0) continue;
             if (op.test(seconds, threshold)) matched++;
         }
-        return new Verdict(matched > 0, matched, "当前检测到 " + matched + " 个带该状态的目标");
+        return new Verdict(matched > 0, matched, detail("status", matched));
     }
 
     /** 元素列是不是「查某种状态」的列（火水冰雷毒光风土音）；身份 / 空列走身份口径。 */
@@ -411,19 +468,20 @@ public final class MagicCircleGates {
         if (element == null || element.isEmpty()) {
             double light = level.getMaxLocalRawBrightness(pos);
             boolean pass = op.test(light, threshold);
-            return new Verdict(pass, pass ? 1 : 0, "当前光照 " + (int) light + "（" + op.symbol() + " "
-                    + (int) threshold + "）");
+            return new Verdict(pass, pass ? 1 : 0,
+                    detail("env.light", (int) light, op.symbol(), (int) threshold));
         }
         if (name.equals("金") || name.equals("木")) {
             double y = (pos.getY() + 64) * 15.0 / 224.0; // -64 → 0 档，约 160 → 15 档
             if (name.equals("木")) y = 15.0 - y;          // 地表列反向：越接近地表刻度越小
             boolean pass = op.test(y, threshold);
-            return new Verdict(pass, pass ? 1 : 0, "当前 Y=" + pos.getY() + "（刻度 " + (int) y
-                    + "，" + op.symbol() + " " + (int) threshold + "）");
+            return new Verdict(pass, pass ? 1 : 0,
+                    detail("env.y", pos.getY(), (int) y, op.symbol(), (int) threshold));
         }
         boolean present = environmentPresence(level, pos, name);
         boolean pass = op == CompareOperator.GREATER_THAN ? present : !present;
-        return new Verdict(pass, pass ? 1 : 0, (present ? "有" : "没有") + name + "环境");
+        return new Verdict(pass, pass ? 1 : 0,
+                detail(present ? "env.present" : "env.absent", magicName(element)));
     }
 
     private static boolean environmentPresence(ServerLevel level, BlockPos pos, String name) {
@@ -467,8 +525,8 @@ public final class MagicCircleGates {
         if (element == null || element.isEmpty()) {
             int signal = level.getBestNeighborSignal(BlockPos.containing(anchor));
             boolean pass = op.test(signal, Math.min(threshold, 15.0));
-            return new Verdict(pass, pass ? 1 : 0, "红石信号 " + signal + "（" + op.symbol() + " "
-                    + (int) threshold + "）");
+            return new Verdict(pass, pass ? 1 : 0,
+                    detail("action.signal", signal, op.symbol(), (int) threshold));
         }
         if (name.equals("奥术")) {
             int matched = 0;
@@ -482,9 +540,9 @@ public final class MagicCircleGates {
             if (caster != null && !caster.isSpectator()) {
                 nearest = Math.min(nearest, anchor.distanceTo(caster.position()));
             }
-            return new Verdict(matched > 0, matched, "最近玩家 " + (nearest == Double.MAX_VALUE ? "-"
-                    : String.format(Locale.ROOT, "%.1f格", nearest)) + "（" + op.symbol() + " "
-                    + (int) threshold + "格）");
+            return new Verdict(matched > 0, matched, detail("action.nearest",
+                    nearest == Double.MAX_VALUE ? "-" : String.format(Locale.ROOT, "%.1f", nearest),
+                    op.symbol(), (int) threshold));
         }
         List<LivingEntity> nearby = scanLiving(level, anchor, Math.max(radius, 6), null);
         int matched = 0;
@@ -493,7 +551,7 @@ public final class MagicCircleGates {
             if (actionMatches(living, name, anchor, level.getGameTime())) matched++;
         }
         return new Verdict(matched > 0, matched,
-                "当前检测到 " + matched + " 个" + actionName(name) + "的目标");
+                detail("action.count", matched, actionComponent(name)));
     }
 
     private static String actionName(String name) {
@@ -545,8 +603,7 @@ public final class MagicCircleGates {
         List<LivingEntity> nearby = scanLiving(level, anchor, radius, element);
         int total = nearby.size();
         boolean pass = op.test(total, threshold);
-        return new Verdict(pass, total, "当前检测到 " + total + " 个满足条件的生物（" + op.symbol() + " "
-                + (int) threshold + "）");
+        return new Verdict(pass, total, detail("count", total, op.symbol(), (int) threshold));
     }
 
     /** 烈焰（附着）：目标身上元素附着层数比较；空列 = 身上几种不同元素附着。 */
@@ -559,7 +616,7 @@ public final class MagicCircleGates {
             int layers = attachLayers(living, element);
             if (layers > 0 && op.test(layers, threshold)) matched++;
         }
-        return new Verdict(matched > 0, matched, "当前检测到 " + matched + " 个附着达标的目标");
+        return new Verdict(matched > 0, matched, detail("attach", matched));
     }
 
     /** 附着层数 = 效果等级 + 1；空元素列数「几种不同元素附着」。 */

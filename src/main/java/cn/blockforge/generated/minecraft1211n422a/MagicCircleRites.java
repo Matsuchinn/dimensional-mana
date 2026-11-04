@@ -6,6 +6,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -349,8 +350,7 @@ public final class MagicCircleRites {
                         .withStyle(ChatFormatting.GRAY), false);
             }
             if (outcome.hasAny()) {
-                actor.displayClientMessage(Component.literal(outcome.describe()).withStyle(ChatFormatting.LIGHT_PURPLE),
-                        false);
+                actor.displayClientMessage(outcome.describe().copy().withStyle(ChatFormatting.LIGHT_PURPLE), false);
             }
         }
     }
@@ -374,15 +374,18 @@ public final class MagicCircleRites {
 
         boolean hasAny() { return hurt + heal + summon + mined + blocked + reactions > 0; }
 
-        String describe() {
-            StringBuilder builder = new StringBuilder();
-            if (hurt > 0) builder.append("伤害 ×").append(hurt);
-            if (reactions > 0) builder.append(builder.length() > 0 ? "、" : "").append("反应 ×").append(reactions);
-            if (heal > 0) builder.append(builder.length() > 0 ? "、" : "").append("治疗 ×").append(heal);
-            if (summon > 0) builder.append(builder.length() > 0 ? "、" : "").append("召唤 ×").append(summon);
-            if (mined > 0) builder.append(builder.length() > 0 ? "、" : "").append("挖掘 ×").append(mined);
-            if (blocked > 0) builder.append(builder.length() > 0 ? "、" : "").append("被拦截 ×").append(blocked);
-            return builder.toString();
+        /** 「伤害 ×3、反应 ×2」这一行总结：每段都按语言文件拼，分隔符也走语言文件。 */
+        Component describe() {
+            List<Component> parts = new ArrayList<>();
+            // 本类里 Outcome.preview(Component) 和外面那个按路径取文案的 preview(String, …) 重名，
+            // 内层调用必须显式带类名，否则解析到自己的同名方法。
+            if (hurt > 0) parts.add(MagicCircleRites.preview("summary.hurt", hurt));
+            if (reactions > 0) parts.add(MagicCircleRites.preview("summary.reactions", reactions));
+            if (heal > 0) parts.add(MagicCircleRites.preview("summary.heal", heal));
+            if (summon > 0) parts.add(MagicCircleRites.preview("summary.summon", summon));
+            if (mined > 0) parts.add(MagicCircleRites.preview("summary.mined", mined));
+            if (blocked > 0) parts.add(MagicCircleRites.preview("summary.blocked", blocked));
+            return joined(parts);
         }
     }
 
@@ -978,11 +981,10 @@ public final class MagicCircleRites {
                         if (test && shots != null) {
                             showGateReadouts(level, pos, entity, layer, shots);
                             for (GateShot shot : shots) {
-                                outcome.preview(Component.literal("[条件解析] #" + (shot.node() + 1) + " "
-                                        + shot.verdict().mark() + " — " + shot.verdict().detail()));
+                                outcome.preview(preview("gate.node", shot.node() + 1,
+                                        shot.verdict().mark(), shot.verdict().detail()));
                             }
-                            outcome.preview(Component.literal("[条件解析] 终端#" + (plan.terminal + 1)
-                                    + (pass ? "：门控放行，这一发会执行。" : "：被门控拦截，这一发不会执行。")));
+                            outcome.preview(preview(pass ? "gate.pass" : "gate.blocked", plan.terminal + 1));
                         }
                         if (!pass) {
                             outcome.blocked++;
@@ -1023,7 +1025,7 @@ public final class MagicCircleRites {
         if (plan.dyeConflict && !hasStabilizer
                 && level.random.nextFloat() < MagicCircleConfig.MISFIRE_CHANCE.get()) {
             outcome.blocked++;
-            outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "：染料词缀互冲，本发哑火（放稳定块可避免）"));
+            outcome.preview(preview("misfire", plan.terminal + 1));
             return;
         }
 
@@ -1077,8 +1079,7 @@ public final class MagicCircleRites {
                     test, outcome, strength, actor);
             case CHARGE -> terminalCharge(level, pos, entity, node, plan, element, arcaneElement, tags, radius,
                     center, test, outcome, strength, actor, caster, pvp);
-            case NONE -> outcome.preview(Component.literal(
-                    "终端#" + (plan.terminal + 1) + "：没有可用主协议（缺「协议指定」声明）"));
+            case NONE -> outcome.preview(preview("no_protocol", plan.terminal + 1));
         }
     }
 
@@ -1144,7 +1145,7 @@ public final class MagicCircleRites {
         }
         if (affixIds.contains("explosion") && hits > 0) {
             if (test) {
-                outcome.preview(Component.literal("  ↳ 爆炸词缀：中心 1.5 格爆炸（默认不破坏方块，声明「方块破坏」才拆地）"));
+                outcome.preview(preview("explosion_affix"));
             } else {
                 level.explode(caster, center.x, center.y, center.z, 1.5F, false,
                         damage != null && damage.flag(2)
@@ -1152,17 +1153,15 @@ public final class MagicCircleRites {
                                 : net.minecraft.world.level.Level.ExplosionInteraction.NONE);
             }
         }
-        StringBuilder line = new StringBuilder();
-        line.append("终端#").append(plan.terminal + 1).append("（火药")
-                .append(node.element().isEmpty() ? "" : "+" + MagicCirclePowders.shortName(node.element()))
-                .append("）：预计每发 ").append(String.format(Locale.ROOT, "%.1f", base)).append(" 点");
-        if (element != null) line.append("（").append(MagicCirclePowders.shortName(node.element())).append("系，可打反应）");
-        line.append(" × 约 ").append(hits).append(" 个目标");
-        if (realPct > 0) line.append(" · 附带 ").append(realPct).append("% 真实伤害");
-        if (allowPvp) line.append(" · 已开PvP");
-        if (friendFire) line.append(" · 已开友伤");
-        if (!tags.isEmpty()) line.append(" · 词缀：").append(String.join("、", tags.stream().map(MagicCircleRites::tagName).toList()));
-        outcome.preview(Component.literal(line.toString()));
+        MutableComponent line = preview("damage", plan.terminal + 1, elementPlus(node.element()),
+                String.format(Locale.ROOT, "%.1f", base),
+                element == null ? Component.empty() : preview("damage.reaction_note", elementName(node.element())),
+                hits);
+        if (realPct > 0) line.append(preview("suffix.real_damage", realPct));
+        if (allowPvp) line.append(preview("suffix.pvp_on"));
+        if (friendFire) line.append(preview("suffix.friend_fire"));
+        if (!tags.isEmpty()) line.append(preview("suffix.affixes", tagList(tags)));
+        outcome.preview(line);
     }
 
     /** 伤害系词缀 / 染料修饰落地。 */
@@ -1261,10 +1260,11 @@ public final class MagicCircleRites {
             healed++;
             outcome.heal++;
         }
-        outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（糖）：预计每目标 "
-                + String.format(Locale.ROOT, "%.1f", per) + " 点治疗 × " + healed + " 名"
-                + (heal == null ? "" : " · 本发上限 " + heal.primary() + " 点")
-                + (affixIds.isEmpty() ? "" : " · 词缀：" + String.join("、", tags.stream().map(MagicCircleRites::tagName).toList()))));
+        MutableComponent line = preview("heal", plan.terminal + 1,
+                String.format(Locale.ROOT, "%.1f", per), healed);
+        if (heal != null) line.append(preview("suffix.heal_cap", heal.primary()));
+        if (!affixIds.isEmpty()) line.append(preview("suffix.affixes", tagList(tags)));
+        outcome.preview(line);
     }
 
     /** 召唤特化：数量 / 寿命 / Boss 权限按召唤边界执法；白名单、场上上限照常。 */
@@ -1273,19 +1273,20 @@ public final class MagicCircleRites {
                                        MagicCircleGraph.Plan plan, ElementType element, java.util.Set<String> affixIds,
                                        boolean test, Outcome outcome, double strength, ServerPlayer caster) {
         if (!MagicCircleConfig.SUMMON_ENABLED.get()) {
-            outcome.preview(Component.literal("  ↳ 服务器已关闭召唤"));
+            outcome.preview(preview("summon.disabled"));
             return;
         }
         MagicCircleDecl.Entry summon = plan.declaration(MagicCircleDecl.Group.SUMMON);
         String entityId;
-        String kind = "友好";
+        Component kind;
         if (affixIds.contains("summon_hostile") || element == ElementType.POISON) {
-            kind = "敌对";
+            kind = preview("summon.kind.hostile");
             entityId = "minecraft:cave_spider";
         } else if (affixIds.contains("summon_special") || MagicCirclePowders.isArcane(node.element())) {
-            kind = "特殊";
+            kind = preview("summon.kind.special");
             entityId = "minecraft:allay"; // 特殊召唤：无害傀儡 / 展示物
         } else {
+            kind = preview("summon.kind.friendly");
             entityId = summonIdOf(element);
             if (entityId == null) entityId = "dimensional_mana:vine_servant"; // 词缀召唤、元素槽空着
         }
@@ -1293,13 +1294,13 @@ public final class MagicCircleRites {
         if (isBlacklisted(MagicCircleConfig.SUMMON_BLACKLIST.get(), entityId)
                 || (!MagicCircleConfig.SUMMON_WHITELIST.get().isEmpty()
                 && !MagicCircleConfig.SUMMON_WHITELIST.get().contains(entityId))) {
-            outcome.preview(Component.literal("  ↳ 召唤" + kind + "「" + entityId + "」被服务器名单拦截"));
+            outcome.preview(preview("summon.blacklisted", kind, entityId));
             outcome.blocked++;
             return;
         }
         boolean boss = BOSS_IDS.contains(entityId);
         if (boss && (summon == null || !summon.flag(0))) {
-            outcome.preview(Component.literal("  ↳ Boss 级召唤未获「Boss 权限」声明放行"));
+            outcome.preview(preview("summon.boss_locked"));
             outcome.blocked++;
             return;
         }
@@ -1308,13 +1309,17 @@ public final class MagicCircleRites {
                 ? MagicCircleConfig.SUMMON_LIFETIME_SECONDS.get() : summon.secondary();
         int onField = countSummons(level, entity);
         int room = Math.max(0, Math.min(max, MagicCircleConfig.MAX_SUMMONS_PER_NETWORK.get()) - onField);
-        String aiName = summon == null ? "守卫锚点" : switch (summon.enumValue(0)) {
-            case 0 -> "跟随"; case 1 -> "待机"; case 3 -> "激进"; case 4 -> "被动"; default -> "守卫锚点";
+        Component aiName = summon == null ? preview("summon.ai.guard") : switch (summon.enumValue(0)) {
+            case 0 -> preview("summon.ai.follow");
+            case 1 -> preview("summon.ai.idle");
+            case 3 -> preview("summon.ai.aggressive");
+            case 4 -> preview("summon.ai.passive");
+            default -> preview("summon.ai.guard");
         };
         if (test) {
-            outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（召唤" + kind + "）：预计召唤 "
-                    + room + " 只 " + entityId + "，持续 " + life + " 秒，AI " + aiName
-                    + (boss ? " · Boss级" : "")));
+            MutableComponent line = preview("summon.preview", plan.terminal + 1, kind, room, entityId, life, aiName);
+            if (boss) line.append(preview("suffix.boss_tier"));
+            outcome.preview(line);
             outcome.summon += room;
             return;
         }
@@ -1344,8 +1349,7 @@ public final class MagicCircleRites {
             spawned++;
         }
         outcome.summon += spawned;
-        outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "：实际召唤 " + spawned + " 只 "
-                + entityId + "，存活 " + life + " 秒"));
+        outcome.preview(preview("summon.actual", plan.terminal + 1, spawned, entityId, life));
     }
 
     /** 红石终端：点亮附近可受电方块（灯 / 门 / 活板门），4 秒后自动关。 */
@@ -1365,9 +1369,9 @@ public final class MagicCircleRites {
             }
         }
         MagicCircleDecl.Entry signal = plan.declaration(MagicCircleDecl.Group.SIGNAL);
-        StringBuilder line = new StringBuilder("终端#" + (plan.terminal + 1) + "（红石）：信号强度 15，点亮 " + lit + " 个方块");
-        if (signal != null) line.append(" · 无线边界：").append(signal.primary()).append(" 格（无线中继下版本实装）");
-        outcome.preview(Component.literal(line.toString()));
+        MutableComponent line = preview("signal", plan.terminal + 1, lit);
+        if (signal != null) line.append(preview("suffix.wireless", signal.primary()));
+        outcome.preview(line);
     }
 
     /** 烈焰终端：净化负面与元素附着；元素决定特化（冰解冻、光杀菌、风驱散）。 */
@@ -1400,10 +1404,9 @@ public final class MagicCircleRites {
             }
             if (did) outcome.heal++;
         }
-        outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（烈焰"
-                + (node.element().isEmpty() ? "" : "+" + MagicCirclePowders.shortName(node.element()))
-                + "）：预计净化最多 " + clears + " 个负面，命中 " + cleaned + " 名友方"
-                + (dyeTags.contains("guard") ? " · 守护染料：额外移除 1 个" : "")));
+        MutableComponent line = preview("purify", plan.terminal + 1, elementPlus(node.element()), clears, cleaned);
+        if (dyeTags.contains("guard")) line.append(preview("suffix.purify_guard"));
+        outcome.preview(line);
     }
 
     /** 萤石终端：照明 / 显形 / 投影；元素决定特化。 */
@@ -1440,18 +1443,16 @@ public final class MagicCircleRites {
                             center.z + level.random.nextDouble() * 2 - 1, 1, 0.0, 0.0, 0.0, 0.0);
                 }
             }
-            outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（萤石+奥术）：全息投影特效，范围 "
-                    + (int) lightRadius + " 格"));
+            outcome.preview(preview("light.arcane", plan.terminal + 1, (int) lightRadius));
             return;
         }
-        String kind = switch (element == null ? ElementType.LIGHT : element) {
-            case POISON -> "致盲领域（黑暗效果）";
-            case SOUND -> "隐匿屏障（移除显形）";
-            case ICE -> "冰光照明";
-            default -> "照明 / 显形";
+        Component kind = switch (element == null ? ElementType.LIGHT : element) {
+            case POISON -> preview("light.kind.blind");
+            case SOUND -> preview("light.kind.veil");
+            case ICE -> preview("light.kind.ice");
+            default -> preview("light.kind.default");
         };
-        outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（萤石）：" + kind + "，范围 "
-                + (int) lightRadius + " 格，预计影响 " + revealed + " 个目标"));
+        outcome.preview(preview("light", plan.terminal + 1, kind, (int) lightRadius, revealed));
     }
 
     /** 青金终端：金 = 挖矿（精准看词缀 / 声明），木 = 收割，光 = 鉴定，其余 = 扫描上聊天。 */
@@ -1469,10 +1470,11 @@ public final class MagicCircleRites {
             if (test) {
                 int perMinute = Math.min(interact == null ? Integer.MAX_VALUE : interact.primary(),
                         MagicCircleConfig.MAX_BLOCKS_PER_MINUTE.get());
-                outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（青金+金）：预计单次挖掘 ≤ "
-                        + perTrigger + " 块 · 每分钟 ≤ " + perMinute + " 块"
-                        + (silk ? " · 带精准采集" : "") + (toInventory ? " · 产物直接进背包" : "")
-                        + (interact == null ? "（没声明交互边界，走服务器默认限额）" : "")));
+                MutableComponent line = preview("mine.preview", plan.terminal + 1, perTrigger, perMinute);
+                if (silk) line.append(preview("suffix.silk"));
+                if (toInventory) line.append(preview("suffix.to_inventory"));
+                if (interact == null) line.append(preview("suffix.mine_default"));
+                outcome.preview(line);
                 return;
             }
             outcome.mined += mineV22(level, pos, entity, strength, test, perTrigger, silk, toInventory,
@@ -1481,27 +1483,30 @@ public final class MagicCircleRites {
         }
         if (element == ElementType.NATURE) {
             int harvested = harvestCrops(level, center, radius, test);
-            outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（青金+木）：预计收割成熟作物 "
-                    + harvested + " 格"));
+            outcome.preview(preview("harvest", plan.terminal + 1, harvested));
             return;
         }
         int scanned = 0;
-        StringBuilder names = new StringBuilder();
+        MutableComponent names = Component.empty();
+        int listed = 0;
         MagicCircleDecl.Entry info = plan.declaration(MagicCircleDecl.Group.INFO);
         double scanRadius = info == null ? radius : Math.max(4.0, info.primary());
         for (LivingEntity target : areaTargets(level, center, scanRadius)) {
             scanned++;
             if (!test && scanned <= 5) {
-                names.append(names.length() == 0 ? "" : "、").append(target.getDisplayName().getString())
-                        .append("(").append(String.format(Locale.ROOT, "%.0f", target.getHealth())).append("♥)");
+                if (listed > 0) names.append(preview("list_separator"));
+                names.append(target.getDisplayName())
+                        .append(Component.literal("(" + String.format(Locale.ROOT, "%.0f", target.getHealth())
+                                + "♥)"));
+                listed++;
             }
         }
-        if (!test && actor != null && names.length() > 0) {
-            actor.displayClientMessage(Component.literal("扫描：" + names).withStyle(ChatFormatting.AQUA), false);
+        if (!test && actor != null && listed > 0) {
+            actor.displayClientMessage(preview("scan_chat", names).withStyle(ChatFormatting.AQUA), false);
         }
-        outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（青金）：扫描半径 "
-                + (int) scanRadius + " 格，预计上报 " + scanned + " 个目标"
-                + (element == ElementType.LIGHT ? " · 洞察：含元素附着与魔法痕迹" : "")));
+        MutableComponent line = preview("scan", plan.terminal + 1, (int) scanRadius, scanned);
+        if (element == ElementType.LIGHT) line.append(preview("suffix.insight"));
+        outcome.preview(line);
     }
 
     /** 紫晶终端：奥术充能 / 金探测金属 / 毒随机传送 / 风定向传送 / 音共鸣。 */
@@ -1516,13 +1521,13 @@ public final class MagicCircleRites {
             int mana = energy == null ? 10 : energy.primary();
             ServerPlayer target = energy != null && energy.enumValue(0) == 1 ? caster : (actor != null ? actor : caster);
             if (!test && target != null) ManaData.restoreMana(target, mana, false);
-            outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（紫晶+奥术）：预计充能 " + mana
-                    + " 点魔素 → " + (target == null ? "触发者" : target.getName().getString())));
+            outcome.preview(preview("charge", plan.terminal + 1, mana,
+                    target == null ? preview("charge.caster") : target.getName()));
             return;
         }
         if (element == ElementType.METAL || tags.contains("detect")) {
             int found = scanMetal(level, center, 8, test);
-            outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（紫晶+金）：探测到金属矿脉 " + found + " 块（半径 8）"));
+            outcome.preview(preview("detect", plan.terminal + 1, found));
             return;
         }
         if (element == ElementType.POISON) {
@@ -1542,8 +1547,9 @@ public final class MagicCircleRites {
                     }
                 }
             }
-            outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（紫晶+毒）：随机传送最多 " + moved
-                    + " 个目标，距离 ≤ " + dist + " 格" + (crossDim ? " · 声明了跨维度（本版仍禁）" : " · 禁跨维度")));
+            MutableComponent line = preview("teleport.random", plan.terminal + 1, moved, dist);
+            line.append(preview(crossDim ? "suffix.cross_dim_declared" : "suffix.cross_dim_off"));
+            outcome.preview(line);
             return;
         }
         if (element == ElementType.WIND) {
@@ -1560,8 +1566,7 @@ public final class MagicCircleRites {
                     target.push(dir.x * dist * 0.12, 0.25, dir.z * dist * 0.12);
                 }
             }
-            outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（紫晶+风）：定向传送 / 击退 " + moved
-                    + " 个目标，距离 " + dist + " 格（默认只推敌对）"));
+            outcome.preview(preview("teleport.wind", plan.terminal + 1, moved, dist));
             return;
         }
         if (element == ElementType.SOUND) {
@@ -1573,11 +1578,10 @@ public final class MagicCircleRites {
                 hits++;
                 outcome.hurt++;
             }
-            outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（紫晶+音）：共鸣音伤 "
-                    + String.format(Locale.ROOT, "%.1f", dmg) + " × " + hits + " 个敌对目标"));
+            outcome.preview(preview("sound", plan.terminal + 1, String.format(Locale.ROOT, "%.1f", dmg), hits));
             return;
         }
-        outcome.preview(Component.literal("终端#" + (plan.terminal + 1) + "（紫晶）：稳固 / 相位移相 —— 本版本该特化未开放"));
+        outcome.preview(preview("unsupported", plan.terminal + 1));
     }
 
     // ---------------------------------------------------------------- v2.2 小工具
@@ -1677,35 +1681,57 @@ public final class MagicCircleRites {
         return found;
     }
 
-    /** 词缀标签的中文短名（预览行拼接用）。 */
-    private static String tagName(String tag) {
-        return switch (tag) {
-            case "mine" -> "挖掘";
-            case "silk" , "silk_mine" -> "精准采集";
-            case "heal" -> "治疗";
-            case "damage" -> "伤害";
-            case "plant" -> "种植";
-            case "silence" -> "静音";
-            case "boost" -> "效果提升";
-            case "debuff" -> "负面附加";
-            case "buff" -> "增益附加";
-            case "summon" -> "召唤";
-            case "explosion" -> "爆炸";
-            case "spread" -> "强扩散";
-            case "purify" -> "净化";
-            case "expand" -> "扩大范围";
-            case "charge" -> "充能";
-            case "detect" -> "探测";
-            case "teleport" -> "传送";
-            case "pierce" -> "破甲";
-            case "freeze" -> "冻结";
-            case "irrigate" -> "灌溉";
-            case "resonance" -> "震荡";
-            case "stabilize" -> "稳固";
-            case "light" -> "照明";
-            case "signal" -> "信号";
-            default -> tag;
+    // ---------------------------------------------------------------- 预览行文案
+
+    /**
+     * 试运行 / 施法反馈里的每一段文字都从这里取，键统一挂在
+     * {@code message.dimensional_mana.magiccircle.output.*} 下面。
+     *
+     * <p>为什么按「段」拼而不是整句：一句里有一堆可选尾巴（真实伤害、PvP、词缀、精准采集……），
+     * 整句写死要按 2^n 种组合各写一条；拆成段之后中文和英文都只要写自己那一段，
+     * 拼接顺序交给各自的译文决定（带编号的 %1$s 占位符，换语种可以换语序）。</p>
+     */
+    private static MutableComponent preview(String path, Object... args) {
+        return Component.translatable("message.dimensional_mana.magiccircle.output." + path, args);
+    }
+
+    /** 把几段用语言文件里的分隔符连起来（中文「、」，英文逗号加空格）。 */
+    private static Component joined(List<Component> parts) {
+        MutableComponent out = Component.empty();
+        for (int i = 0; i < parts.size(); i++) {
+            if (i > 0) out.append(preview("list_separator"));
+            out.append(parts.get(i));
+        }
+        return out;
+    }
+
+    /** 词缀标签的短名：认得的走语言文件，认不得的原样显示。 */
+    private static Component tagName(String tag) {
+        String known = switch (tag) {
+            case "silk", "silk_mine" -> "silk";
+            case "mine", "heal", "damage", "plant", "silence", "boost", "debuff", "buff", "summon",
+                 "explosion", "spread", "purify", "expand", "charge", "detect", "teleport", "pierce",
+                 "freeze", "irrigate", "resonance", "stabilize", "light", "signal" -> tag;
+            default -> null;
         };
+        return known == null ? Component.literal(tag) : preview("tag." + known);
+    }
+
+    /** 一串词缀「· 词缀：爆炸、扩散」里的那个列表。 */
+    private static Component tagList(java.util.Collection<String> tags) {
+        List<Component> parts = new ArrayList<>();
+        for (String tag : tags) parts.add(tagName(tag));
+        return joined(parts);
+    }
+
+    /** 元素 / 粉末的本地化短名（预览行里「火药+火」的那个「火」）。 */
+    private static Component elementName(String itemId) {
+        return MagicCirclePowders.displayName(itemId);
+    }
+
+    /** 「+火」这一小段；元素槽空着就整段不出现。 */
+    private static Component elementPlus(String itemId) {
+        return itemId == null || itemId.isEmpty() ? Component.empty() : preview("element_plus", elementName(itemId));
     }
 
     // ================================================================ 异面连线
@@ -1953,9 +1979,14 @@ public final class MagicCircleRites {
                 && player.getUUID().equals(anchor.owner());
     }
 
-    /** 锚点最上面那层的名字（远程面板上显示）。 */
+    /**
+     * 锚点最上面那层的名字（远程面板上显示）。
+     *
+     * <p>没有层就回空串，由面板那边补一句「无名法阵」的译文：服务端拿不到玩家的语言设置，
+     * 这里拼中文过去，英文客户端就只能看到中文。</p>
+     */
     private static String anchorName(MagicCircleProjectionBlockEntity anchor) {
-        if (anchor.layers().isEmpty()) return "无名法阵";
+        if (anchor.layers().isEmpty()) return "";
         return anchor.layers().get(anchor.layers().size() - 1).name();
     }
 

@@ -134,7 +134,9 @@ public final class MagicCircleRemoteScreen extends Screen {
                 : "gui.dimensional_mana.magiccircle.remote.stopped");
         int stateWidth = font.width(state);
         int nameRoom = Math.max(24, right - left - 16 - stateWidth - 6);
-        String name = font.plainSubstrByWidth(entry.name(), nameRoom);
+        String name = font.plainSubstrByWidth(entry.name().isEmpty()
+                ? Component.translatable("gui.dimensional_mana.magiccircle.remote.unnamed").getString()
+                : entry.name(), nameRoom);
         graphics.drawString(font, name, left + 6, top + 4, hover ? 0xFFFFE4A8 : 0xFFE9DCFF, false);
         graphics.drawString(font, state, right - 6 - stateWidth, top + 4,
                 entry.running() ? 0xFF8FFFC1 : 0xFF9C8FB5, false);

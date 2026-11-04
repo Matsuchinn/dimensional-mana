@@ -273,6 +273,31 @@ public final class MagicCirclePowders {
         };
     }
 
+    /**
+     * 粉末 / 元素的<b>可翻译</b>短名（聊天预览、门控解析这类会跟着玩家语言走的文字用它）。
+     *
+     * <p>跟 {@link #shortName} 的分工：{@code shortName} 是画在世界里的固定缩写（方块贴的字、
+     * 蓝图角标），故意不读语言文件；这里返回 {@link Component}，客户端按自己的语言渲染。
+     * 认不得的粉末退回 {@code shortName}，宁可显示中文缩写也不显示裸 id。</p>
+     */
+    public static Component displayName(String itemId) {
+        if (itemId == null || itemId.isEmpty()) return Component.literal("-");
+        Powder powder = BY_ITEM.get(itemId);
+        if (powder == null) return Component.literal("-");
+        ElementType element = elementOf(itemId);
+        if (element != null) {
+            return Component.translatable("message.dimensional_mana.magiccircle.element."
+                    + element.name().toLowerCase(java.util.Locale.ROOT));
+        }
+        if (isArcane(itemId)) return Component.translatable("message.dimensional_mana.magiccircle.element.arcane");
+        String path = ResourceLocation.parse(itemId).getPath();
+        return switch (path) {
+            case "redstone", "sugar", "gunpowder", "blaze_powder", "glowstone_dust", "lapis_dust",
+                 "amethyst_dust" -> Component.translatable("message.dimensional_mana.magiccircle.powder." + path);
+            default -> Component.literal(shortName(itemId));
+        };
+    }
+
     /** 16 种染料的短名；不是染料就回「?」。 */
     private static String dyeShortName(String path) {
         return switch (path) {

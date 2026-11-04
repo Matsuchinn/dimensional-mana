@@ -215,10 +215,16 @@ public class LumeliaPlantBlock extends ManaPlantBlock {
      */
     @Override
     protected void randomTick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
+        // r308：随机刻里要反复改邻居，改的过程会触发连锁更新，自己可能已经被拆成空气了。
+        // 所以每次动手之前都重新从世界里读一遍，读到的不是卢梅莉亚就直接收手，
+        // 绝不拿空气去读 wall_mounted（那会抛 IllegalArgumentException 把整世界 tick 打断）。
+        state = level.getBlockState(pos);
+        if (!state.is(this)) return;
         BlockState fixed = stackState(state, level, pos);
         if (fixed != state) {
             level.setBlock(pos, fixed, Block.UPDATE_ALL);
-            state = fixed;
+            state = level.getBlockState(pos);
+            if (!state.is(this)) return;
         }
         if (state.getValue(WALL_MOUNTED)) {
             climbWall(state, level, pos, random);
@@ -246,6 +252,7 @@ public class LumeliaPlantBlock extends ManaPlantBlock {
      * 旧存档里已经卡在半腰的贴着墙的植株，也会在这里一格一格自己爬上去，不用重开世界。</p>
      */
     private void climbWall(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
+        if (!state.is(this)) return;                       // 已经不是卢梅莉亚了（被连锁更新拆掉）
         if (state.getValue(ABOVE)) return;                 // 上面还有一段，交给最顶上那格去爬
         if (random.nextFloat() > CLIMB_CHANCE) return;
         int height = 1;
@@ -255,21 +262,29 @@ public class LumeliaPlantBlock extends ManaPlantBlock {
         if (!level.getBlockState(above).canBeReplaced() || !level.getFluidState(above).isEmpty()) return;
         Direction facing = state.getValue(FACING);
         BlockPos wall = above.relative(facing.getOpposite());
-        if (level.getBlockState(wall).isFaceSturdy(level, wall, facing)) {
-            // 背后还是墙：继续贴着爬一段。
-            BlockState grown = defaultBlockState().setValue(WALL_MOUNTED, true).setValue(FACING, facing);
-            level.setBlock(above, stackState(grown, level, above), Block.UPDATE_ALL);
-            level.setBlock(pos, stackState(level.getBlockState(pos), level, pos), Block.UPDATE_ALL);
-            return;
-        }
-        // 到墙顶了：在崖沿上换栽成地栽形态（脚下踩着的正是最后一段贴墙株，站得住）。
-        // 它的上下分段照常由 stackState 标好，长出来就是一株完整的「崖顶草」。
-        level.setBlock(above, stackState(defaultBlockState(), level, above), Block.UPDATE_ALL);
-        level.setBlock(pos, stackState(level.getBlockState(pos), level, pos), Block.UPDATE_ALL);
+        // 背后还是墙：继续贴着爬一段；到墙顶了就在崖沿上换栽成地栽形态（脚下踩着的正是
+        // 最后一段贴墙株，站得住）。它的上下分段照常由 stackState 标好，长出来就是一株
+        // 完整的「崖顶草」。
+        BlockState grown = level.getBlockState(wall).isFaceSturdy(level, wall, facing)
+                ? defaultBlockState().setValue(WALL_MOUNTED, true).setValue(FACING, facing)
+                : defaultBlockState();
+        level.setBlock(above, stackState(grown, level, above), Block.UPDATE_ALL);
+        // r308（崩溃修复）：上面那一段落位会触发邻居更新，脚下这一格有可能当场被判定
+        // 「撑不住」而变回空气。以前这里直接把 level.getBlockState(pos) 读出来喂给
+        // stackState——读到空气时，stackState 里“空气 == 空气”照样通过方块比较，
+        // 接着 getValue(WALL_MOUNTED) 就抛 IllegalArgumentException，整世界 tick 崩掉。
+        // 现在先确认这一格还是卢梅莉亚，不是就直接收手。
+        BlockState self = level.getBlockState(pos);
+        if (!self.is(this)) return;
+        BlockState fixed = stackState(self, level, pos);
+        if (fixed != self) level.setBlock(pos, fixed, Block.UPDATE_ALL);
     }
 
     /** 按上下邻居重新标出这一格是「底 / 中 / 顶」里的哪一种。 */
     public static BlockState stackState(BlockState state, LevelReader level, BlockPos pos) {
+        // 传进来的不是卢梅莉亚（最常见的是空气）就没有 above/below 这两个属性，原样返回，
+        // 免得在空气上 setValue 抛 IllegalArgumentException。世界生成那边也会走这个方法。
+        if (!state.hasProperty(ABOVE) || !state.hasProperty(BELOW)) return state;
         boolean above = isSegment(level.getBlockState(pos.above()), state);
         boolean below = isSegment(level.getBlockState(pos.below()), state);
         return state.setValue(ABOVE, above).setValue(BELOW, below);
@@ -277,6 +292,10 @@ public class LumeliaPlantBlock extends ManaPlantBlock {
 
     /** 同一种形态（都在地上，或者都贴墙）的卢梅莉亚才算同一株的上下两段。 */
     private static boolean isSegment(BlockState candidate, BlockState self) {
+        // 先查属性有没有注册，再取值。
+        // r308（崩溃修复）：以前只比 getBlock()，两格都是空气时“空气 == 空气”成立，
+        // 接着 candidate.getValue(WALL_MOUNTED) 就在空气上抛 IllegalArgumentException。
+        if (!candidate.hasProperty(WALL_MOUNTED) || !self.hasProperty(WALL_MOUNTED)) return false;
         return candidate.getBlock() == self.getBlock()
                 && candidate.getValue(WALL_MOUNTED) == self.getValue(WALL_MOUNTED);
     }
