@@ -418,29 +418,29 @@ public final class ManaCommands {
     private static int showHelp(CommandSourceStack source) {
         source.sendSuccess(() -> Component.translatable("command.dimensional_mana.help.title")
                 .withStyle(ChatFormatting.LIGHT_PURPLE), false);
-        source.sendSuccess(() -> Component.literal("/dimensional_mana status [玩家]")
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.status")
                 .withStyle(ChatFormatting.AQUA), false);
-        source.sendSuccess(() -> Component.literal("/dimensional_mana mana <玩家> <数值>")
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.mana")
                 .withStyle(ChatFormatting.AQUA), false);
-        source.sendSuccess(() -> Component.literal("/dimensional_mana battle_qi <玩家> <数值>")
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.battle_qi")
                 .withStyle(ChatFormatting.GOLD), false);
-        source.sendSuccess(() -> Component.literal("/dimensional_mana max_mana <玩家> <数值>")
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.max_mana")
                 .withStyle(ChatFormatting.AQUA), false);
-        source.sendSuccess(() -> Component.literal("/dimensional_mana max_battle_qi <玩家> <数值>")
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.max_battle_qi")
                 .withStyle(ChatFormatting.GOLD), false);
-        source.sendSuccess(() -> Component.literal("/dimensional_mana unlock_spells|unlock_elements|max_skills|unlock_all [玩家]")
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.unlock")
                 .withStyle(ChatFormatting.LIGHT_PURPLE), false);
-        source.sendSuccess(() -> Component.literal("/dimensional_mana cooldown on|off|reset|status [玩家]")
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.cooldown")
                 .withStyle(ChatFormatting.AQUA), false);
-        source.sendSuccess(() -> Component.literal("/dimensional_mana manacost on|off|status [玩家]")
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.manacost")
                 .withStyle(ChatFormatting.LIGHT_PURPLE), false);
-        source.sendSuccess(() -> Component.literal("/dimensional_mana spell_crit set|clear|status [玩家] [百分比]")
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.spell_crit")
                 .withStyle(ChatFormatting.RED), false);
         source.sendSuccess(() -> Component.literal("/dimensional_mana magiccircle register|status|list|unregister")
                 .withStyle(ChatFormatting.LIGHT_PURPLE), false);
-        source.sendSuccess(() -> Component.literal("/dimensional_mana locate_cluster [范围]")
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.locate_cluster")
                 .withStyle(ChatFormatting.LIGHT_PURPLE), false);
-        source.sendSuccess(() -> Component.literal("/dimensional_mana combat [生物]")
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.combat")
                 .withStyle(ChatFormatting.GOLD), false);
         source.sendSuccess(() -> Component.literal("/dimensional_mana mob list|show|set|remove|reset|refresh")
                 .withStyle(ChatFormatting.YELLOW), false);

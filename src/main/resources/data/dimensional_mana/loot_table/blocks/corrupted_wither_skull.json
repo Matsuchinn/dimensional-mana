@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:block",
+  "pools": [{
+    "rolls": 1,
+    "entries": [{"type": "minecraft:item", "name": "dimensional_mana:corrupted_wither_skull"}],
+    "conditions": [{"condition": "minecraft:survives_explosion"}]
+  }]
+}

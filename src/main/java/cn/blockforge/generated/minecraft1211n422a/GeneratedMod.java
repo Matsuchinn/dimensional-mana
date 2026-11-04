@@ -137,6 +137,8 @@ public final class GeneratedMod {
     public static final String CORRUPTED_SPIDER_EYE_ID = "corrupted_spider_eye";
     /** 魔蚀蛛丝：破坏魔蚀蛛网掉 1 个。 */
     public static final String CORRUPTED_SILK_ID = "corrupted_silk";
+    /** 畸变下界之星：魔蚀凋零的必掉材料。 */
+    public static final String DISTORTED_NETHER_STAR_ID = "distorted_nether_star";
     /** 「次元物语：斗气」创造页的摆放顺序：饰品 → 手册 → 技能书。 */
     public static final List<String> QI_ITEM_IDS = new ArrayList<>();
     /** 「次元物语：魔导」创造页自己收着的新东西，主创造页不再重复放一遍。 */
@@ -537,6 +539,40 @@ public final class GeneratedMod {
             "magic_eye", () -> EntityType.Builder.<MagicEyeEntity>of(MagicEyeEntity::new, MobCategory.MISC)
                     .sized(0.5F, 0.5F).clientTrackingRange(8).updateInterval(1)
                     .build(MOD_ID + ":magic_eye"));
+    /** r301 魔蚀凋零：继承原版凋零的 Boss，1000 血 / 30 万魔素 / 5000 斗气。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<CorruptedWither>> CORRUPTED_WITHER = ENTITY_TYPES.register(
+            "corrupted_wither", () -> EntityType.Builder.<CorruptedWither>of(CorruptedWither::new, MobCategory.MONSTER)
+                    .sized(0.9F, 3.5F).clientTrackingRange(16).updateInterval(2).fireImmune()
+                    .build(MOD_ID + ":corrupted_wither"));
+    /** 魔蚀凋零的【侵蚀凋零】骷髅头弹。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<CorruptedWitherSkull>> CORRUPTED_WITHER_SKULL =
+            ENTITY_TYPES.register("corrupted_wither_skull", () -> EntityType.Builder
+                    .<CorruptedWitherSkull>of(CorruptedWitherSkull::new, MobCategory.MISC)
+                    .sized(0.3125F, 0.3125F).clientTrackingRange(8).updateInterval(1)
+                    .build(MOD_ID + ":corrupted_wither_skull"));
+    /** 虚无聚合体：蓝 / 红两种晶体头颅。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<CorruptedWitherAggregate>> CORRUPTED_WITHER_AGGREGATE =
+            ENTITY_TYPES.register("corrupted_wither_aggregate", () -> EntityType.Builder
+                    .<CorruptedWitherAggregate>of(CorruptedWitherAggregate::new, MobCategory.MISC)
+                    .sized(0.9F, 0.9F).clientTrackingRange(10).updateInterval(1)
+                    .build(MOD_ID + ":corrupted_wither_aggregate"));
+    /** 虚无凋零射线。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<CorruptedWitherBeam>> CORRUPTED_WITHER_BEAM =
+            ENTITY_TYPES.register("corrupted_wither_beam", () -> EntityType.Builder
+                    .<CorruptedWitherBeam>of(CorruptedWitherBeam::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F).clientTrackingRange(16).updateInterval(1).noSummon()
+                    .build(MOD_ID + ":corrupted_wither_beam"));
+    /** 凋零幻影：二阶段受击分裂出来的假身。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<CorruptedWitherPhantom>> CORRUPTED_WITHER_PHANTOM =
+            ENTITY_TYPES.register("corrupted_wither_phantom", () -> EntityType.Builder
+                    .<CorruptedWitherPhantom>of(CorruptedWitherPhantom::new, MobCategory.MONSTER)
+                    .sized(0.9F, 3.5F).clientTrackingRange(16).updateInterval(2)
+                    .build(MOD_ID + ":corrupted_wither_phantom"));
+    /** 魔蚀凋零骷髅头（方块）：召唤阵的三颗头。 */
+    public static final DeferredBlock<Block> CORRUPTED_WITHER_SKULL_BLOCK = BLOCKS.register(
+            CorruptedWitherSkullBlock.BLOCK_ID, () -> new CorruptedWitherSkullBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_PURPLE).strength(1.0F, 3.0F)
+                    .sound(SoundType.BONE_BLOCK).noOcclusion().dynamicShape()));
     public static final DeferredHolder<StructureType<?>, StructureType<AncientMagicAltarStructure>> ANCIENT_MAGIC_ALTAR_STRUCTURE_TYPE =
             STRUCTURE_TYPES.register("ancient_magic_altar", () -> () -> AncientMagicAltarStructure.CODEC);
     public static final DeferredHolder<StructurePieceType, StructurePieceType> ANCIENT_MAGIC_ALTAR_PIECE =
@@ -782,6 +818,7 @@ public final class GeneratedMod {
         registerCorruptedWeaver();
         registerSwordmaster();
         registerVoidShade();
+        registerCorruptedWither();
         // r271：蚀魔荒原——方块 / 物品 / 粒子一次挂齐。
         ErosionWasteland.registerItems();
     }
@@ -826,6 +863,27 @@ public final class GeneratedMod {
         naturalEgg("void_shade_spawn_egg", ITEMS.register("void_shade_spawn_egg", () ->
                 new DeferredSpawnEggItem(VOID_SHADE, 0x0D0818, 0x7B3BD6,
                         new Item.Properties().rarity(Rarity.EPIC))));
+    }
+
+    /**
+     * r301 魔蚀凋零的整条内容线：
+     * 魔蚀凋零骷髅头（方块 + 物品）、畸变下界之星、刷怪蛋。
+     *
+     * <p>全部放进「次元物语：自然」创造页：召唤材料和掉落物排在自然页末尾，
+     * 刷怪蛋走和别的魔素变异体一样的「插到最后一枚蛋后面」的规则。</p>
+     */
+    private static void registerCorruptedWither() {
+        MOD_BLOCKS.put(CorruptedWitherSkullBlock.BLOCK_ID, CORRUPTED_WITHER_SKULL_BLOCK);
+        MOD_ITEMS.put(CorruptedWitherSkullBlock.BLOCK_ID, ITEMS.register(CorruptedWitherSkullBlock.BLOCK_ID, () ->
+                new BlockItem(CORRUPTED_WITHER_SKULL_BLOCK.get(), new Item.Properties().rarity(Rarity.EPIC))));
+        MOD_ITEMS.put(DISTORTED_NETHER_STAR_ID, ITEMS.register(DISTORTED_NETHER_STAR_ID, () ->
+                new LoreItem(new Item.Properties().rarity(Rarity.EPIC),
+                        "tooltip.dimensional_mana.distorted_nether_star")));
+        naturalEgg("corrupted_wither_spawn_egg", ITEMS.register("corrupted_wither_spawn_egg", () ->
+                new DeferredSpawnEggItem(CORRUPTED_WITHER, 0x1A0B22, 0x9B59FF,
+                        new Item.Properties().rarity(Rarity.EPIC))));
+        NATURAL_ITEM_IDS.add(CorruptedWitherSkullBlock.BLOCK_ID);
+        NATURAL_ITEM_IDS.add(DISTORTED_NETHER_STAR_ID);
     }
 
     /**
@@ -1238,6 +1296,7 @@ public final class GeneratedMod {
         POTIONS.register(modBus);
         SpellSounds.register();
         GoblinSounds.register();
+        CorruptedWitherSounds.register();
         // r212 冒险者男声台词（右键搭话/成交/拒绝），不再用村民音。
         AdventurerSounds.register();
         SOUNDS.register(modBus);
@@ -1292,6 +1351,8 @@ public final class GeneratedMod {
         modBus.addListener(MagicCircleNetActionPayload::register);
         modBus.addListener(MagicCircleRemoteListPayload::register);
         modBus.addListener(MagicCircleCodeResultPayload::register);
+        modBus.addListener(CorruptedWitherFxPayload::register);
+        modBus.addListener(CorruptedWitherBurstPayload::register);
         if (FMLEnvironment.dist == Dist.CLIENT) ClientModEvents.register(modBus);
         ManaEvents events = new ManaEvents();
         FragmentLootEvents fragmentLoot = new FragmentLootEvents();
@@ -1346,6 +1407,15 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(VoidShadeEvents::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(VoidShadeEvents::onDamagePost);
         NeoForge.EVENT_BUS.addListener(VoidShadeEvents::onLivingDeath);
+        // r301 魔蚀凋零：受击链路（光易伤 / 全属性减伤 / 聚合体吸收 / 2% 限伤 / 幻影分裂）、
+        // 禁疗封印、击杀回魔，以及「魔蚀骷髅头 + 灵魂沙 + 特级魔晶块」的召唤仪式。
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherEvents::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherEvents::onLivingDeath);
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherEvents::onHeal);
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherEvents::onBlockPlaced);
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherEvents::onRightClickBlock);
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherEvents::onTooltip);
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherEvents::onLevelTick);
         // 流浪剑士：雇佣交互、友伤豁免、完美格挡、远程格挡、瞬身闪避、喝药/集气打断、死亡清理。
         NeoForge.EVENT_BUS.addListener(SwordmasterEvents::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(SwordmasterEvents::onProjectileImpact);
@@ -1520,6 +1590,10 @@ public final class GeneratedMod {
         event.put(VOID_PHANTOM.get(), VoidPhantomEntity.createAttributes().build());
         // 寒冰傀儡：35 生命、与雪傀儡一致的 0.2 移速，本身不近战，只射冰锥。
         event.put(NewSpellContent.FROST_GOLEM.get(), SpellSummon.attributes(35, 0, 0.2, 0, 0).build());
+        // r301 魔蚀凋零：1000 生命、原版凋零 1.25 倍移速、64 格索敌、完全免击退。
+        event.put(CORRUPTED_WITHER.get(), CorruptedWither.createAttributes().build());
+        // 凋零幻影：20 生命、不动、不索敌，砍一下就炸。
+        event.put(CORRUPTED_WITHER_PHANTOM.get(), CorruptedWitherPhantom.createAttributes().build());
     }
 
     private static void registerElementalSlimes() {

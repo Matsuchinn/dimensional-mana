@@ -40,9 +40,10 @@ public final class SpellWheelScreen extends Screen {
         int cx = width / 2;
         int cy = height / 2;
         hoveredSlot = slotAt(mouseX, mouseY, cx, cy);
-        graphics.drawCenteredString(font, title, cx, cy - 8, 0xFFEBD9FF);
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.spell_wheel.hint"),
-                cx, cy + 7, 0xFFBDA7D1);
+        TextFit.centered(graphics, font, title, cx, cy - 8, width - 24, 0xFFEBD9FF);
+        // 英文提示比中文长一截，按窗口宽度截断，窗口小的时候不会画到屏幕外。
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.spell_wheel.hint"),
+                cx, cy + 7, width - 24, 0xFFBDA7D1);
         for (int i = 0; i < SLOT_COUNT; i++) {
             double angle = -Math.PI / 2.0 + Math.PI * 2.0 * i / SLOT_COUNT;
             int x = cx + (int)Math.round(Math.cos(angle) * 72.0);
@@ -66,10 +67,10 @@ public final class SpellWheelScreen extends Screen {
                     ? Component.translatable("gui.dimensional_mana.spell_wheel.empty", hoveredSlot + 1)
                     : Component.translatable("gui.dimensional_mana.spell_wheel.slot", hoveredSlot + 1,
                             Component.translatable(hovered.translationKey()));
-            graphics.drawCenteredString(font, line, cx, cy + 28, 0xFFFFFFFF);
+            TextFit.centered(graphics, font, line, cx, cy + 28, width - 24, 0xFFFFFFFF);
         } else {
-            graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.spell_wheel.double_click_hint"),
-                    cx, cy + 28, 0xFFD2B9DF);
+            TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.spell_wheel.double_click_hint"),
+                    cx, cy + 28, width - 24, 0xFFD2B9DF);
         }
         if (assigningSlot != Integer.MIN_VALUE) {
             // 子界面使用不透明底板，并提高绘制层级，彻底盖住上一层轮盘文字。
@@ -91,10 +92,11 @@ public final class SpellWheelScreen extends Screen {
         Component heading = assigningSlot >= 0
                 ? Component.translatable("gui.dimensional_mana.spell_wheel.assign_title", assigningSlot + 1)
                 : Component.translatable("gui.dimensional_mana.spell_wheel.assign_title_auto");
-        graphics.drawCenteredString(font, heading, width / 2, layout.y() + 10, 0xFFFFE8A6);
+        TextFit.centered(graphics, font, heading, width / 2, layout.y() + 10,
+                Math.max(80, layout.width() - 20), 0xFFFFE8A6);
         if (spells.isEmpty()) {
-            graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.spell_wheel.no_spells"),
-                    width / 2, layout.y() + 47, 0xFFC9B7CE);
+            TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.spell_wheel.no_spells"),
+                    width / 2, layout.y() + 47, Math.max(80, layout.width() - 20), 0xFFC9B7CE);
             return;
         }
 
@@ -113,20 +115,21 @@ public final class SpellWheelScreen extends Screen {
                     hover ? 0xD0523470 : 0xB01A1228);
             graphics.renderOutline(cardX, cardY, CARD_WIDTH, CARD_HEIGHT, hover ? 0xFFFFD678 : 0xFF9D79BF);
             graphics.blit(spell.icon(), cardX + 22, cardY + 5, 0, 0, 16, 16, 16, 16);
-            graphics.drawCenteredString(font, Component.translatable(spell.translationKey()), cardX + 30, cardY + 28,
-                    hover ? 0xFFFFFFFF : 0xFFD6C8E1);
+            TextFit.centeredShrunk(graphics, font, Component.translatable(spell.translationKey()), cardX + 30, cardY + 28,
+                    CARD_WIDTH - 4, hover ? 0xFFFFFFFF : 0xFFD6C8E1);
         }
 
         int footerY = layout.y() + layout.height() - 14;
         if (layout.pageCount() > 1) {
-            graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.spell_wheel.page",
-                    pickerPage + 1, layout.pageCount()), width / 2, footerY, 0xFFD2B9DF);
+            TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.spell_wheel.page",
+                    pickerPage + 1, layout.pageCount()), width / 2, footerY,
+                    Math.max(80, layout.width() - 60), 0xFFD2B9DF);
             graphics.drawCenteredString(font, Component.literal("‹"), layout.x() + 14, footerY, 0xFFFFE8A6);
             graphics.drawCenteredString(font, Component.literal("›"), layout.x() + layout.width() - 14,
                     footerY, 0xFFFFE8A6);
         } else if (anyHovered) {
-            graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.spell_wheel.click_to_assign"),
-                    width / 2, footerY, 0xFFFFE8A6);
+            TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.spell_wheel.click_to_assign"),
+                    width / 2, footerY, Math.max(80, layout.width() - 20), 0xFFFFE8A6);
         }
     }
 

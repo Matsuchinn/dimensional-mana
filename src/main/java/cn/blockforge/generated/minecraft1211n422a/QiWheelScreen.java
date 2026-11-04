@@ -42,9 +42,9 @@ public final class QiWheelScreen extends Screen {
         int cx = width / 2;
         int cy = height / 2;
         hoveredSlot = slotAt(mouseX, mouseY, cx, cy);
-        graphics.drawCenteredString(font, title, cx, cy - 107, 0xFFFFE3B0);
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.qi_wheel.hint"),
-                cx, cy + 100, 0xFFC9A98E);
+        TextFit.centered(graphics, font, title, cx, cy - 107, width - 24, 0xFFFFE3B0);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.qi_wheel.hint"),
+                cx, cy + 100, width - 24, 0xFFC9A98E);
         for (int i = 0; i < SLOT_COUNT; i++) {
             double angle = -Math.PI / 2.0 + Math.PI * 2.0 * i / SLOT_COUNT;
             int x = cx + (int)Math.round(Math.cos(angle) * RING_RADIUS);
@@ -69,10 +69,10 @@ public final class QiWheelScreen extends Screen {
                     ? Component.translatable("gui.dimensional_mana.qi_wheel.empty", hoveredSlot + 1)
                     : Component.translatable("gui.dimensional_mana.qi_wheel.slot", hoveredSlot + 1,
                     Component.translatable(hovered.translation()), hovered.cost());
-            graphics.drawCenteredString(font, line, cx, cy + 78, 0xFFFFFFFF);
+            TextFit.centered(graphics, font, line, cx, cy + 78, width - 24, 0xFFFFFFFF);
         } else {
-            graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.qi_wheel.select_hint"),
-                    cx, cy + 78, 0xFFC9A98E);
+            TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.qi_wheel.select_hint"),
+                    cx, cy + 78, width - 24, 0xFFC9A98E);
         }
         if (assigningSlot != Integer.MIN_VALUE) {
             graphics.pose().pushPose();
@@ -94,11 +94,12 @@ public final class QiWheelScreen extends Screen {
         graphics.fill(0, 0, width, height, 0xE6000000);
         graphics.fillGradient(panelX, panelY, panelX + panelWidth, panelY + panelHeight, 0xFF34181A, 0xFF1A0C0F);
         graphics.renderOutline(panelX, panelY, panelWidth, panelHeight, 0xFFE0B478);
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.qi_wheel.assign_title",
-                (assigningSlot >= 0 ? assigningSlot : 0) + 1), width / 2, panelY + 9, 0xFFFFE8A6);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.qi_wheel.assign_title",
+                (assigningSlot >= 0 ? assigningSlot : 0) + 1), width / 2, panelY + 9,
+                Math.max(80, panelWidth - 20), 0xFFFFE8A6);
         if (abilities.isEmpty()) {
-            graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.qi_wheel.no_abilities"),
-                    width / 2, panelY + 47, 0xFFC9B7CE);
+            TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.qi_wheel.no_abilities"),
+                    width / 2, panelY + 47, Math.max(80, panelWidth - 20), 0xFFC9B7CE);
             return;
         }
         int gridX = (width - gridWidth) / 2;
@@ -113,13 +114,13 @@ public final class QiWheelScreen extends Screen {
             graphics.renderOutline(cardX, gridY, CARD_WIDTH, CARD_HEIGHT, hover ? 0xFFFFD678 : 0xFF9D6E4B);
             ItemStack icon = iconOf(ability);
             if (!icon.isEmpty()) graphics.renderItem(icon, cardX + 6, gridY + 4);
-            graphics.drawString(font, Component.translatable(ability.translation()), cardX + 26, gridY + 6,
-                    hover ? 0xFFFFFFFF : 0xFFE6D2BE, false);
-            graphics.drawString(font, Component.translatable("gui.dimensional_mana.qi_manual.cost", ability.cost()),
-                    cardX + 26, gridY + 17, 0xFF9FE3FF, false);
+            TextFit.left(graphics, font, Component.translatable(ability.translation()), cardX + 26, gridY + 6,
+                    CARD_WIDTH - 30, hover ? 0xFFFFFFFF : 0xFFE6D2BE, false);
+            TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.qi_manual.cost", ability.cost()),
+                    cardX + 26, gridY + 17, CARD_WIDTH - 30, 0xFF9FE3FF, false);
             String summary = Component.translatable("gui.dimensional_mana.qi_manual." + ability.id() + ".1").getString();
-            graphics.drawString(font, font.plainSubstrByWidth(summary, CARD_WIDTH - 12),
-                    cardX + 6, gridY + 30, 0xFFB99A80, false);
+            TextFit.left(graphics, font, Component.literal(summary),
+                    cardX + 6, gridY + 30, CARD_WIDTH - 12, 0xFFB99A80, false);
         }
     }
 

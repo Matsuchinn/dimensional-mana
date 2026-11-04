@@ -46,11 +46,12 @@ public final class ElementTalentScreen extends Screen {
         graphics.fill(0, 0, width, height, 0xC0060710);
         graphics.fillGradient(left, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xF0181330, 0xF0081C2A);
         graphics.renderOutline(left, top, PANEL_WIDTH, PANEL_HEIGHT, 0xFFD6A7FF);
-        graphics.drawCenteredString(font, title, width / 2, top + 11, 0xFFFFE4A8);
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.element_resonance.subtitle",
-                selected.size(), ElementTalentData.INITIAL_CHOICES), width / 2, top + 26, 0xFFCDB8DF);
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.element_resonance.arcane_guarantee"),
-                width / 2, top + 39, 0xFFB58AFF);
+        TextFit.centered(graphics, font, title, width / 2, top + 11, PANEL_WIDTH - 24, 0xFFFFE4A8);
+        // 英文副标题比中文长，按面板宽度截断；卡片里的元素名同理。
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.element_resonance.subtitle",
+                selected.size(), ElementTalentData.INITIAL_CHOICES), width / 2, top + 26, PANEL_WIDTH - 24, 0xFFCDB8DF);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.element_resonance.arcane_guarantee"),
+                width / 2, top + 39, PANEL_WIDTH - 24, 0xFFB58AFF);
         for (int i = 0; i < ElementType.values().length; i++) {
             ElementType element = ElementType.values()[i];
             int x = left + 16 + (i % 4) * 99;
@@ -60,9 +61,10 @@ public final class ElementTalentScreen extends Screen {
             graphics.fill(x, y, x + 91, y + 50, picked ? 0xB03D285D : hover ? 0x8A29384A : 0x80120F20);
             graphics.renderOutline(x, y, 91, 50, picked ? element.color() : hover ? 0xFFE5CEFF : 0xFF715B87);
             graphics.renderItem(new ItemStack(element.icon()), x + 7, y + 7);
-            graphics.drawString(font, Component.translatable(element.translationKey()), x + 29, y + 7,
-                    picked ? element.color() : 0xFFF4ECFF, false);
-            graphics.drawWordWrap(font, Component.translatable(element.descriptionKey()), x + 29, y + 19, 57, 0xFFBFB4C8);
+            TextFit.centeredShrunk(graphics, font, Component.translatable(element.translationKey()), x + 63, y + 7,
+                    57, picked ? element.color() : 0xFFF4ECFF);
+            TextFit.wrapLines(graphics, font, Component.translatable(element.descriptionKey()), x + 29, y + 19, 57, 3, 10,
+                    0xFFBFB4C8);
             if (picked) graphics.drawString(font, Component.literal("✓").withStyle(ChatFormatting.GREEN), x + 75, y + 6, 0xFF7CFF9C, false);
         }
     }

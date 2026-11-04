@@ -549,6 +549,13 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
         recipes.add(simpleRecipe("crystal_special", "special_mana_crystal_dust", "supreme_mana_crystal_dust",
                 "special_mana_crystal", "advanced_mana_crystal_dust", 5_000));
 
+        // r301 魔蚀凋零：一颗凋零骷髅头扔进加工台，用 10000 魔素侵蚀 10 秒（200 刻）变成魔蚀骷髅头。
+        // 三个魔蚀骷髅头才能摆出召唤阵，所以这条配方是整条 Boss 线的入口。
+        recipes.add(new ProcessRecipe("corrupted_wither_skull",
+                List.of(new IngredientStack("minecraft:wither_skeleton_skull", 1)), List.of(),
+                List.of(new OutputStack(CorruptedWitherSkullBlock.BLOCK_ID, 1)),
+                10_000, 200, CorruptedWitherSkullBlock.BLOCK_ID));
+
         int[] times = {80, 120, 160, 200};
         int[] manaCosts = {50, 220, 840, 2_080};
         for (int grade = 0; grade < GeneratedMod.FRAGMENT_GRADES.size() - 1; grade++) {

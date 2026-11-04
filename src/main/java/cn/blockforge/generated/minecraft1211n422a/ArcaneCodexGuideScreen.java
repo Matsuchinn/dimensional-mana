@@ -336,8 +336,9 @@ public final class ArcaneCodexGuideScreen extends Screen {
     }
 
     private void renderHome(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.drawWordWrap(font, Component.translatable("gui.dimensional_mana.guide.home_intro"),
-                left + 22, top + 28, PANEL_WIDTH - 44, 0xFF3B2A32);
+        // 首页开场白在卡片区上方，只有三行的高度：英文再长也不会压到章节卡上。
+        TextFit.wrapLines(graphics, font, Component.translatable("gui.dimensional_mana.guide.home_intro"),
+                left + 22, top + 28, PANEL_WIDTH - 44, 3, 10, 0xFF3B2A32);
         int cardWidth = homeCardWidth();
         int cardHeight = homeCardHeight();
         int textWidth = cardWidth - 34;
@@ -350,8 +351,10 @@ public final class ArcaneCodexGuideScreen extends Screen {
             graphics.renderOutline(x, y, cardWidth, cardHeight, hover ? 0xFF8A3FA5 : 0xFF8A6A46);
             ItemStack icon = new ItemStack(chapter.icon());
             graphics.renderItem(icon, x + 7, y + (cardHeight - 16) / 2);
-            graphics.drawString(font, Component.translatable("gui.dimensional_mana.guide.chapter." + chapter.id()),
-                    x + 28, y + 5, 0xFF4A274E, false);
+            // 英文译名比中文长得多，标题先按卡片宽度截断，别顶到卡片外。
+            TextFit.left(graphics, font,
+                    Component.translatable("gui.dimensional_mana.guide.chapter." + chapter.id()),
+                    x + 28, y + 5, textWidth, 0xFF4A274E, false);
             // 说明最多占两行，超长的用省略号截断，免得挤出卡片外。
             String hint = Component.translatable("gui.dimensional_mana.guide.chapter." + chapter.id() + ".hint").getString();
             int hintMaxWidth = textWidth * 2;
@@ -384,8 +387,9 @@ public final class ArcaneCodexGuideScreen extends Screen {
             graphics.renderOutline(x, y, 92, 44, hover ? subject.color() : 0xFF9A805E);
             ItemStack icon = modStack(subject.eggId(), 1);
             graphics.renderItem(icon, x + 7, y + 14);
-            graphics.drawWordWrap(font, Component.translatable(subject.nameKey()),
-                    x + 29, y + 8, 57, 0xFF4A274E);
+            // 卡片只有 44 像素高：最多三行，再多就截断（英文名比中文长很多）。
+            TextFit.wrapLines(graphics, font, Component.translatable(subject.nameKey()),
+                    x + 29, y + 8, 57, 3, 10, 0xFF4A274E);
             if (hover) hoveredStack = icon;
         }
         graphics.disableScissor();
@@ -396,8 +400,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
     private void renderBestiaryDetail(GuiGraphics graphics) {
         BestiarySubject subject = bestiarySubject(selectedBestiaryId);
         if (subject == null) return;
-        graphics.drawCenteredString(font, Component.translatable(subject.nameKey()),
-                width / 2, top + 29, subject.color());
+        TextFit.centered(graphics, font, Component.translatable(subject.nameKey()),
+                width / 2, top + 29, PANEL_WIDTH - 40, subject.color());
         ItemStack icon = modStack(subject.eggId(), 1);
         graphics.renderItem(icon, left + 24, top + 47);
         String base = "gui.dimensional_mana.bestiary." + subject.id() + ".";
@@ -450,10 +454,11 @@ public final class ArcaneCodexGuideScreen extends Screen {
 
     private void renderChapterIndex(GuiGraphics graphics, int mouseX, int mouseY) {
         Chapter chapter = CHAPTERS.get(selectedChapter);
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.chapter_index",
-                Component.translatable("gui.dimensional_mana.guide.chapter." + chapter.id())), width / 2, top + 31, 0xFF6A2B76);
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.chapter_index_hint"),
-                width / 2, top + 45, 0xFF715D49);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.guide.chapter_index",
+                Component.translatable("gui.dimensional_mana.guide.chapter." + chapter.id())),
+                width / 2, top + 31, PANEL_WIDTH - 40, 0xFF6A2B76);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.guide.chapter_index_hint"),
+                width / 2, top + 45, PANEL_WIDTH - 40, 0xFF715D49);
         // 页数多的章节（例如“法术”有十四页）也要能看全：超出可视区就滚动。
         int rows = (chapter.pages().size() + 3) / 4;
         int viewTop = top + 62;
@@ -471,7 +476,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
             graphics.fill(x, y, x + 92, y + 58, hover ? 0x669A5AA8 : 0x33FFFFFF);
             graphics.renderOutline(x, y, 92, 58, hover ? 0xFF8A3FA5 : 0xFF9A805E);
             renderPageIcon(graphics, guide.id(), x + 38, y + 7);
-            graphics.drawWordWrap(font, Component.translatable(guide.titleKey()), x + 6, y + 29, 80,
+            TextFit.wrapLines(graphics, font, Component.translatable(guide.titleKey()), x + 6, y + 29, 80, 2, 10,
                     hover ? 0xFF6A2B76 : 0xFF4A274E);
         }
         graphics.disableScissor();
@@ -485,7 +490,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
 
     private void renderChapter(GuiGraphics graphics) {
         GuidePage guide = PAGES.get(page);
-        graphics.drawCenteredString(font, Component.translatable(guide.titleKey()), width / 2, top + 29, 0xFF6A2B76);
+        TextFit.centered(graphics, font, Component.translatable(guide.titleKey()),
+                width / 2, top + 29, PANEL_WIDTH - 40, 0xFF6A2B76);
         if (guide.id().equals("reaction_rules")) { chapterScroll = 0; chapterScrollMax = 0; renderAttachmentAtlas(graphics); return; }
         if (guide.id().equals("reaction_priority")) { chapterScroll = 0; chapterScrollMax = 0; renderReactionPriority(graphics); return; }
         if (guide.id().equals("reaction_charge")) { chapterScroll = 0; chapterScrollMax = 0; renderChargeGuide(graphics); return; }
@@ -573,7 +579,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
             else graphics.renderItem(new ItemStack(element.icon()), x + 10, y + 9);
             Component name = arcane ? Component.translatable("gui.dimensional_mana.medium.arcane")
                     : Component.translatable(element.translationKey());
-            graphics.drawString(font, name.copy().withStyle(ChatFormatting.BOLD), x + 34, y + 6, color, false);
+            TextFit.left(graphics, font, name.copy().withStyle(ChatFormatting.BOLD),
+                    x + 34, y + 6, 56, color, false);
             String seconds = String.format(Locale.ROOT, "%.1f", (arcane ? ElementReactionSystem.ARCANE_ATTACHMENT_TICKS
                     : element.attachmentTicks()) / 20.0F);
             Component type = Component.translatable(arcane ? "gui.dimensional_mana.guide.attachment.arcane"
@@ -581,8 +588,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
                     : "gui.dimensional_mana.guide.attachment.long", seconds);
             graphics.drawWordWrap(font, type, x + 34, y + 20, 55, 0xFF5E5144);
         }
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.attachment.hint"),
-                width / 2, top + 210, 0xFF715D49);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.guide.attachment.hint"),
+                width / 2, top + 210, PANEL_WIDTH - 40, 0xFF715D49);
     }
 
     private void renderReactionPriority(GuiGraphics graphics) {
@@ -597,14 +604,14 @@ public final class ArcaneCodexGuideScreen extends Screen {
             int y = top + 51 + (i / 2) * 43;
             graphics.fill(x, y, x + 196, y + 36, 0x33FFFFFF);
             graphics.renderOutline(x, y, 196, 36, groups[i][0].color());
-            graphics.drawString(font, Component.translatable("gui.dimensional_mana.guide.reaction_group." + i)
-                    .withStyle(ChatFormatting.BOLD), x + 8, y + 5, groups[i][0].color(), false);
+            TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.guide.reaction_group." + i)
+                    .withStyle(ChatFormatting.BOLD), x + 8, y + 5, 180, groups[i][0].color(), false);
             Component names = Component.empty();
             for (int j = 0; j < groups[i].length; j++) {
                 if (j > 0) names = names.copy().append(Component.literal(" · ").withStyle(ChatFormatting.DARK_GRAY));
                 names = names.copy().append(reactionName(groups[i][j]));
             }
-            graphics.drawWordWrap(font, names, x + 8, y + 18, 180, 0xFF3D343A);
+            TextFit.wrapLines(graphics, font, names, x + 8, y + 17, 180, 2, 9, 0xFF3D343A);
         }
     }
 
@@ -665,10 +672,10 @@ public final class ArcaneCodexGuideScreen extends Screen {
 
     private void renderRecipeCategories(GuiGraphics graphics, int mouseX, int mouseY) {
         List<GuideRecipe> recipes = allGuideRecipes();
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.recipes.categories_title"),
-                width / 2, top + 31, 0xFF6A2B76);
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.recipes.categories_hint"),
-                width / 2, top + 45, 0xFF715D49);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.guide.recipes.categories_title"),
+                width / 2, top + 31, PANEL_WIDTH - 40, 0xFF6A2B76);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.guide.recipes.categories_hint"),
+                width / 2, top + 45, PANEL_WIDTH - 40, 0xFF715D49);
         for (int i = 0; i < PRODUCT_CATEGORIES.size(); i++) {
             ProductCategory category = PRODUCT_CATEGORIES.get(i);
             int x = left + 24 + (i % 2) * 205;
@@ -679,20 +686,23 @@ public final class ArcaneCodexGuideScreen extends Screen {
             graphics.renderOutline(x, y, 182, 56, hover ? 0xFF8A3FA5 : 0xFF9A805E);
             ItemStack icon = new ItemStack(category.icon());
             graphics.renderItem(icon, x + 12, y + 18);
-            graphics.drawString(font, Component.translatable("gui.dimensional_mana.guide.recipe.category." + category.id()),
-                    x + 38, y + 10, 0xFF4A274E, false);
-            graphics.drawWordWrap(font, Component.translatable("gui.dimensional_mana.guide.recipe.category." + category.id() + ".hint", count),
-                    x + 38, y + 25, 135, 0xFF5E5144);
+            TextFit.left(graphics, font,
+                    Component.translatable("gui.dimensional_mana.guide.recipe.category." + category.id()),
+                    x + 38, y + 10, 135, 0xFF4A274E, false);
+            TextFit.wrapLines(graphics, font,
+                    Component.translatable("gui.dimensional_mana.guide.recipe.category." + category.id() + ".hint", count),
+                    x + 38, y + 25, 135, 2, 10, 0xFF5E5144);
             if (hover) hoveredStack = icon;
         }
     }
 
     private void renderRecipeKinds(GuiGraphics graphics, int mouseX, int mouseY) {
         List<GuideRecipe> recipes = allGuideRecipes().stream().filter(recipe -> matchesCategory(recipe, selectedCategory)).toList();
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.recipes.kinds_title",
-                Component.translatable("gui.dimensional_mana.guide.recipe.category." + selectedCategory)), width / 2, top + 30, 0xFF6A2B76);
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.recipes.kinds_hint"),
-                width / 2, top + 44, 0xFF715D49);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.guide.recipes.kinds_title",
+                Component.translatable("gui.dimensional_mana.guide.recipe.category." + selectedCategory)),
+                width / 2, top + 30, PANEL_WIDTH - 40, 0xFF6A2B76);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.guide.recipes.kinds_hint"),
+                width / 2, top + 44, PANEL_WIDTH - 40, 0xFF715D49);
         List<RecipeKind> kinds = availableKinds(recipes);
         for (int i = 0; i < kinds.size(); i++) {
             RecipeKind kind = kinds.get(i);
@@ -704,10 +714,12 @@ public final class ArcaneCodexGuideScreen extends Screen {
             graphics.renderOutline(x, y, 74, 58, hover ? 0xFF8A3FA5 : 0xFF9A805E);
             ItemStack icon = new ItemStack(kind.icon());
             graphics.renderItem(icon, x + 29, y + 6);
-            graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.recipe.kind." + kind.id()),
-                    x + 37, y + 26, 0xFF4A274E);
-            graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.recipes.kind_count", count),
-                    x + 37, y + 42, 0xFF715D49);
+            TextFit.centered(graphics, font,
+                    Component.translatable("gui.dimensional_mana.guide.recipe.kind." + kind.id()),
+                    x + 37, y + 26, 70, 0xFF4A274E);
+            TextFit.centered(graphics, font,
+                    Component.translatable("gui.dimensional_mana.guide.recipes.kind_count", count),
+                    x + 37, y + 42, 70, 0xFF715D49);
             if (hover) hoveredStack = icon;
         }
     }
@@ -716,10 +728,11 @@ public final class ArcaneCodexGuideScreen extends Screen {
         List<RecipeEntry> entries = filteredRecipeEntries();
         int pages = Math.max(1, (entries.size() + RECIPE_ENTRIES_PER_PAGE - 1) / RECIPE_ENTRIES_PER_PAGE);
         recipeIndexPage = Math.min(recipeIndexPage, pages - 1);
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.recipes.index_title",
-                Component.translatable("gui.dimensional_mana.guide.recipe.kind." + selectedKind)), width / 2, top + 29, 0xFF6A2B76);
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.guide.recipes.index_hint", entries.size()),
-                width / 2, top + 42, 0xFF715D49);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.guide.recipes.index_title",
+                Component.translatable("gui.dimensional_mana.guide.recipe.kind." + selectedKind)),
+                width / 2, top + 29, PANEL_WIDTH - 40, 0xFF6A2B76);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.guide.recipes.index_hint", entries.size()),
+                width / 2, top + 42, PANEL_WIDTH - 40, 0xFF715D49);
         int first = recipeIndexPage * RECIPE_ENTRIES_PER_PAGE;
         for (int cell = 0; cell < RECIPE_ENTRIES_PER_PAGE; cell++) {
             int index = first + cell;
@@ -755,15 +768,15 @@ public final class ArcaneCodexGuideScreen extends Screen {
         recipeDetailPage = Math.min(recipeDetailPage, entry.recipes.size() - 1);
         GuideRecipe recipe = entry.recipes.get(recipeDetailPage);
         graphics.renderItem(entry.result, left + 26, top + 29);
-        graphics.drawString(font, entry.result.getHoverName(), left + 49, top + 31, 0xFF4A274E, false);
+        TextFit.left(graphics, font, entry.result.getHoverName(), left + 49, top + 31, 170, 0xFF4A274E, false);
         graphics.drawString(font, Component.translatable("gui.dimensional_mana.guide.recipes.detail_count",
                 recipeDetailPage + 1, entry.recipes.size()), left + 49, top + 43, 0xFF837363, false);
-        graphics.drawWordWrap(font, Component.translatable("gui.dimensional_mana.guide.recipes.introduction",
+        TextFit.wrapLines(graphics, font, Component.translatable("gui.dimensional_mana.guide.recipes.introduction",
                 entry.result.getHoverName(), Component.translatable("gui.dimensional_mana.guide.recipe.kind." + recipe.kind)),
-                left + 238, top + 29, 180, 0xFF5E5144);
+                left + 238, top + 29, 180, 4, 10, 0xFF5E5144);
         renderLargeRecipe(graphics, recipe, left + 25, top + 70, mouseX, mouseY);
-        graphics.drawCenteredString(font, Component.literal(recipe.sourceId), width / 2,
-                top + PANEL_HEIGHT - 43, 0xFF8B7762);
+        TextFit.centered(graphics, font, Component.literal(recipe.sourceId), width / 2,
+                top + PANEL_HEIGHT - 43, PANEL_WIDTH - 40, 0xFF8B7762);
     }
 
     private void renderLargeRecipe(GuiGraphics graphics, GuideRecipe recipe, int x, int y, int mouseX, int mouseY) {

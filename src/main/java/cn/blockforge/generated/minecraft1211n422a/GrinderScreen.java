@@ -22,7 +22,7 @@ public final class GrinderScreen extends AbstractContainerScreen<GrinderMenu> {
         super.init();
         grindButton = addRenderableWidget(Button.builder(Component.translatable("gui.dimensional_mana.grind"), button -> {
             if (minecraft != null && minecraft.gameMode != null) minecraft.gameMode.handleInventoryButtonClick(menu.containerId, 0);
-        }).bounds(leftPos + 70, topPos + 55, 38, 18).build());
+        }).bounds(leftPos + 59, topPos + 55, 60, 18).build()); // 英文 Grinding 比中文长，按钮加宽
     }
 
     @Override

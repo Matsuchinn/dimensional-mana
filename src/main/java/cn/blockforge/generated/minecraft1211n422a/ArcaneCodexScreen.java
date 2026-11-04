@@ -131,7 +131,7 @@ public final class ArcaneCodexScreen extends Screen {
         graphics.fillGradient(left, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xF0191330, 0xF0081728);
         graphics.renderOutline(left, top, PANEL_WIDTH, PANEL_HEIGHT, 0xFFB98CFF);
         graphics.fill(left + 10, top + 38, left + PANEL_WIDTH - 10, top + 40, 0xFF7253A6);
-        graphics.drawCenteredString(font, title, width / 2, top - 13, 0xFFEAD9FF);
+        TextFit.centered(graphics, font, title, width / 2, top - 13, PANEL_WIDTH - 20, 0xFFEAD9FF);
         hoverRows.clear();
         switch (page) {
             case SKILLS -> renderSkills(graphics);
@@ -154,14 +154,17 @@ public final class ArcaneCodexScreen extends Screen {
     private void renderSkills(GuiGraphics graphics) {
         int level = ClientProgressState.magicLevel();
         int required = ClientProgressState.requiredExperience();
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.magic_level", level, MagicProgression.MAX_MAGIC_LEVEL),
-                left + 22, top + 49, 0xFFFFD86B, false);
+        Component levelText = Component.translatable("gui.dimensional_mana.magic_level", level, MagicProgression.MAX_MAGIC_LEVEL);
+        TextFit.left(graphics, font, levelText, left + 22, top + 49, 150, 0xFFFFD86B, false);
         String xp = level >= MagicProgression.MAX_MAGIC_LEVEL
                 ? Component.translatable("gui.dimensional_mana.magic_xp.max").getString()
                 : ClientProgressState.magicExperience() + " / " + required;
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.magic_xp", xp), left + 145, top + 49, 0xFF9AD7FF, false);
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.skill_points", ClientProgressState.skillPoints()),
-                left + 300, top + 49, 0xFF84FFB2, false);
+        // 英文的等级 / 经验 / 技能点比中文长，固定坐标会互相压住：经验接在等级后面，技能点贴右边。
+        int levelRight = left + 22 + Math.min(150, font.width(levelText));
+        TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.magic_xp", xp),
+                levelRight + 10, top + 49, Math.max(60, left + 250 - levelRight - 10), 0xFF9AD7FF, false);
+        TextFit.right(graphics, font, Component.translatable("gui.dimensional_mana.skill_points",
+                ClientProgressState.skillPoints()), left + PANEL_WIDTH - 22, top + 49, 130, 0xFF84FFB2, false);
         int progressWidth = level >= MagicProgression.MAX_MAGIC_LEVEL || required <= 0 ? 242
                 : (int)Math.min(242, ClientProgressState.magicExperience() * 242L / required);
         graphics.fill(left + 22, top + 66, left + 264, top + 72, 0xFF241B39);
@@ -174,7 +177,7 @@ public final class ArcaneCodexScreen extends Screen {
             int x = left + 22 + (i % 2) * 190;
             int y = top + 85 + (i / 2) * 32;
             int rank = ClientProgressState.skill(skill);
-            graphics.drawString(font, Component.translatable(skill.translation()), x, y + 1, 0xFFF2EAFF, false);
+            TextFit.left(graphics, font, Component.translatable(skill.translation()), x, y + 1, 168, 0xFFF2EAFF, false);
             graphics.drawString(font, Component.literal(rank + " / " + MagicProgression.MAX_SKILL_LEVEL), x, y + 11,
                     rank >= MagicProgression.MAX_SKILL_LEVEL ? 0xFFFFD86B : 0xFFAEB9CE, false);
             List<Component> tooltip = List.of(
@@ -186,10 +189,12 @@ public final class ArcaneCodexScreen extends Screen {
     }
 
     private void renderSpells(GuiGraphics graphics) {
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.spell.element_talents"),
-                left + 18, top + 48, 0xFFFFD86B, false);
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.spell.right_click_hint"),
-                left + 150, top + 48, 0xFFAA98BE, false);
+        Component talentsLabel = Component.translatable("gui.dimensional_mana.spell.element_talents");
+        TextFit.left(graphics, font, talentsLabel, left + 18, top + 48, 120, 0xFFFFD86B, false);
+        // 提示接在标题右边，不会因为英文标题变长而压住它。
+        int talentsRight = left + 18 + Math.min(120, font.width(talentsLabel)) + 10;
+        TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.spell.right_click_hint"),
+                talentsRight, top + 48, left + PANEL_WIDTH - 16 - talentsRight, 0xFFAA98BE, false);
         String[] media = {"arcane", "fire", "water", "ice", "lightning", "wind", "earth", "nature", "metal", "light", "poison", "sound"};
         for (int i = 0; i < media.length; i++) {
             String medium = media[i];
@@ -204,8 +209,9 @@ public final class ArcaneCodexScreen extends Screen {
             if (!unlocked) graphics.setColor(0.25F, 0.25F, 0.25F, 1.0F);
             graphics.renderItem(icon, x + 10, y + 3);
             graphics.setColor(1, 1, 1, 1);
-            graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.medium." + medium), x + 18, y + 21,
-                    unlocked ? 0xFFF2EAFF : 0xFF77717D);
+            // 格子只有 36 像素宽，英文单词（Lightning 等）要缩字才放得下。
+            TextFit.centeredShrunk(graphics, font, Component.translatable("gui.dimensional_mana.medium." + medium),
+                    x + 18, y + 21, 34, unlocked ? 0xFFF2EAFF : 0xFF77717D);
         }
 
         List<SpellDefinition> spells = spellsForMedium(selectedMedium);
@@ -232,12 +238,12 @@ public final class ArcaneCodexScreen extends Screen {
             if (!accessible || progress <= 0) graphics.setColor(0.28F, 0.28F, 0.28F, 1.0F);
             drawSpellIcon(graphics, spell, x + 7, y + 11, 1.0F);
             graphics.setColor(1, 1, 1, 1);
-            graphics.drawString(font, Component.translatable(spell.translationKey()), x + 27, y + 4,
+            TextFit.left(graphics, font, Component.translatable(spell.translationKey()), x + 27, y + 4, 58,
                     accessible ? 0xFFFFFFFF : 0xFF88818A, false);
             String stateKey = !accessible ? "gui.dimensional_mana.spell.state.element_locked"
                     : progress >= 3 ? "gui.dimensional_mana.spell.state.available"
                     : "gui.dimensional_mana.spell.state.fragment_recipe";
-            graphics.drawString(font, Component.translatable(stateKey), x + 27, y + 16,
+            TextFit.left(graphics, font, Component.translatable(stateKey), x + 27, y + 16, 58,
                     !accessible ? 0xFFFF7777 : progress >= 3 ? 0xFF79F1B2 : 0xFFE1B9FF, false);
             graphics.drawString(font, Component.literal(progress + " / " + SpellData.REQUIRED_SUCCESSES),
                     x + 27, y + 28, 0xFFBEB4C6, false);
@@ -274,7 +280,8 @@ public final class ArcaneCodexScreen extends Screen {
                     ? Component.translatable(state, progress, SpellData.REQUIRED_SUCCESSES, Component.keybind("key.dimensional_mana.cast_spell"))
                     : state.endsWith("element_locked") ? Component.translatable(state)
                     : Component.translatable(state, progress, SpellData.REQUIRED_SUCCESSES);
-            graphics.drawString(font, stateText, x, y + 55, progress >= 3 ? 0xFF79F1B2 : 0xFFFFD279, false);
+            TextFit.left(graphics, font, stateText, x, y + 55, left + PANEL_WIDTH - 14 - x,
+                    progress >= 3 ? 0xFF79F1B2 : 0xFFFFD279, false);
             String elementFragmentId = selectedSpell.elementFragmentId();
             if (elementFragmentId != null && ClientElementTalentState.canAccess(selectedSpell)
                     && progress < SpellData.REQUIRED_SUCCESSES) {
@@ -283,8 +290,8 @@ public final class ArcaneCodexScreen extends Screen {
                         selectedSpell.schoolFragmentId(selectedSpell.grade())).get());
                 graphics.renderItem(elementFragment, x, y + 69);
                 graphics.renderItem(schoolFragment, x + 19, y + 69);
-                graphics.drawString(font, Component.translatable("gui.dimensional_mana.spell.unlock_material_pair"),
-                        x + 40, y + 73, 0xFFE1B9FF, false);
+                TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.spell.unlock_material_pair"),
+                        x + 40, y + 73, left + PANEL_WIDTH - 14 - (x + 40), 0xFFE1B9FF, false);
             }
         }
     }
@@ -517,7 +524,8 @@ public final class ArcaneCodexScreen extends Screen {
     }
 
     private void drawStatusRow(GuiGraphics graphics, int x, int y, String label, String value, String source) {
-        graphics.drawString(font, Component.translatable(label), x, y, 0xFFCBC0E0, false);
+        // 数值固定在 x+112，英文属性名比中文长，先截到 105 再把数值画上去。
+        TextFit.left(graphics, font, Component.translatable(label), x, y, 105, 0xFFCBC0E0, false);
         graphics.drawString(font, value, x + 112, y, 0xFFFFFFFF, false);
         hoverRows.add(new HoverRow(x, y - 2, 170, 14, List.of(
                 Component.translatable(label).withStyle(ChatFormatting.LIGHT_PURPLE),
@@ -526,7 +534,7 @@ public final class ArcaneCodexScreen extends Screen {
 
     private void drawStatusRow(GuiGraphics graphics, int x, int y, String label, String value,
                                String source, double base, double finalValue) {
-        graphics.drawString(font, Component.translatable(label), x, y, 0xFFCBC0E0, false);
+        TextFit.left(graphics, font, Component.translatable(label), x, y, 105, 0xFFCBC0E0, false);
         graphics.drawString(font, value, x + 112, y, 0xFFFFFFFF, false);
         hoverRows.add(new HoverRow(x, y - 2, 170, 14, List.of(
                 Component.translatable(label).withStyle(ChatFormatting.LIGHT_PURPLE),

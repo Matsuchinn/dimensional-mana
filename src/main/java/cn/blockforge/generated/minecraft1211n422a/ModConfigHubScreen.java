@@ -50,11 +50,12 @@ public final class ModConfigHubScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         super.render(graphics, mouseX, mouseY, delta);
-        graphics.drawCenteredString(font, title, width / 2, 20, 0xFFFFFFFF);
-        graphics.drawCenteredString(font, Component.translatable("config.dimensional_mana.hub.body"),
-                width / 2, 36, 0xFFB8C8E8);
-        graphics.drawCenteredString(font, Component.translatable("config.dimensional_mana.hub.files_hint"),
-                width / 2, 166, 0xFF8A96A8);
+        TextFit.centered(graphics, font, title, width / 2, 20, width - 20, 0xFFFFFFFF);
+        TextFit.centered(graphics, font, Component.translatable("config.dimensional_mana.hub.body"),
+                width / 2, 36, width - 20, 0xFFB8C8E8);
+        // 提示行最长，窄窗口下按窗口宽度截断，不会画到屏幕外。
+        TextFit.centered(graphics, font, Component.translatable("config.dimensional_mana.hub.files_hint"),
+                width / 2, 166, width - 20, 0xFF8A96A8);
     }
 
     /** 从模组列表进来时不该额外暂停游戏。 */

@@ -665,7 +665,10 @@ public final class WanderingSwordmaster extends net.minecraft.world.entity.Pathf
             targetRefreshCooldown = 20;
             if (getTarget() == null) {
                 LivingEntity found = findCombatTarget();
-                if (found != null) setTarget(found);
+                // r300：刚被寻路判定「走不到」的人，这 10 秒里不要再主动捡回来。
+                // 以前每 20 刻就重新锁定一次：追两步 → 放弃 → 又锁定 → 又追…
+                // 玩家看到的就是他在墙边不停打转。被打了的反击例外走 targetSelector，不受影响。
+                if (found != null && !MobPathing.isUnreachable(this, found)) setTarget(found);
             }
         }
     }
@@ -1463,13 +1466,24 @@ public final class WanderingSwordmaster extends net.minecraft.world.entity.Pathf
         return reach;
     }
 
-    /** 前方一格高、上方是空的？那就不是死路，抬腿能跨上去（step_height 只有 0.8，走不上去，得跳）。 */
-    private boolean canHopOver(Vec3 dir) {
+    /** 跳跃高度上限（格）：r300 按用户要求从 1 格台阶上调到 3 格，追人和脱困都能翻矮墙。 */
+    public static final int MAX_HOP_STEPS = 3;
+
+    /** 前方 1 格内有台阶？能翻上去的话返回要翻几格（最高 {@link #MAX_HOP_STEPS}），翻不过返回 0。 */
+    private int hopHeight(Vec3 dir) {
         Vec3 flat = new Vec3(dir.x, 0.0D, dir.z);
-        if (flat.lengthSqr() < 1.0E-6D) return false;
+        if (flat.lengthSqr() < 1.0E-6D) return 0;
         flat = flat.normalize();
-        AABB raised = getBoundingBox().move(flat.x * 1.05D, 1.05D, flat.z * 1.05D);
-        return level().noCollision(this, raised);
+        for (int steps = MAX_HOP_STEPS; steps >= 1; steps--) {
+            AABB raised = getBoundingBox().move(flat.x * 1.05D, steps + 0.05D, flat.z * 1.05D);
+            if (level().noCollision(this, raised)) return steps;
+        }
+        return 0;
+    }
+
+    /** 跳到指定高度需要的初始竖直速度：v = √(2gh)（重力 0.08/刻²），再留 5% 空气阻力余量。 */
+    private static double hopVelocity(double height) {
+        return Math.sqrt(0.16D * height) * 1.05D;
     }
 
     /** 把水平向量按角度转一圈（脱困、绕障都用同一套）。 */
@@ -1523,9 +1537,12 @@ public final class WanderingSwordmaster extends net.minecraft.world.entity.Pathf
         toward = new Vec3(toward.x, 0.0D, toward.z);
         if (toward.lengthSqr() < 1.0E-4D) toward = new Vec3(0.0D, 0.0D, 1.0D);
         toward = toward.normalize();
-        // 1) 面前只是 1 格高的坎：跳一下就能过去，别用瞬身。
-        if (onGround() && canHopOver(toward) && freeRunLength(toward, 2.0D) >= 0.5D) {
-            setDeltaMovement(getDeltaMovement().x, 0.42D, getDeltaMovement().z);
+        // 1) 面前是 3 格以内的坎：起跳翻过去，别用瞬身（r300：跳跃高度从 1 格调到 3 格）。
+        //    1 格坎沿用「脚前留有点空间才跳」的老条件；更高的坎贴着墙起跳才合理，
+        //    只要求坎顶那层是站得开的（hopHeight 已经探过碰撞箱）。
+        int hop = onGround() ? hopHeight(toward) : 0;
+        if (hop >= 2 || (hop == 1 && freeRunLength(toward, 2.0D) >= 0.5D)) {
+            setDeltaMovement(getDeltaMovement().x, hopVelocity(hop), getDeltaMovement().z);
             move(MoverType.SELF, toward.scale(0.35D));
             return;
         }
@@ -1718,9 +1735,10 @@ public final class WanderingSwordmaster extends net.minecraft.world.entity.Pathf
         move(MoverType.SELF, step);
         if (before.distanceTo(position()) >= want * 0.55D) return before.distanceTo(position());
 
-        // 1) 前方只是 1 格高的坎：起跳跨过去。
-        if (onGround() && canHopOver(step)) {
-            setDeltaMovement(getDeltaMovement().x, 0.42D, getDeltaMovement().z);
+        // 1) 前方是 3 格以内的坎：起跳跨过去（r300：跳跃高度上调到 3 格）。
+        int hop = onGround() ? hopHeight(step) : 0;
+        if (hop >= 1) {
+            setDeltaMovement(getDeltaMovement().x, hopVelocity(hop), getDeltaMovement().z);
             move(MoverType.SELF, step);
             if (before.distanceTo(position()) >= want * 0.55D) return before.distanceTo(position());
         }
@@ -1994,6 +2012,9 @@ public final class WanderingSwordmaster extends net.minecraft.world.entity.Pathf
         for (LivingEntity candidate : serverLevel.getEntitiesOfClass(LivingEntity.class,
                 getBoundingBox().inflate(range), this::isHostileTarget)) {
             if (!isValidTarget(candidate, false)) continue;
+            // 巡逻口径的选敌先看寻路黑名单：这个刚确认「走不到」，换下一个可达的打，
+            // 别再把他锁成目标然后原地演追逐戏。
+            if (MobPathing.isUnreachable(this, candidate)) continue;
             double distance = distanceToSqr(candidate);
             if (distance < bestDistance) { bestDistance = distance; best = candidate; }
         }
@@ -2170,6 +2191,54 @@ public final class WanderingSwordmaster extends net.minecraft.world.entity.Pathf
         float yaw = (float)(Math.atan2(delta.z, delta.x) * 180.0D / Math.PI) - 90.0F;
         setYRot(yaw);
         yHeadRot = yaw;
+    }
+
+    /**
+     * 温和版锁定：只交给 LookControl 每刻最多 25° 地转头，绝不硬写 YRot。
+     *
+     * <p>r300：导航走路径期间改用这个。原来每刻 {@code setYRot} 硬掰向目标，和 MoveControl
+     * 「转到路径点方向」同刻互相打架，YRot 每刻几十度地来回跳 —— 玩家眼里就是它在原地转圈。
+     * 硬锁（{@link #faceTarget}）只留给站定出招和自控位移的环绕走位用。</p>
+     */
+    public void faceTargetSoft(LivingEntity target) {
+        if (target == null) return;
+        getLookControl().setLookAt(target, 25.0F, 25.0F);
+    }
+
+    /** 环绕的横向挪移 / 向前压迫速度（格每刻）。原版 strafe 被锁死在移动速度的 25%，太慢才自己走位。 */
+    private static final double CIRCLE_SIDE_SPEED = 0.10D;
+    private static final double CIRCLE_CLOSE_SPEED = 0.045D;
+
+    /** 往目标方向压一格的水平单位向量；没目标或站重叠返回 null。 */
+    private Vec3 flatToTarget() {
+        LivingEntity target = getTarget();
+        if (target == null) return null;
+        Vec3 toTarget = target.position().subtract(position());
+        Vec3 flat = new Vec3(toTarget.x, 0.0D, toTarget.z);
+        return flat.lengthSqr() < 1.0E-4D ? null : flat.normalize();
+    }
+
+    /** 环绕的那一侧还有路吗（切线方向约 2.5 格通畅）？两侧都是墙就别绕，绕了就是原地转圈。 */
+    public boolean canCircleAround(boolean clockwise) {
+        Vec3 flat = flatToTarget();
+        if (flat == null) return false;
+        Vec3 side = new Vec3(-flat.z, 0.0D, flat.x).scale(clockwise ? 1.0D : -1.0D);
+        return freeRunLength(side, 2.5D) >= 1.2D;
+    }
+
+    /**
+     * 环绕走位迈一步：沿目标的垂线横移、同时轻轻向目标压迫。
+     *
+     * @return {@code false} = 这一步被方块挡住了，调用方应该换向或放弃环绕
+     */
+    public boolean circleStep(boolean clockwise) {
+        Vec3 flat = flatToTarget();
+        if (flat == null) return false;
+        Vec3 side = new Vec3(-flat.z, 0.0D, flat.x).scale(clockwise ? 1.0D : -1.0D);
+        Vec3 step = side.scale(CIRCLE_SIDE_SPEED).add(flat.scale(CIRCLE_CLOSE_SPEED));
+        Vec3 before = position();
+        move(MoverType.SELF, step);
+        return before.distanceToSqr(position()) >= step.lengthSqr() * 0.35D;
     }
 
     // ---------------------------------------------------------------- 移动速度

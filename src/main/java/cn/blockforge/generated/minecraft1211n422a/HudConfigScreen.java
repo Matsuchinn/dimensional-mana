@@ -300,7 +300,7 @@ public final class HudConfigScreen extends Screen {
         Component hint = Component.translatable(page == Page.LAYOUT
                 ? "hud.edit.dimensional_mana.hint_layout"
                 : "hud.edit.dimensional_mana.hint_toggles");
-        graphics.drawCenteredString(font, hint, width / 2, 5, 0xFFE8D8A0);
+        TextFit.centered(graphics, font, hint, width / 2, 5, width - 20, 0xFFE8D8A0);
     }
 
     private void renderPart(GuiGraphics graphics, HudConfig.Part part, boolean highlight, boolean selected) {
@@ -315,7 +315,8 @@ public final class HudConfigScreen extends Screen {
         preview(graphics, part, cx, cy, scale, alpha);
         Component name = Component.translatable(part.nameKey);
         int nameY = Math.max(2, b[1] - 10);
-        graphics.drawCenteredString(font, name, cx, nameY, (selected ? 0xFFFFE08A : 0xB0C8D8E8) & (on ? 0xFFFFFFFF : 0x80FFFFFF));
+        TextFit.centered(graphics, font, name, cx, nameY, Math.max(60, b[2] - b[0] + 40),
+                (selected ? 0xFFFFE08A : 0xB0C8D8E8) & (on ? 0xFFFFFFFF : 0x80FFFFFF));
     }
 
     /** 每个部件的示意图形：只求一眼能认出来，不追求和真实 HUD 完全一致。 */
@@ -336,7 +337,9 @@ public final class HudConfigScreen extends Screen {
                 int side = (int)Math.round(20 * scale);
                 graphics.fill(cx - side, cy - side / 2 - 2, cx - side + 2 * side, cy + side / 2 + 2, fill);
                 graphics.renderOutline(cx - side, cy - side / 2 - 2, 2 * side, side + 4, body);
-                graphics.drawString(font, "火球术", cx + side - (int)Math.round(6 * scale), cy - 4, body, false);
+                // 示意文字也要跟语言走：中文写「火球术」，英文写翻译后的名字。
+                graphics.drawString(font, Component.translatable("gui.dimensional_mana.spell.fireball"),
+                        cx + side - (int)Math.round(6 * scale), cy - 4, body, false);
             }
             case RES_ICON -> {
                 disc(graphics, cx, cy, (int)Math.round(13 * scale), (0x90 * alpha / 0xFF) << 24 | 0x00121A33);

@@ -75,9 +75,10 @@ public final class MagicCircleCodeScreen extends Screen {
         graphics.fillGradient(panelX, panelY, panelX + PANEL_WIDTH, panelY + PANEL_HEIGHT,
                 0xF0161026, 0xF0061520);
         graphics.renderOutline(panelX, panelY, PANEL_WIDTH, PANEL_HEIGHT, 0xFF9E70D1);
-        graphics.drawString(font, title, panelX + 8, panelY + 6, 0xFFFFD86B, false);
         String count = Component.translatable("gui.dimensional_mana.magiccircle.code.count",
                 text.length(), MAX_CHARS).getString();
+        TextFit.left(graphics, font, title, panelX + 8, panelY + 6, PANEL_WIDTH - 16 - font.width(count) - 6,
+                0xFFFFD86B, false);
         graphics.drawString(font, count, panelX + PANEL_WIDTH - 8 - font.width(count), panelY + 6,
                 0xFF9C8FB5, false);
 
@@ -101,9 +102,9 @@ public final class MagicCircleCodeScreen extends Screen {
             lineY += 11;
         }
 
-        graphics.drawString(font, carrierLine(), panelX + 8, panelY + 126, 0xFF8FE9FF, false);
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.code.hint"),
-                panelX + 8, panelY + 140, COLOR_DIM, false);
+        TextFit.left(graphics, font, carrierLine(), panelX + 8, panelY + 126, PANEL_WIDTH - 16, 0xFF8FE9FF, false);
+        TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.magiccircle.code.hint"),
+                panelX + 8, panelY + 140, PANEL_WIDTH - 16, COLOR_DIM, false);
 
         int buttonY = panelY + PANEL_HEIGHT - BUTTON_HEIGHT - 8;
         drawButton(graphics, pasteRect(panelX, buttonY), mouseX, mouseY, waiting
@@ -164,8 +165,8 @@ public final class MagicCircleCodeScreen extends Screen {
         boolean hover = rect.contains(mouseX, mouseY);
         graphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, hover ? 0xAA4A2E6E : 0x66120F20);
         graphics.renderOutline(rect.x, rect.y, rect.w, rect.h, hover ? 0xFFFFD86B : 0xFF5A4770);
-        graphics.drawString(font, label, rect.x + (rect.w - font.width(label)) / 2, rect.y + 5,
-                hover ? 0xFFFFE4A8 : 0xFFE9DCFF, false);
+        TextFit.centeredShrunk(graphics, font, label, rect.x + rect.w / 2, rect.y + 5, rect.w - 4,
+                hover ? 0xFFFFE4A8 : 0xFFE9DCFF);
     }
 
     private Rect pasteRect(int panelX, int buttonY) {

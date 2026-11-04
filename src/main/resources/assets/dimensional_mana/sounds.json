@@ -1602,5 +1602,104 @@
     "sounds": [
       "dimensional_mana:rift/anti_void_leave"
     ]
+  },
+  "corrupted_wither_ambient": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_wither_ambient",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_wither/ambient",
+        "volume": 1.5
+      }
+    ]
+  },
+  "corrupted_wither_hurt": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_wither_hurt",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_wither/hurt",
+        "volume": 1.2
+      }
+    ]
+  },
+  "corrupted_wither_death": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_wither_death",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_wither/death",
+        "volume": 1.4
+      }
+    ]
+  },
+  "corrupted_wither_spawn": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_wither_spawn",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_wither/spawn",
+        "volume": 1.5
+      }
+    ]
+  },
+  "corrupted_wither_shoot": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_wither_shoot",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_wither/shoot",
+        "volume": 1.1
+      }
+    ]
+  },
+  "corrupted_wither_charge": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_wither_charge",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_wither/charge",
+        "volume": 1.25
+      }
+    ]
+  },
+  "corrupted_wither_beam": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_wither_beam",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_wither/beam",
+        "volume": 1.4
+      }
+    ]
+  },
+  "corrupted_wither_beam_loop": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_wither_beam_loop",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_wither/beam_loop",
+        "volume": 0.9
+      }
+    ]
+  },
+  "corrupted_wither_phase": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_wither_phase",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_wither/phase",
+        "volume": 1.4
+      }
+    ]
+  },
+  "corrupted_wither_pulse": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_wither_pulse",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_wither/pulse",
+        "volume": 1.1
+      }
+    ]
+  },
+  "corrupted_wither_blast": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_wither_blast",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_wither/blast",
+        "volume": 1.6
+      }
+    ]
   }
 }

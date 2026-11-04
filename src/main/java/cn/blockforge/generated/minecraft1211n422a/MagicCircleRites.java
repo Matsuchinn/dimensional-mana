@@ -755,6 +755,10 @@ public final class MagicCircleRites {
             return;
         }
         if (!(living instanceof Mob mob)) return;
+        // 魔蚀凋零这类 Boss 自带完整 AI：只保留上面的到期消散，不做锚点牵引 / 远程传送。
+        // 以前它被法阵召唤出来时会拿到「守卫锚点」模式，离锚点超过 24 格就直接 teleportTo
+        // 回法阵——表现出来就是「凋零每隔一阵自己闪回出生点」，而且每 10 刻拉一次，走位看着很僵。
+        if (living instanceof CorruptedWither) return;
         // —— 每刻仇恨校验：当前目标是自己人（owner / 同队）就强制清空 ——
         LivingEntity target = mob.getTarget();
         if (target != null && isFriendlyToSummon(mob, target)) mob.setTarget(null);

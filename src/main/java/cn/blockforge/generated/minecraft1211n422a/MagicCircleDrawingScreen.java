@@ -383,20 +383,23 @@ public final class MagicCircleDrawingScreen extends Screen {
     }
 
     private void renderHeader(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.drawString(font, title, left + GAP + 2, top + 4, COLOR_GOLD, false);
-        String subtitle = Component.translatable("gui.dimensional_mana.magiccircle.subtitle",
-                state.baseW(), state.baseH(), state.canvasW(), state.canvasH(), state.layer() + 1).getString();
-        graphics.drawString(font, subtitle, left + GAP + 2, top + 15, COLOR_DIM, false);
         // r218：右列收起后 sideX 贴到面板右沿，这两行要让开右上角的关闭钮（面板右沿 -24）。
         int headerRight = hideSide ? left + panelW - 24 : sideX - 4;
         String level = Component.translatable(state.freePowder()
                         ? "gui.dimensional_mana.magiccircle.level.creative"
                         : "gui.dimensional_mana.magiccircle.level",
                 state.magicLevel(), state.unlockedPowders(), state.totalPowders()).getString();
-        graphics.drawString(font, level, headerRight - font.width(level), top + 4,
-                state.freePowder() ? COLOR_GOLD : COLOR_AQUA, false);
         String owner = Component.translatable("gui.dimensional_mana.magiccircle.owner",
                 state.ownerName().isEmpty() ? "-" : state.ownerName()).getString();
+        // 标题和副标题都得给右边那两行让位：英文长一截，固定坐标会直接压上去。
+        int titleWidth = Math.max(40, headerRight - 8 - font.width(level) - (left + GAP + 2));
+        int subtitleWidth = Math.max(40, headerRight - 8 - font.width(owner) - (left + GAP + 2));
+        graphics.drawString(font, TextFit.clamp(font, title, titleWidth), left + GAP + 2, top + 4, COLOR_GOLD, false);
+        String subtitle = Component.translatable("gui.dimensional_mana.magiccircle.subtitle",
+                state.baseW(), state.baseH(), state.canvasW(), state.canvasH(), state.layer() + 1).getString();
+        graphics.drawString(font, TextFit.clamp(font, subtitle, subtitleWidth), left + GAP + 2, top + 15, COLOR_DIM, false);
+        graphics.drawString(font, level, headerRight - font.width(level), top + 4,
+                state.freePowder() ? COLOR_GOLD : COLOR_AQUA, false);
         graphics.drawString(font, owner, headerRight - font.width(owner), top + 15, COLOR_DIM, false);
         Rect close = closeRect();
         boolean hover = close.contains(mouseX, mouseY);
@@ -439,8 +442,9 @@ public final class MagicCircleDrawingScreen extends Screen {
         graphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h,
                 active ? 0xAA4A2E6E : hover ? 0x88302A46 : 0x44120F20);
         graphics.renderOutline(rect.x, rect.y, rect.w, rect.h, active ? 0xFFFFD86B : 0xFF4A3B60);
-        graphics.drawString(font, label, rect.x + (rect.w - font.width(label)) / 2, rect.y + 3,
-                active ? 0xFFFFE4A8 : COLOR_DIM, false);
+        // 按钮固定宽度，英文标签（Draw / Select / Transcribe）比中文长，缩字塞进按钮里。
+        TextFit.centeredShrunk(graphics, font, label, rect.x + rect.w / 2, rect.y + 3, rect.w - 4,
+                active ? 0xFFFFE4A8 : COLOR_DIM);
     }
 
     private void renderCanvas(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -876,8 +880,8 @@ public final class MagicCircleDrawingScreen extends Screen {
 
         renderDetailBox(graphics);
 
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.candidate.title"),
-                sideX + 4, sideY + DETAIL_H + 6, COLOR_GOLD, false);
+        TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.magiccircle.candidate.title"),
+                sideX + 4, sideY + DETAIL_H + 6, sideW - 8, COLOR_GOLD, false);
         int viewTop = sideViewportTop();
         int viewBottom = sideViewportBottom();
         int viewportH = Math.max(24, viewBottom - viewTop);
@@ -902,13 +906,14 @@ public final class MagicCircleDrawingScreen extends Screen {
                 boolean hover = sideVisible(rect) && rect.contains(mouseX, mouseY);
                 graphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, hover ? 0xAA3D2A5C : 0x88201730);
                 graphics.renderOutline(rect.x, rect.y, rect.w, rect.h, hover ? 0xFFE9C8FF : 0xFF6A4E8E);
-                graphics.drawString(font, Component.translatable(glyph.translationKey()),
-                        rect.x + 4, rect.y + 2, 0xFFF4ECFF, false);
                 String score = Math.round(view.score() * 100) + "%";
+                // 名字要给右边的百分比让位：英文名称比中文长，固定宽度会压在一起。
+                TextFit.left(graphics, font, Component.translatable(glyph.translationKey()),
+                        rect.x + 4, rect.y + 2, rect.w - 12 - font.width(score), 0xFFF4ECFF, false);
                 graphics.drawString(font, score, rect.x + rect.w - 4 - font.width(score), rect.y + 2,
                         scoreColor(view.score()), false);
-                graphics.drawString(font, Component.translatable(glyph.blockType().translationKey()),
-                        rect.x + 4, rect.y + 12, 0xFFBDA9DE, false);
+                TextFit.left(graphics, font, Component.translatable(glyph.blockType().translationKey()),
+                        rect.x + 4, rect.y + 12, rect.w - 8, 0xFFBDA9DE, false);
             }
         } else {
             boolean failed = !preview.isEmpty() || !state.strokeEcho().isEmpty();
@@ -920,11 +925,11 @@ public final class MagicCircleDrawingScreen extends Screen {
         }
 
         int nodeTitleY = viewTop + sideCandidatesH() + 6 - sideScroll;
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.nodes.title",
-                state.nodes().size()), sideX + 4, nodeTitleY, COLOR_GOLD, false);
+        TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.magiccircle.nodes.title",
+                state.nodes().size()), sideX + 4, nodeTitleY, sideW - 8, COLOR_GOLD, false);
         if (state.nodes().isEmpty()) {
-            graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.nodes.empty"),
-                    sideX + 4, nodeTitleY + 13, COLOR_DIM, false);
+            TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.magiccircle.nodes.empty"),
+                    sideX + 4, nodeTitleY + 13, sideW - 8, COLOR_DIM, false);
         } else {
             // 列表不再只显示 4 行：全部铺进滚动区，块多就滚轮翻。
             for (int index = 0; index < state.nodes().size(); index++) {
@@ -940,7 +945,7 @@ public final class MagicCircleDrawingScreen extends Screen {
                         + "/" + MagicCirclePowders.shortName(node.semantic())
                         + "/" + MagicCirclePowders.shortName(node.power())
                         + "/" + MagicCirclePowders.shortName(node.dye())
-                        + (node.handDrawn() ? "·手" : "");
+                        + handMark(node);
                 label = font.plainSubstrByWidth(label, Math.max(10, rect.w - 6));
                 graphics.drawString(font, label, rect.x + 3, rect.y + 2, active ? 0xFFFFE4A8 : COLOR_DIM, false);
                 if (hover) {
@@ -1038,7 +1043,7 @@ public final class MagicCircleDrawingScreen extends Screen {
         // 第一行：第几层 · 什么块 (坐标)；右侧带角色角标（终/缀/declare/门），手绘的补一个"·手"。
         String head = Component.translatable("tooltip.dimensional_mana.magiccircle.node.header",
                 state.layer() + 1, type == null ? node.type() : type.fallbackName(), node.x(), node.y()).getString()
-                + (node.handDrawn() ? "·手" : "");
+                + handMark(node);
         String role = roleMark(index, type);
         graphics.drawString(font, font.plainSubstrByWidth(head, role == null ? w - 6 : w - 18),
                 x + 3, y + 14, COLOR_GOLD, false);
@@ -1050,7 +1055,9 @@ public final class MagicCircleDrawingScreen extends Screen {
         if (order > 0) {
             int siblings = layerSiblings(order);
             String text = Component.translatable("tooltip.dimensional_mana.magiccircle.node.order", order).getString()
-                    + (siblings > 1 ? "·并列" + siblings : "");
+                    + (siblings > 1
+                            ? Component.translatable("gui.dimensional_mana.magiccircle.mark.parallel", siblings).getString()
+                            : "");
             graphics.drawString(font, font.plainSubstrByWidth(text, w - 6), x + 3, y + 24, 0xFF8FE3FF, false);
         } else {
             graphics.drawString(font, font.plainSubstrByWidth(Component.translatable(
@@ -1633,13 +1640,24 @@ public final class MagicCircleDrawingScreen extends Screen {
         MagicCircleGraph.Role role = clientAnalysis.roles.get(index);
         if (role == null) return null;
         return switch (role) {
-            case TERMINAL -> "终";
-            case PREFIX -> "缀";
-            case DECL -> "宣";
-            case GATE -> "门";
-            case TRIGGER_BASE -> "座";
+            case TERMINAL -> mark("terminal");
+            case PREFIX -> mark("prefix");
+            case DECL -> mark("decl");
+            case GATE -> mark("gate");
+            case TRIGGER_BASE -> mark("trigger_base");
             case NORMAL -> null;
         };
+    }
+
+    /** 角标文字走翻译键：中文是单字，英文用单字母，宽度都一样是 1 个字。 */
+    private static String mark(String id) {
+        return Component.translatable("gui.dimensional_mana.magiccircle.mark." + id).getString();
+    }
+
+    /** 手绘块的后缀标记：中文「·手」，英文「·H」。 */
+    private static String handMark(MagicCircleSyncPayload.NodeView node) {
+        return node.handDrawn()
+                ? Component.translatable("gui.dimensional_mana.magiccircle.mark.hand").getString() : "";
     }
 
     private int roleMarkColor(int index) {
@@ -1667,7 +1685,8 @@ public final class MagicCircleDrawingScreen extends Screen {
         declTab(graphics, "▦ " + Component.translatable("gui.dimensional_mana.magiccircle.decl.tab.powder")
                 .getString(), x + 120, y, 88, 12, editorDeclPage == 0, "tab_powder", mouseX, mouseY);
         // 门控规范 v2.4 三：声明模式一键切回门控（⇄ 同一颗钮，两个方向共用服务端 gate/mode）。
-        declTab(graphics, "⛊ 门控", x + 212, y, 56, 12, false, "gate_mode", mouseX, mouseY);
+        declTab(graphics, Component.translatable("gui.dimensional_mana.magiccircle.gate.tab").getString(),
+                x + 212, y, 56, 12, false, "gate_mode", mouseX, mouseY);
     }
 
     /**
@@ -1676,11 +1695,14 @@ public final class MagicCircleDrawingScreen extends Screen {
      */
     private void renderGateTabs(GuiGraphics graphics, int x, int y, int mouseX, int mouseY,
                                 MagicCircleSyncPayload.NodeView node) {
-        declTab(graphics, "⇄ 声明", x + 4, y, 64, 12, false, "gate_mode", mouseX, mouseY);
+        declTab(graphics, Component.translatable("gui.dimensional_mana.magiccircle.gate.decl_tab").getString(),
+                x + 4, y, 64, 12, false, "gate_mode", mouseX, mouseY);
         MagicCircleGates.Domain domain = MagicCircleGates.domainOf(node.semantic());
         if (domain == null) {
             declTab(graphics, "⇌ ?", x + 72, y, 44, 12, false, "gate_op", mouseX, mouseY);
-            graphics.drawString(font, "语义槽空：装一种原版粉选判定域", x + 122, y + 3, 0xFFFF9BA8, false);
+            TextFit.left(graphics, font, Component.translatable(
+                    "gui.dimensional_mana.magiccircle.gate.semantic_empty"),
+                    x + 122, y + 3, EDITOR_WIDTH - 128, 0xFFFF9BA8, false);
             return;
         }
         MagicCircleGates.CompareOperator op = MagicCircleGates.operatorOf(domain, node.gate());
@@ -1694,7 +1716,9 @@ public final class MagicCircleDrawingScreen extends Screen {
         // r218：提示行画进页签下方的**提示带**（97~127），解析句超长自动折行，
         // 不再像图 11 那样叠到「拿下来」按钮和底栏上。
         if (clientAnalysis != null && clientAnalysis.baseGates.containsValue(editorNode)) {
-            graphics.drawString(font, "[系统提示] 这是触发链的第一步判定。", x + 4, y + 13, 0xFFFFD86B, false);
+            TextFit.left(graphics, font, Component.translatable(
+                    "gui.dimensional_mana.magiccircle.gate.first_step"),
+                    x + 4, y + 13, EDITOR_WIDTH - 8, 0xFFFFD86B, false);
         }
         drawWrapped(graphics, MagicCircleGates.describe(node), x + 4, y + 23,
                 EDITOR_WIDTH - 8, 2, COLOR_DIM);
@@ -1714,12 +1738,14 @@ public final class MagicCircleDrawingScreen extends Screen {
         }
         // r218：两行提示住进 84~117 的提示带，网格从 120 起画——图 12 里
         // 「系统提示」压进元素按钮那一行的事不会再发生。
-        graphics.drawString(font, "[系统提示] 当前节点判定已停用，仅作为逻辑起点与效率底座。",
-                x + 4, y + 85, 0xFFFFD86B, false);
+        TextFit.left(graphics, font, Component.translatable(
+                        "gui.dimensional_mana.magiccircle.gate.masked"),
+                x + 4, y + 85, EDITOR_WIDTH - 8, 0xFFFFD86B, false);
         Integer gateIdx = clientAnalysis == null ? null : clientAnalysis.baseGates.get(editorNode);
         if (gateIdx != null && gateIdx >= 0 && gateIdx < state.nodes().size()) {
             String summary = MagicCircleGates.describe(state.nodes().get(gateIdx));
-            drawWrapped(graphics, "真正触发需满足上游条件：" + summary, x + 4, y + 95,
+            drawWrapped(graphics, Component.translatable(
+                            "gui.dimensional_mana.magiccircle.gate.upstream", summary).getString(), x + 4, y + 95,
                     EDITOR_WIDTH - 8, 2, 0xFF9AE08B);
         }
     }
@@ -1780,7 +1806,8 @@ public final class MagicCircleDrawingScreen extends Screen {
             int px = x + 58;
             px = declStepper(graphics, px, rowY, entry, group, entry.primary(), "minus", "plus", 0);
             if (group.secondaryMax > 0) {
-                graphics.drawString(font, "次", x + 150, rowY, COLOR_DIM, false);
+                graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.decl.times"),
+                        x + 150, rowY, COLOR_DIM, false);
                 declStepper(graphics, x + 160, rowY, entry, group, entry.secondary(), "secminus", "secplus", 0);
             }
             declButton(graphics, "×", x + 246, rowY, 11, 11, true, "remove", group, 0);
@@ -3622,8 +3649,8 @@ public final class MagicCircleDrawingScreen extends Screen {
                 !enabled ? 0x33120F20 : hover ? 0xAA4A2E6E : 0x66211A33);
         graphics.renderOutline(rect.x, rect.y, rect.w, rect.h,
                 !enabled ? 0xFF332A44 : hover ? 0xFFFFD86B : 0xFF5A4770);
-        graphics.drawString(font, label, rect.x + (rect.w - font.width(label)) / 2, rect.y + 4,
-                enabled ? (hover ? 0xFFFFE4A8 : COLOR_TEXT) : 0xFF6A5F7E, false);
+        TextFit.centeredShrunk(graphics, font, label, rect.x + rect.w / 2, rect.y + 4, rect.w - 4,
+                enabled ? (hover ? 0xFFFFE4A8 : COLOR_TEXT) : 0xFF6A5F7E);
     }
 
     /**

@@ -108,7 +108,7 @@ public final class CombatCodexScreen extends Screen {
         graphics.fillGradient(left, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, BACKGROUND_TOP, BACKGROUND_BOTTOM);
         graphics.renderOutline(left, top, PANEL_WIDTH, PANEL_HEIGHT, OUTLINE);
         graphics.fill(left + 10, top + 36, left + PANEL_WIDTH - 10, top + 38, DIVIDER);
-        graphics.drawCenteredString(font, title, width / 2, top - 13, TITLE_COLOR);
+        TextFit.centered(graphics, font, title, width / 2, top - 13, PANEL_WIDTH - 20, TITLE_COLOR);
         hoverRows.clear();
         switch (page) {
             case STATUS -> renderStatus(graphics);
@@ -138,8 +138,8 @@ public final class CombatCodexScreen extends Screen {
         int rightX = left + 220;
         int y = top + 48;
 
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.combat_codex.section.base"),
-                leftX, y, 0xFFFFC46B, false);
+        TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.combat_codex.section.base"),
+                leftX, y, 190, 0xFFFFC46B, false);
         y += 13;
         drawRow(graphics, leftX, y, "gui.dimensional_mana.combat_codex.health",
                 format(player.getHealth()) + " / " + format(player.getMaxHealth()),
@@ -167,8 +167,8 @@ public final class CombatCodexScreen extends Screen {
                 "gui.dimensional_mana.combat_codex.qi_condense.source");
 
         y = top + 48;
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.combat_codex.section.melee"),
-                rightX, y, 0xFFFFC46B, false);
+        TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.combat_codex.section.melee"),
+                rightX, y, left + PANEL_WIDTH - 16 - rightX, 0xFFFFC46B, false);
         y += 13;
         drawAttributeRow(graphics, rightX, y, "gui.dimensional_mana.combat_codex.melee_damage", Attributes.ATTACK_DAMAGE);
         double meleeBonus = BattleQiGloveItem.worn(player) ? (BattleQiGloveItem.MELEE_DAMAGE_MULTIPLIER - 1.0) : 0.0;
@@ -192,8 +192,8 @@ public final class CombatCodexScreen extends Screen {
                 "gui.dimensional_mana.combat_codex.execute.source");
 
         y = top + PANEL_HEIGHT - 74;
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.combat_codex.section.defense"),
-                leftX, y, 0xFFFFC46B, false);
+        TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.combat_codex.section.defense"),
+                leftX, y, 190, 0xFFFFC46B, false);
         y += 13;
         drawRow(graphics, leftX, y, "gui.dimensional_mana.combat_codex.perfect_window",
                 BattleQiParry.PERFECT_WINDOW_TICKS + " tick",
@@ -208,8 +208,8 @@ public final class CombatCodexScreen extends Screen {
         drawRow(graphics, leftX, y += 15, "gui.dimensional_mana.combat_codex.vulnerability",
                 String.format(java.util.Locale.ROOT, "+%.0f%%", vulnerability),
                 "gui.dimensional_mana.combat_codex.vulnerability.source");
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.combat_codex.status_hint"),
-                rightX, top + PANEL_HEIGHT - 26, HINT_COLOR, false);
+        TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.combat_codex.status_hint"),
+                rightX, top + PANEL_HEIGHT - 26, left + PANEL_WIDTH - 16 - rightX, HINT_COLOR, false);
     }
 
     private double qiRegenPerSecond() {
@@ -227,22 +227,25 @@ public final class CombatCodexScreen extends Screen {
     private void renderSkills(GuiGraphics graphics) {
         int x = left + 20;
         int y = top + 48;
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.qi_level",
-                ClientQiState.level(), QiProgression.MAX_QI_LEVEL), x, y, 0xFFFFD86B, false);
+        Component qiLevelText = Component.translatable("gui.dimensional_mana.qi_level",
+                ClientQiState.level(), QiProgression.MAX_QI_LEVEL);
+        TextFit.left(graphics, font, qiLevelText, x, y, 150, 0xFFFFD86B, false);
         String xp = ClientQiState.level() >= QiProgression.MAX_QI_LEVEL
                 ? Component.translatable("gui.dimensional_mana.magic_xp.max").getString()
                 : ClientQiState.experience() + " / " + ClientQiState.requiredExperience();
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.qi_xp", xp), x + 150, y, 0xFFE8C08A, false);
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.qi_skill_points", ClientQiState.skillPoints()),
-                x + 300, y, 0xFF84FFB2, false);
+        int qiLevelRight = x + Math.min(150, font.width(qiLevelText));
+        TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.qi_xp", xp),
+                qiLevelRight + 10, y, Math.max(60, x + 280 - qiLevelRight - 10), 0xFFE8C08A, false);
+        TextFit.right(graphics, font, Component.translatable("gui.dimensional_mana.qi_skill_points",
+                ClientQiState.skillPoints()), x + 384, y, 120, 0xFF84FFB2, false);
         int required = ClientQiState.requiredExperience();
         int progressWidth = ClientQiState.level() >= QiProgression.MAX_QI_LEVEL || required <= 0 ? 384
                 : (int)Math.min(384, ClientQiState.experience() * 384L / required);
         graphics.fill(x, y + 12, x + 384, y + 18, 0xFF38201B);
         graphics.fill(x, y + 12, x + Math.max(0, progressWidth), y + 18, 0xFFC9622F);
         graphics.renderOutline(x, y + 12, 384, 6, 0xFFD9A15C);
-        graphics.drawString(font, Component.translatable("gui.dimensional_mana.qi_xp_rule"),
-                x, y + 22, HINT_COLOR, false);
+        TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.qi_xp_rule"),
+                x, y + 22, 384, HINT_COLOR, false);
 
         QiProgression.Skill[] skills = QiProgression.Skill.values();
         for (int i = 0; i < skills.length; i++) {
@@ -252,7 +255,8 @@ public final class CombatCodexScreen extends Screen {
             int rank = ClientQiState.skill(skill);
             graphics.fill(cardX, cardY, cardX + 194, cardY + 40, 0xA0301A18);
             graphics.renderOutline(cardX, cardY, 194, 40, rank >= QiProgression.MAX_SKILL_LEVEL ? 0xFFFFD86B : 0xFF8E5A3A);
-            graphics.drawString(font, Component.translatable(skill.translation()), cardX + 6, cardY + 4, 0xFFFFF0DC, false);
+            TextFit.left(graphics, font, Component.translatable(skill.translation()), cardX + 6, cardY + 4, 182,
+                    0xFFFFF0DC, false);
             graphics.drawString(font, Component.literal(rank + " / " + QiProgression.MAX_SKILL_LEVEL),
                     cardX + 6, cardY + 15, rank >= QiProgression.MAX_SKILL_LEVEL ? 0xFFFFD86B : 0xFFC2A98F, false);
             List<Component> tooltip = List.of(
@@ -281,21 +285,21 @@ public final class CombatCodexScreen extends Screen {
             int slot = slotOf(ability);
             graphics.fill(x, cardY, x + 384, cardY + 50, learned ? 0xA03A1B16 : 0x80201616);
             graphics.renderOutline(x, cardY, 384, 50, learned ? 0xFFFFC46B : 0xFF5C453A);
-            graphics.drawString(font, Component.translatable(ability.translation()), x + 6, cardY + 4,
+            TextFit.left(graphics, font, Component.translatable(ability.translation()), x + 6, cardY + 4, 138,
                     learned ? 0xFFFFF0DC : 0xFF8A7568, false);
-            graphics.drawString(font, Component.translatable(
+            TextFit.left(graphics, font, Component.translatable(
                             learned ? "gui.dimensional_mana.qi_ability.learned" : "gui.dimensional_mana.qi_ability.locked"),
-                    x + 150, cardY + 4, learned ? 0xFF84FFB2 : 0xFFB07A6A, false);
+                    x + 150, cardY + 4, 104, learned ? 0xFF84FFB2 : 0xFFB07A6A, false);
             if (learned) {
-                graphics.drawString(font, Component.translatable("gui.dimensional_mana.qi_ability.equipped",
-                                slot >= 0 ? slot + 1 : 0), x + 260, cardY + 4, 0xFFE8C08A, false);
+                TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.qi_ability.equipped",
+                                slot >= 0 ? slot + 1 : 0), x + 260, cardY + 4, 118, 0xFFE8C08A, false);
             }
-            graphics.drawString(font, Component.translatable("gui.dimensional_mana.qi_manual." + ability.id() + ".1"),
-                    x + 6, cardY + 17, 0xFFC2A98F, false);
-            graphics.drawString(font, Component.translatable("gui.dimensional_mana.qi_manual.cost", ability.cost()),
-                    x + 6, cardY + 29, 0xFF7FDFFF, false);
-            graphics.drawString(font, Component.translatable("gui.dimensional_mana.qi_manual." + ability.id() + ".2"),
-                    x + 6, cardY + 40, 0xFFB99A80, false);
+            TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.qi_manual." + ability.id() + ".1"),
+                    x + 6, cardY + 17, 372, 0xFFC2A98F, false);
+            TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.qi_manual.cost", ability.cost()),
+                    x + 6, cardY + 29, 372, 0xFF7FDFFF, false);
+            TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.qi_manual." + ability.id() + ".2"),
+                    x + 6, cardY + 40, 372, 0xFFB99A80, false);
             hoverRows.add(new HoverRow(x, cardY, 384, 50, List.of(
                     Component.translatable(ability.translation()).withStyle(ChatFormatting.GOLD),
                     Component.translatable("gui.dimensional_mana.qi_manual.cost", ability.cost())
@@ -325,7 +329,7 @@ public final class CombatCodexScreen extends Screen {
     }
 
     private void drawRow(GuiGraphics graphics, int x, int y, String label, String value, String source) {
-        graphics.drawString(font, Component.translatable(label), x, y, LABEL_COLOR, false);
+        TextFit.left(graphics, font, Component.translatable(label), x, y, 105, LABEL_COLOR, false);
         graphics.drawString(font, value, x + 112, y, VALUE_COLOR, false);
         hoverRows.add(new HoverRow(x, y - 2, 200, 13, List.of(
                 Component.translatable(label).withStyle(ChatFormatting.GOLD),

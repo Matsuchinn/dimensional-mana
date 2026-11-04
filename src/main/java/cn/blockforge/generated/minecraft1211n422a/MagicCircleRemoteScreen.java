@@ -75,8 +75,9 @@ public final class MagicCircleRemoteScreen extends Screen {
         graphics.fill(left, top, left + panelWidth, top + panelHeight, 0xC8120F1E);
         graphics.renderOutline(left, top, panelWidth, panelHeight, 0xFF5A4770);
 
-        graphics.drawCenteredString(font, title, left + panelWidth / 2, top + 8, 0xFFB4A0FF);
-        graphics.drawCenteredString(font, summary(), left + panelWidth / 2, top + 22, 0xFF8FE9FF);
+        // 英文标题和摘要行都比中文长，按面板宽度截断（面板本身随窗口缩放）。
+        TextFit.centered(graphics, font, title, left + panelWidth / 2, top + 8, panelWidth - 16, 0xFFB4A0FF);
+        TextFit.centered(graphics, font, summary(), left + panelWidth / 2, top + 22, panelWidth - 16, 0xFF8FE9FF);
         if (!data.entries().isEmpty() && panelWidth >= 300) {
             // 右上角：附近一共扫到几个（清单可能只是其中最近的 64 个）。
             Component count = Component.translatable(
@@ -97,12 +98,12 @@ public final class MagicCircleRemoteScreen extends Screen {
 
         if (entries.isEmpty()) {
             int midY = (listTop + listBottom) / 2;
-            graphics.drawCenteredString(font, Component.translatable(
+            TextFit.centered(graphics, font, Component.translatable(
                     "gui.dimensional_mana.magiccircle.remote.empty"),
-                    (listLeft + listRight) / 2, midY - 10, 0xFF9C8FB5);
-            graphics.drawCenteredString(font, Component.translatable(
+                    (listLeft + listRight) / 2, midY - 10, listRight - listLeft - 16, 0xFF9C8FB5);
+            TextFit.centered(graphics, font, Component.translatable(
                     "gui.dimensional_mana.magiccircle.remote.empty_hint"),
-                    (listLeft + listRight) / 2, midY + 4, 0xFF7C6F94);
+                    (listLeft + listRight) / 2, midY + 4, listRight - listLeft - 16, 0xFF7C6F94);
         } else {
             graphics.enableScissor(listLeft, listTop, listRight, listBottom);
             for (int index = 0; index < entries.size(); index++) {
@@ -188,8 +189,8 @@ public final class MagicCircleRemoteScreen extends Screen {
         graphics.renderOutline(stopX, buttonY, STOP_WIDTH, STOP_HEIGHT,
                 hoverStop ? 0xFFFF9BA8 : 0xFF7A4A5A);
         Component stopLabel = Component.translatable("gui.dimensional_mana.magiccircle.remote.stop_all");
-        graphics.drawString(font, stopLabel, stopX + (STOP_WIDTH - font.width(stopLabel)) / 2, buttonY + 6,
-                hoverStop ? 0xFFFFC0C8 : 0xFFE9A8B4, false);
+        TextFit.centeredShrunk(graphics, font, stopLabel, stopX + STOP_WIDTH / 2, buttonY + 6, STOP_WIDTH - 4,
+                hoverStop ? 0xFFFFC0C8 : 0xFFE9A8B4);
 
         int importX = left + panelWidth - 10 - IMPORT_WIDTH;
         hoverImport = mouseX >= importX && mouseX < importX + IMPORT_WIDTH
@@ -199,8 +200,8 @@ public final class MagicCircleRemoteScreen extends Screen {
         graphics.renderOutline(importX, buttonY, IMPORT_WIDTH, IMPORT_HEIGHT,
                 hoverImport ? 0xFFFFD86B : 0xFF5A4770);
         Component importLabel = Component.translatable("gui.dimensional_mana.magiccircle.remote.import");
-        graphics.drawString(font, importLabel, importX + (IMPORT_WIDTH - font.width(importLabel)) / 2,
-                buttonY + 6, hoverImport ? 0xFFFFE4A8 : 0xFFE9DCFF, false);
+        TextFit.centeredShrunk(graphics, font, importLabel, importX + IMPORT_WIDTH / 2, buttonY + 6,
+                IMPORT_WIDTH - 4, hoverImport ? 0xFFFFE4A8 : 0xFFE9DCFF);
 
         if (!entries.isEmpty()) {
             // 底部中间那条提示：只画在两颗按钮之间的空档里，放不下就按宽度截断，绝不压到按钮上。

@@ -81,6 +81,9 @@ public final class ClientModEvents {
     private static final ResourceLocation RESONANCE_CORE_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "resonance_core_hud");
     private static final ResourceLocation RADIANT_FLASH_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "radiant_flash");
     private static final ResourceLocation PARRY_HUD = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "parry_hud");
+    /** r301 魔蚀凋零的屏幕暗角（射线蓄力 / 腐化雨）。 */
+    private static final ResourceLocation CORRUPTED_WITHER_HUD = ResourceLocation.fromNamespaceAndPath(
+            GeneratedMod.MOD_ID, "corrupted_wither_hud");
     /** 招架姿态：右键按住多少刻、这一轮有没有把 begin 发出去。 */
     private static int parryHoldTicks;
     private static boolean parryStanceSent;
@@ -141,6 +144,8 @@ public final class ClientModEvents {
             ClientProAppraisalState.clear();
             ClientQiState.clear();
             ClientAltarAuraState.clear();
+            CorruptedWitherClientFx.clear();
+            CorruptedWitherBurstFx.clear();
             ClientMagicCirclePayloadHandler.clearPendingRemote();
             qiCastHeld = false;
             qiCastSuppressed = false;
@@ -150,6 +155,15 @@ public final class ClientModEvents {
         NeoForge.EVENT_BUS.addListener(ClientManaSenseState::render);
         NeoForge.EVENT_BUS.addListener(ClientManaRadarState::render);
         NeoForge.EVENT_BUS.addListener(ClientAltarAuraState::render);
+        // r301 魔蚀凋零：拖尾 / 腐化雨 / 紫色暗角 / 镜头高频抖动 / 压暗天空。
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherClientFx::tick);
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherClientFx::renderWorld);
+        // r304 聚合体爆炸：客户端 tick 维护活跃特效列表，渲染阶段只画面片。
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherBurstFx::tick);
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherBurstFx::render);
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherClientFx::cameraAngles);
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherClientFx::fogColor);
+        NeoForge.EVENT_BUS.addListener(CorruptedWitherClientFx::fogDistance);
         NeoForge.EVENT_BUS.addListener(InventoryGlowEffects::render);
     }
 
@@ -618,6 +632,14 @@ public final class ClientModEvents {
         event.registerEntityRenderer(GeneratedMod.MAGIC_EYE.get(), MagicEyeRenderer::new);
         event.registerEntityRenderer(GeneratedMod.SOUL_FIRE_ARROW.get(), SoulFireArrowRenderer::new);
         event.registerEntityRenderer(GeneratedMod.GIANT_SOUL_FIRE_ARROW.get(), SoulFireArrowRenderer::new);
+        // r301 魔蚀凋零：本体（发光外壳 + 三道能量光环）、虚无聚合体、射线、幻影、侵蚀骷髅头。
+        event.registerEntityRenderer(GeneratedMod.CORRUPTED_WITHER.get(), CorruptedWitherRenderer::new);
+        event.registerEntityRenderer(GeneratedMod.CORRUPTED_WITHER_AGGREGATE.get(),
+                CorruptedWitherAggregateRenderer::new);
+        event.registerEntityRenderer(GeneratedMod.CORRUPTED_WITHER_BEAM.get(), CorruptedWitherBeamRenderer::new);
+        event.registerEntityRenderer(GeneratedMod.CORRUPTED_WITHER_PHANTOM.get(),
+                CorruptedWitherPhantomRenderer::new);
+        event.registerEntityRenderer(GeneratedMod.CORRUPTED_WITHER_SKULL.get(), CorruptedWitherSkullRenderer::new);
         // 第 3 阶段：贴面投影锚点上的光点 / 连线 / 呼吸脉冲。
         event.registerBlockEntityRenderer(GeneratedMod.MAGIC_CIRCLE_PROJECTION_BLOCK_ENTITY.get(),
                 MagicCircleProjectionRenderer::new);
@@ -762,6 +784,8 @@ public final class ClientModEvents {
         event.registerAboveAll(RADIANT_FLASH_HUD, (graphics, delta) -> ClientSpellVisuals.renderRadiantFlash(graphics));
         // 招架的准心白圈、完美招架白闪/金色光晕、斗气不足的泛红都画在最上层。
         event.registerAboveAll(PARRY_HUD, (graphics, delta) -> ClientParryVisuals.renderHud(graphics));
+        // 魔蚀凋零的紫色暗角画在招架层之上，Boss 蓄力时压住整个屏幕边缘。
+        event.registerAboveAll(CORRUPTED_WITHER_HUD, (graphics, delta) -> CorruptedWitherClientFx.renderHud(graphics));
     }
 
     private static void addEffectTooltips(GatherEffectScreenTooltipsEvent event) {

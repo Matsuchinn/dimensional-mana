@@ -26,18 +26,7 @@ public final class AppraisalGlassesItem extends Item implements ICurioItem {
 
     public static boolean isEquipped(net.minecraft.world.entity.LivingEntity entity) {
         return CuriosApi.getCuriosInventory(entity)
-                .map(handler -> {
-                    var stacksHandler = handler.getStacksHandler("head").orElse(null);
-                    if (stacksHandler != null) {
-                        var stacks = stacksHandler.getStacks();
-                        for (int i = 0; i < stacks.getSlots(); i++) {
-                            if (stacks.getStackInSlot(i).is(GeneratedMod.MOD_ITEMS.get("appraisal_glasses").get())) {
-                                return true;
-                            }
-                        }
-                    }
-                    return false;
-                })
-                .orElse(false);
+                .flatMap(handler -> handler.findFirstCurio(stack -> stack.is(GeneratedMod.MOD_ITEMS.get("appraisal_glasses").get()), "head"))
+                .isPresent();
     }
 }

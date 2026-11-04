@@ -27,6 +27,8 @@ public final class ManaConcentration {
         if (AncientAltarData.isEmpowered(level, pos)) value += AncientAltarData.AURA_BONUS;
         // r282：露天魔晶矿簇：8 格内 +4.00，同样是"在不在圈内"的判定，重叠不叠加。
         if (CrystalClusterData.isEmpowered(level, pos)) value += CrystalClusterData.AURA_BONUS;
+        // r301：被【虚无凋零射线】的扭曲光环扫过的区域，浓度在 10 分钟内只剩一半。
+        value *= CorruptedZoneData.get(level).factorAt(pos, level.getGameTime());
         return Math.max(0.0, value);
     }
 

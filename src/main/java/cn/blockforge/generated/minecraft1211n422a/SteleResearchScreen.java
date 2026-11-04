@@ -100,9 +100,9 @@ public final class SteleResearchScreen extends Screen {
         graphics.renderOutline(left, top, PANEL_WIDTH, PANEL_HEIGHT, 0xFF9E70D1);
         graphics.renderOutline(left + 5, top + 5, PANEL_WIDTH - 10, PANEL_HEIGHT - 10, 0xFF3F7B89);
 
-        graphics.drawCenteredString(font, title, width / 2, top + 13, 0xFFFFE4A8);
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.stele.subtitle"),
-                width / 2, top + 29, 0xFFA78CC2);
+        TextFit.centered(graphics, font, title, width / 2, top + 13, PANEL_WIDTH - 24, 0xFFFFE4A8);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.stele.subtitle"),
+                width / 2, top + 29, PANEL_WIDTH - 24, 0xFFA78CC2);
 
         for (int i = 0; i < RUNES.length; i++) {
             double wave = Math.sin((animationTicks + partialTick) * 0.065 + i * 1.7);
@@ -114,16 +114,16 @@ public final class SteleResearchScreen extends Screen {
         }
 
         int infoY = top + 137;
-        graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.stele.uses",
-                uses, SteleResearchData.MAX_DAILY_USES), width / 2, infoY, 0xFFD9C6E9);
+        TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.stele.uses",
+                uses, SteleResearchData.MAX_DAILY_USES), width / 2, infoY, PANEL_WIDTH - 24, 0xFFD9C6E9);
         if (uses < SteleResearchData.MAX_DAILY_USES) {
-            graphics.drawCenteredString(font, Component.translatable("gui.dimensional_mana.stele.cost", manaCost),
-                    width / 2, infoY + 14, 0xFF78D8FF);
+            TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.stele.cost", manaCost),
+                    width / 2, infoY + 14, PANEL_WIDTH - 24, 0xFF78D8FF);
         }
         if (statusKey != null && !statusKey.isBlank()) {
             Component status = statusComponent();
             int statusColor = statusKey.endsWith("success") ? 0xFF8FFFC1 : 0xFFFF9D9D;
-            graphics.drawCenteredString(font, status, width / 2, infoY + 32, statusColor);
+            TextFit.centered(graphics, font, status, width / 2, infoY + 32, PANEL_WIDTH - 24, statusColor);
         }
     }
 

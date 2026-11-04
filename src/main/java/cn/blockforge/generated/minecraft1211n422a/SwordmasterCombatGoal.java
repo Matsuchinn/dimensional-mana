@@ -23,10 +23,14 @@ import java.util.EnumSet;
  */
 public final class SwordmasterCombatGoal extends Goal {
     private static final int DECISION_INTERVAL = 6;
+    /** 一轮环绕结束后至少歇多久（刻）：没贴近就歇满这个数改走普通寻路，防「绕圈不停手」。 */
+    private static final int CIRCLE_REST = 45;
     private final WanderingSwordmaster mob;
     private int decisionCooldown;
     private int targetCheckCooldown;
     private int circleTicks;
+    private int circleCooldown;
+    private double circleStartDistance;
     private float circleDirection = 1.0F;
 
     public SwordmasterCombatGoal(WanderingSwordmaster mob) {
@@ -45,7 +49,9 @@ public final class SwordmasterCombatGoal extends Goal {
         if (targetCheckCooldown > 0) { targetCheckCooldown--; return false; }
         targetCheckCooldown = 10;
         LivingEntity found = mob.findCombatTarget();
-        if (found == null) return false;
+        // 刚被寻路判定「走不到」的人别立刻再捡回来打（r300）：以前 10 刻后重新选目标、
+        // 追两步又放弃，反复几轮，看起来就是一直在原地磨。
+        if (found == null || MobPathing.isUnreachable(mob, found)) return false;
         mob.setTarget(found);
         return true;
     }
@@ -64,6 +70,9 @@ public final class SwordmasterCombatGoal extends Goal {
     public void start() {
         decisionCooldown = 0;
         circleTicks = 0;
+        // 刚接战先歇 10 刻再考虑环绕，起手就是绕圈很怪。
+        circleCooldown = 10;
+        circleStartDistance = 0.0D;
         circleDirection = mob.getRandom().nextBoolean() ? 1.0F : -1.0F;
         mob.setSprinting(false);
     }
@@ -118,8 +127,18 @@ public final class SwordmasterCombatGoal extends Goal {
             return;
         }
 
-        mob.faceTarget(target);
+        // 朝向处理（r300，「原地打转」的头号修法）：
+        // 导航正在沿路径走的时候，身体朝向交给 MoveControl/LookControl 自己慢慢转（原版怪就这套，不会打转）。
+        // 以前是每刻用 faceTarget 硬写 YRot 对准目标，跟导航「朝路径点转」在同一刻对着干，
+        // 身体朝向每刻来回跳几十度，玩家看到的就是贴墙原地转圈。
+        // 硬锁定只留给「位移由自己接管」的场合：环绕走位、贴身站桩出招。
+        if (circleTicks > 0 || !mob.getNavigation().isInProgress()) {
+            mob.faceTarget(target);
+        } else {
+            mob.faceTargetSoft(target);
+        }
         if (decisionCooldown > 0) decisionCooldown--;
+        if (circleCooldown > 0) circleCooldown--;
 
         if (distance > 16.0D) {
             // 远距离：有视线才用本人冲撞；没视线先寻路，不对着墙浪费技能。
@@ -161,20 +180,53 @@ public final class SwordmasterCombatGoal extends Goal {
                 if (aimed && distance <= 10.0D && mob.canFeint(target)
                         && target.getAttackAnim(0.0F) < 0.1F) {
                     mob.playTacticalFeint(target);
-                    circleTicks = 12;
-                    circleDirection = -circleDirection;
+                    if (circleCooldown <= 0 && mob.canCircleAround(circleDirection > 0.0F)) {
+                        circleTicks = 12;
+                        circleDirection = -circleDirection;
+                        circleStartDistance = distance;
+                    }
                     return;
                 }
-                if (circleTicks <= 0 && aimed && distance < 8.0D) {
-                    circleTicks = 10 + mob.getRandom().nextInt(9);
-                    circleDirection = mob.getRandom().nextBoolean() ? 1.0F : -1.0F;
+                if (circleTicks <= 0 && circleCooldown <= 0 && aimed && distance < 8.0D) {
+                    // 挑一侧还有路的再绕（r300）：以前贴着墙也照样起绕，横移一步就撞住，
+                    // 人还每刻硬转对准目标 —— 那就是「原地打转」。两侧都堵死就改普通逼近。
+                    boolean clockwise = mob.getRandom().nextBoolean();
+                    if (mob.canCircleAround(clockwise)) {
+                        circleDirection = clockwise ? 1.0F : -1.0F;
+                    } else if (mob.canCircleAround(!clockwise)) {
+                        circleDirection = clockwise ? -1.0F : 1.0F;
+                    } else {
+                        circleDirection = 0.0F;
+                    }
+                    if (circleDirection == 0.0F) {
+                        // 没地方绕：歇一阵，这段时间正常寻路逼近。
+                        circleCooldown = CIRCLE_REST;
+                    } else {
+                        circleTicks = 10 + mob.getRandom().nextInt(9);
+                        circleStartDistance = distance;
+                    }
                 }
             }
             if (circleTicks > 0) {
                 circleTicks--;
                 // 一边横移一边略向前压迫，逼玩家先出招；目标真挥剑后下一轮直接反制。
+                // r300：环绕改成自控位移（circleStep），不再走 MoveControl.strafe ——
+                // strafe 被写死在移动速度的 25%，绕得比走还慢，几乎看不出在动。
                 mob.getNavigation().stop();
-                mob.getMoveControl().strafe(0.18F, 0.82F * circleDirection);
+                if (!mob.circleStep(circleDirection > 0.0F)) {
+                    // 撞上东西：换边再来；两边都堵死就收手，回去走正常逼近，别空转。
+                    circleDirection = -circleDirection;
+                    if (!mob.circleStep(circleDirection > 0.0F)) {
+                        circleTicks = 0;
+                        circleCooldown = CIRCLE_REST;
+                    }
+                }
+                // 已经压到近战距离：环绕的目的达到了，直接收。
+                if (circleTicks > 0 && distance <= 5.0D) circleTicks = 0;
+                if (circleTicks <= 0) {
+                    // 一轮结束：贴进了 ≥1 格就很快能再绕；白绕（比如目标骑在墙上）就歇久一点。
+                    circleCooldown = distance < circleStartDistance - 1.0D ? 15 : CIRCLE_REST;
+                }
             } else if (decisionCooldown <= 1 || mob.getNavigation().isDone()) {
                 MobPathing.chase(mob, target, distance > 8.0D ? 1.12D : 0.92D);
             }

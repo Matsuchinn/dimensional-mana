@@ -51,9 +51,12 @@ public final class CrystalProcessorScreen extends AbstractContainerScreen<Crysta
 
     @Override
     protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.drawString(font, title, titleLabelX, titleLabelY, 0xFFEAD9FF, false);
-        graphics.drawString(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, 0xFFBDB0CE, false);
+        // 右上角的魔素数值是右对齐的，标题得先给它让位，否则英文标题会直接压上去。
         String manaText = Component.translatable("gui.dimensional_mana.processor.mana", menu.mana(), menu.maxMana()).getString();
+        TextFit.left(graphics, font, title, titleLabelX, titleLabelY,
+                Math.max(40, imageWidth - 14 - font.width(manaText) - titleLabelX), 0xFFEAD9FF, false);
+        TextFit.left(graphics, font, playerInventoryTitle, inventoryLabelX, inventoryLabelY,
+                imageWidth - 16 - inventoryLabelX, 0xFFBDB0CE, false);
         graphics.drawString(font, manaText, imageWidth - 8 - font.width(manaText), 6, 0xFF74D8FF, false);
     }
 
