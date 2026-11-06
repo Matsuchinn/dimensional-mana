@@ -16,6 +16,9 @@ import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.JukeboxBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
@@ -166,12 +169,53 @@ public final class ElementalSlimeSpawning {
         spawn(level, ElementalSlimeVariant.SOUND, new BlockPos(x, y, z), null, 1);
     }
 
+    /** 找唱片机用的方块判定：调色板预筛和实际扫描必须一致。 */
+    private static final java.util.function.Predicate<BlockState> JUKEBOX = state -> state.is(Blocks.JUKEBOX);
+
+    /** 唱片机检测的扫描半径（水平 16 格、垂直 6 格，和原来的搜索范围一致）。 */
+    private static final int JUKEBOX_RANGE_XZ = 16;
+    private static final int JUKEBOX_RANGE_Y = 6;
+
     private static void tickJukeboxMusic(ServerLevel level, Player player, int ticks) {
         BlockPos origin = player.blockPosition();
-        for (BlockPos pos : BlockPos.betweenClosed(origin.offset(-16, -6, -16), origin.offset(16, 6, 16))) {
+        // 原版这里是 33×13×33 ≈ 1.4 万个方块逐格查一遍，一个唱片机都没有的普通场景也要付这笔钱。
+        // 先问区块段的调色板：附近根本没有唱片机方块时直接返回。
+        if (!sectionsMayHaveJukebox(level, origin)) return;
+        for (BlockPos pos : BlockPos.betweenClosed(
+                origin.offset(-JUKEBOX_RANGE_XZ, -JUKEBOX_RANGE_Y, -JUKEBOX_RANGE_XZ),
+                origin.offset(JUKEBOX_RANGE_XZ, JUKEBOX_RANGE_Y, JUKEBOX_RANGE_XZ))) {
             var state = level.getBlockState(pos);
             if (state.is(Blocks.JUKEBOX) && state.getValue(JukeboxBlock.HAS_RECORD)) musicPulse(level, pos.getCenter(), ticks, 100);
         }
+    }
+
+    /**
+     * 扫描范围覆盖到的区块段里，有没有任何一段「可能出现」唱片机方块。
+     *
+     * <p>只查已经加载的区块；没加载的区块本来也站不到人，不去为了看一眼而强行加载它。</p>
+     */
+    private static boolean sectionsMayHaveJukebox(ServerLevel level, BlockPos origin) {
+        int minChunkX = (origin.getX() - JUKEBOX_RANGE_XZ) >> 4;
+        int maxChunkX = (origin.getX() + JUKEBOX_RANGE_XZ) >> 4;
+        int minChunkZ = (origin.getZ() - JUKEBOX_RANGE_XZ) >> 4;
+        int maxChunkZ = (origin.getZ() + JUKEBOX_RANGE_XZ) >> 4;
+        int minSectionY = (origin.getY() - JUKEBOX_RANGE_Y) >> 4;
+        int maxSectionY = (origin.getY() + JUKEBOX_RANGE_Y) >> 4;
+        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                LevelChunk chunk = level.getChunkSource().getChunkNow(chunkX, chunkZ);
+                if (chunk == null) continue;
+                LevelChunkSection[] sections = chunk.getSections();
+                for (int sectionY = minSectionY; sectionY <= maxSectionY; sectionY++) {
+                    int index = level.getSectionIndex(sectionY << 4);
+                    if (index < 0 || index >= sections.length) continue;
+                    LevelChunkSection section = sections[index];
+                    if (section == null || section.hasOnlyAir()) continue;
+                    if (section.maybeHas(JUKEBOX)) return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static void musicPulse(ServerLevel level, Vec3 at, int ticks, int required) {

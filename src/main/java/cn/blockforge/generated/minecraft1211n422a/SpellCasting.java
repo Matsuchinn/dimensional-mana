@@ -52,6 +52,24 @@ public final class SpellCasting {
     private static final ResourceLocation IRON_SLOW = id("iron_slow");
     private static final ResourceLocation CORROSION_ARMOR = id("corrosion_armor");
     private static final ResourceLocation CORROSION_TOUGHNESS = id("corrosion_toughness");
+    /**
+     * 修正计时用的 NBT 键预先拼好。
+     *
+     * <p>这七个键在 {@link #tickLiving} 里每刻都要给每只活体实体各查一遍，
+     * 以前是每次现拼 {@code "DimensionalManaModifier_" + id.getPath()}，等于每只生物每刻
+     * 白白新建七个字符串。键名只跟修正 id 有关，算一次就够。</p>
+     */
+    private static final String KEY_STONE_ARMOR = modifierKey(STONE_ARMOR);
+    private static final String KEY_STONE_TOUGHNESS = modifierKey(STONE_TOUGHNESS);
+    private static final String KEY_STONE_SLOW = modifierKey(STONE_SLOW);
+    private static final String KEY_IRON_ARMOR = modifierKey(IRON_ARMOR);
+    private static final String KEY_IRON_SLOW = modifierKey(IRON_SLOW);
+    private static final String KEY_CORROSION_ARMOR = modifierKey(CORROSION_ARMOR);
+    private static final String KEY_CORROSION_TOUGHNESS = modifierKey(CORROSION_TOUGHNESS);
+
+    private static String modifierKey(ResourceLocation id) {
+        return "DimensionalManaModifier_" + id.getPath();
+    }
 
     public record CastSnapshot(String spellId, int remainingTicks, int totalTicks) { }
     private record CastState(SpellDefinition spell, List<UUID> targets, int remainingTicks, int totalTicks) {
@@ -451,13 +469,13 @@ public final class SpellCasting {
             if (now >= noFallUntil) NO_FALL.remove(living.getUUID());
             else living.resetFallDistance();
         }
-        cleanupModifier(living, STONE_ARMOR, now);
-        cleanupModifier(living, STONE_TOUGHNESS, now);
-        cleanupModifier(living, STONE_SLOW, now);
-        cleanupModifier(living, IRON_ARMOR, now);
-        cleanupModifier(living, IRON_SLOW, now);
-        cleanupModifier(living, CORROSION_ARMOR, now);
-        cleanupModifier(living, CORROSION_TOUGHNESS, now);
+        cleanupModifier(living, STONE_ARMOR, KEY_STONE_ARMOR, now);
+        cleanupModifier(living, STONE_TOUGHNESS, KEY_STONE_TOUGHNESS, now);
+        cleanupModifier(living, STONE_SLOW, KEY_STONE_SLOW, now);
+        cleanupModifier(living, IRON_ARMOR, KEY_IRON_ARMOR, now);
+        cleanupModifier(living, IRON_SLOW, KEY_IRON_SLOW, now);
+        cleanupModifier(living, CORROSION_ARMOR, KEY_CORROSION_ARMOR, now);
+        cleanupModifier(living, CORROSION_TOUGHNESS, KEY_CORROSION_TOUGHNESS, now);
         ElementReactionSystem.tick(living);
     }
 
@@ -757,8 +775,8 @@ public final class SpellCasting {
             instance.removeModifier(CORROSION_ARMOR);
             instance.removeModifier(CORROSION_TOUGHNESS);
         }
-        target.getPersistentData().remove("DimensionalManaModifier_corrosion_armor");
-        target.getPersistentData().remove("DimensionalManaModifier_corrosion_toughness");
+        target.getPersistentData().remove(KEY_CORROSION_ARMOR);
+        target.getPersistentData().remove(KEY_CORROSION_TOUGHNESS);
     }
 
     private static void castSonicWave(ServerPlayer player) {
@@ -789,11 +807,14 @@ public final class SpellCasting {
         AttributeInstance instance = target.getAttribute(attribute);
         if (instance == null) return;
         instance.addOrUpdateTransientModifier(new AttributeModifier(id, amount, operation));
-        target.getPersistentData().putLong("DimensionalManaModifier_" + id.getPath(), target.level().getGameTime() + duration);
+        target.getPersistentData().putLong(modifierKey(id), target.level().getGameTime() + duration);
     }
 
-    private static void cleanupModifier(LivingEntity living, ResourceLocation id, long now) {
-        String key = "DimensionalManaModifier_" + id.getPath();
+    /**
+     * 计时到期就摘掉这条属性修正。{@code key} 由调用方传进来（见 {@code KEY_*} 常量），
+     * 方法里不再现拼字符串 —— 它每刻都要对每只生物跑七次。
+     */
+    private static void cleanupModifier(LivingEntity living, ResourceLocation id, String key, long now) {
         long until = living.getPersistentData().getLong(key);
         if (until <= 0 || now < until) return;
         for (AttributeInstance instance : living.getAttributes().getSyncableAttributes()) instance.removeModifier(id);

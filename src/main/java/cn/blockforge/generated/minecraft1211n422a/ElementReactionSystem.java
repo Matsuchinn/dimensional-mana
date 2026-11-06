@@ -65,6 +65,14 @@ public final class ElementReactionSystem {
     private static final ResourceLocation MIRE_SPEED = id("mire_speed");
     private static final ResourceLocation MIRE_JUMP = id("mire_jump");
     private static final ResourceLocation SMELT_ARMOR = id("smelt_armor");
+    /**
+     * 修正计时键预先拼好：这四条在 {@link #tick} 里每刻都要给每只活体实体各查一遍，
+     * 现拼 {@code "DimensionalManaReaction_" + id.getPath()} 等于每只生物每刻新建四个字符串。
+     */
+    private static final String KEY_SUPERCONDUCT_ARMOR = modifierKey(SUPERCONDUCT_ARMOR);
+    private static final String KEY_SMELT_ARMOR = modifierKey(SMELT_ARMOR);
+    private static final String KEY_MIRE_SPEED = modifierKey(MIRE_SPEED);
+    private static final String KEY_MIRE_JUMP = modifierKey(MIRE_JUMP);
 
     private record TimedCasterState(UUID caster, long expiresAt, long nextAt, boolean firstDamage) {
         TimedCasterState next(long time) { return new TimedCasterState(caster, expiresAt, time, false); }
@@ -392,10 +400,10 @@ public final class ElementReactionSystem {
         }
         // 金钟罩期间免疫破甲：开启前已经挂上的超导/熔蚀降护甲也立刻收回。
         if (MetalSpells.immuneToArmorBreak(living)) clearArmorBreakModifiers(living);
-        cleanupModifier(living, SUPERCONDUCT_ARMOR, now);
-        cleanupModifier(living, MIRE_SPEED, now);
-        cleanupModifier(living, MIRE_JUMP, now);
-        cleanupModifier(living, SMELT_ARMOR, now);
+        cleanupModifier(living, SUPERCONDUCT_ARMOR, KEY_SUPERCONDUCT_ARMOR, now);
+        cleanupModifier(living, MIRE_SPEED, KEY_MIRE_SPEED, now);
+        cleanupModifier(living, MIRE_JUMP, KEY_MIRE_JUMP, now);
+        cleanupModifier(living, SMELT_ARMOR, KEY_SMELT_ARMOR, now);
         tickPending(level, now);
         tickPendingEcho(level, now);
     }
@@ -567,7 +575,7 @@ public final class ElementReactionSystem {
 
     /** 超导对物理打击补足“护甲降到零以下则转为易伤”的效果。 */
     public static float modifyPhysicalDamage(LivingEntity victim, DamageSource source, float damage) {
-        if (victim.getPersistentData().getLong(modifierKey(SUPERCONDUCT_ARMOR)) <= victim.level().getGameTime()) return damage;
+        if (victim.getPersistentData().getLong(KEY_SUPERCONDUCT_ARMOR) <= victim.level().getGameTime()) return damage;
         // 法术伤害（通用或十二种元素）不吃这条物理易伤，和以前按 msgId 排掉间接魔法的规则一致。
         if (source.getDirectEntity() instanceof LivingEntity && !SpellDamage.isSpell(source)
                 && victim.getArmorValue() <= 0) return damage * 1.5F;
@@ -1025,12 +1033,11 @@ public final class ElementReactionSystem {
             instance.removeModifier(SUPERCONDUCT_ARMOR);
             instance.removeModifier(SMELT_ARMOR);
         }
-        target.getPersistentData().remove(modifierKey(SUPERCONDUCT_ARMOR));
-        target.getPersistentData().remove(modifierKey(SMELT_ARMOR));
+        target.getPersistentData().remove(KEY_SUPERCONDUCT_ARMOR);
+        target.getPersistentData().remove(KEY_SMELT_ARMOR);
     }
 
-    private static void cleanupModifier(LivingEntity target, ResourceLocation id, long now) {
-        String key = modifierKey(id);
+    private static void cleanupModifier(LivingEntity target, ResourceLocation id, String key, long now) {
         long until = target.getPersistentData().getLong(key);
         if (until <= 0 || now < until) return;
         for (AttributeInstance instance : target.getAttributes().getSyncableAttributes()) instance.removeModifier(id);
@@ -1048,7 +1055,7 @@ public final class ElementReactionSystem {
         if (living == null || living.level().isClientSide) return;
         // 便宜的先判断：没挂过泥沼修正、身上也没有土泥沼效果就什么都不做，不用每刻遍历属性。
         net.minecraft.nbt.CompoundTag data = living.getPersistentData();
-        boolean hasMire = data.contains(modifierKey(MIRE_SPEED)) || data.contains(modifierKey(MIRE_JUMP));
+        boolean hasMire = data.contains(KEY_MIRE_SPEED) || data.contains(KEY_MIRE_JUMP);
         boolean hasMud = living.hasEffect(NewSpellContent.MUD);
         if (!hasMire && !hasMud) return;
         if (hasMire) {
@@ -1056,8 +1063,8 @@ public final class ElementReactionSystem {
                 if (instance.getModifier(MIRE_SPEED) != null) instance.removeModifier(MIRE_SPEED);
                 if (instance.getModifier(MIRE_JUMP) != null) instance.removeModifier(MIRE_JUMP);
             }
-            data.remove(modifierKey(MIRE_SPEED));
-            data.remove(modifierKey(MIRE_JUMP));
+            data.remove(KEY_MIRE_SPEED);
+            data.remove(KEY_MIRE_JUMP);
         }
         if (hasMud) living.removeEffect(NewSpellContent.MUD);
     }

@@ -21,6 +21,16 @@ public final class NaturalElementSystem {
     private static final String SUN_TICKS_KEY = "sunTicks";
     private static final String GRASS_READY_AT_KEY = "grassReadyAt";
     private static final String SUN_READY_AT_KEY = "sunReadyAt";
+    /** 天气 / 视线取样结果与取样时刻：这三种判定每 {@value #ENV_SAMPLE_INTERVAL} 刻才重算一次。 */
+    private static final String ENV_SAMPLED_AT_KEY = "envSampledAt";
+    private static final String ENV_EXPOSED_KEY = "envExposed";
+    private static final String ENV_PRECIP_KEY = "envPrecip";
+
+    /** 视线与天气的采样间隔（刻）。0.2 秒一次，肉眼完全看不出来，但省掉了每刻的高度图与群系查询。 */
+    private static final int ENV_SAMPLE_INTERVAL = 4;
+    private static final int PRECIP_NONE = 0;
+    private static final int PRECIP_RAIN = 1;
+    private static final int PRECIP_SNOW = 2;
 
     private static final int WATER = 1 << 0;
     private static final int LAVA = 1 << 1;
@@ -42,6 +52,7 @@ public final class NaturalElementSystem {
         if (!(living.level() instanceof ServerLevel level) || !living.isAlive()) return;
 
         CompoundTag data = living.getPersistentData().getCompound(DATA_KEY);
+        long now = level.getGameTime();
         int previousConditions = data.getInt(ACTIVE_KEY);
         int currentConditions = 0;
 
@@ -62,12 +73,25 @@ public final class NaturalElementSystem {
         currentConditions = updateCooledCondition(living, data, currentConditions,
                 GRASS, grassTicks >= GRASS_REQUIRED_TICKS, ElementType.NATURE, GRASS_READY_AT_KEY);
 
-        BlockPos weatherPos = BlockPos.containing(living.getEyePosition());
-        boolean exposedToSky = level.canSeeSky(weatherPos);
-        Biome.Precipitation precipitation = level.getBiome(weatherPos).value().getPrecipitationAt(weatherPos);
+        // 天气与视线是这里最贵的两步（一次高度图查询 + 一次群系查询），每刻给每只生物都跑一遍没必要：
+        // 采样结果写回实体持久数据，每 ENV_SAMPLE_INTERVAL 刻刷新一次，中间几刻沿用上次的结果。
+        long sampledAt = data.getLong(ENV_SAMPLED_AT_KEY);
+        if (now < sampledAt || now - sampledAt >= ENV_SAMPLE_INTERVAL) {
+            BlockPos weatherPos = BlockPos.containing(living.getEyePosition());
+            boolean exposed = level.canSeeSky(weatherPos);
+            data.putBoolean(ENV_EXPOSED_KEY, exposed);
+            Biome.Precipitation precipitation = exposed
+                    ? level.getBiome(weatherPos).value().getPrecipitationAt(weatherPos) : null;
+            int precipitationKind = precipitation == Biome.Precipitation.RAIN ? PRECIP_RAIN
+                    : precipitation == Biome.Precipitation.SNOW ? PRECIP_SNOW : PRECIP_NONE;
+            data.putInt(ENV_PRECIP_KEY, precipitationKind);
+            data.putLong(ENV_SAMPLED_AT_KEY, now);
+        }
+        boolean exposedToSky = data.getBoolean(ENV_EXPOSED_KEY);
+        int precipitationKind = data.getInt(ENV_PRECIP_KEY);
         boolean precipitationFalling = level.isRaining() && exposedToSky;
-        boolean raining = precipitationFalling && precipitation == Biome.Precipitation.RAIN;
-        boolean snowing = precipitationFalling && precipitation == Biome.Precipitation.SNOW;
+        boolean raining = precipitationFalling && precipitationKind == PRECIP_RAIN;
+        boolean snowing = precipitationFalling && precipitationKind == PRECIP_SNOW;
         currentConditions = updateCondition(living, previousConditions, currentConditions,
                 RAIN, raining, ElementType.WATER);
         currentConditions = updateCondition(living, previousConditions, currentConditions,

@@ -59,20 +59,8 @@ public final class ProfessionalAppraisalGlassesItem extends Item implements ICur
         var holder = GeneratedMod.MOD_ITEMS.get(ITEM_ID);
         if (holder == null) return false;
         Item item = holder.get();
-        
         return CuriosApi.getCuriosInventory(entity)
-                .map(handler -> {
-                    var stacksHandler = handler.getStacksHandler(SLOT).orElse(null);
-                    if (stacksHandler != null) {
-                        var stacks = stacksHandler.getStacks();
-                        for (int i = 0; i < stacks.getSlots(); i++) {
-                            if (stacks.getStackInSlot(i).is(item)) {
-                                return true;
-                            }
-                        }
-                    }
-                    return false;
-                })
-                .orElse(false);
+                .flatMap(handler -> handler.findFirstCurio(stack -> stack.is(item), SLOT))
+                .isPresent();
     }
 }

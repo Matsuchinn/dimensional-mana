@@ -118,6 +118,8 @@ public final class Goblin extends PathfinderMob implements ManaRegenSource {
     private static final long DAY_TICKS = 24000L;
     /** 每天 0 点后的第一个小时是聚集、交换物品的时间。 */
     private static final long GATHER_WINDOW = 1200L;
+    /** 拾取目标多少刻重新扫一次（掉落物不会自己跑掉，半秒一次完全够用）。 */
+    private static final int LOOT_SCAN_INTERVAL = 10;
 
     private final GoblinVariant variant;
     /** 拾取背包：只存在服务端，死亡时全部散落。 */
@@ -126,6 +128,8 @@ public final class Goblin extends PathfinderMob implements ManaRegenSource {
     private int skillCooldown;
     private int eatCooldown;
     private int pickupCooldown;
+    /** 捡东西的扫描节流：掉落物查询按 10 刻一次，不再每刻对 8 格内所有掉落物做一次查询。 */
+    private int lootScanCooldown;
     private int panicTicks;
     private int companionDeaths;
     private int companionCount = 1;
@@ -1162,10 +1166,22 @@ public final class Goblin extends PathfinderMob implements ManaRegenSource {
     }
 
     private ItemEntity findLoot(ServerLevel level) {
-        return level.getEntitiesOfClass(ItemEntity.class, getBoundingBox().inflate(8.0),
-                        entity -> entity.isAlive() && canStore(entity.getItem())).stream()
-                .min(java.util.Comparator.comparingInt((ItemEntity entity) -> -lootPriority(entity.getItem()))
-                        .thenComparingDouble(this::distanceToSqr)).orElse(null);
+        // 老写法是 getEntitiesOfClass(...).stream().min(两层比较器)：每次扫描都要建流、建比较器、装箱。
+        // 这里改成一个普通循环，挑「优先级最高、同样优先级取最近」的那一件，结果完全一样。
+        ItemEntity best = null;
+        int bestPriority = Integer.MIN_VALUE;
+        double bestDistance = Double.MAX_VALUE;
+        for (ItemEntity entity : level.getEntitiesOfClass(ItemEntity.class, getBoundingBox().inflate(8.0),
+                drop -> drop.isAlive() && canStore(drop.getItem()))) {
+            int priority = lootPriority(entity.getItem());
+            double distance = distanceToSqr(entity);
+            if (priority > bestPriority || priority == bestPriority && distance < bestDistance) {
+                best = entity;
+                bestPriority = priority;
+                bestDistance = distance;
+            }
+        }
+        return best;
     }
 
     /** 肉类优先：食物按回血多少排在矿物前面。 */
@@ -1565,6 +1581,9 @@ public final class Goblin extends PathfinderMob implements ManaRegenSource {
         public boolean canUse() {
             if (pickupCooldown > 0 || !(level() instanceof ServerLevel level)) return false;
             if (getTarget() != null || chargeTicks > 0 || leapTicks > 0 || backpackFull()) return false;
+            // 掉落物查询十刻做一次就够：营地里好几只哥布林时，这项以前是每刻每只一次的实体查询。
+            if (--lootScanCooldown > 0) return false;
+            lootScanCooldown = LOOT_SCAN_INTERVAL;
             target = findLoot(level);
             return target != null && target.isAlive();
         }

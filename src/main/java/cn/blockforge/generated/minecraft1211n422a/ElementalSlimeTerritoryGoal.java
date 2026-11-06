@@ -20,9 +20,20 @@ import java.util.UUID;
  */
 public final class ElementalSlimeTerritoryGoal extends Goal {
     private static final double RANGE = 12.0;
+    /**
+     * 多少刻重新扫一次周围。
+     *
+     * <p>以前 {@link #canUse()} 每刻都对 12 格内所有活体实体做一次查询，领地范围里的史莱姆一多，
+     * 光是这一项就是实打实的服务器刻开销。忍耐度最短也有 15 秒，10 刻（半秒）的采样间隔
+     * 对判定结果没有任何可见影响。</p>
+     */
+    private static final int SCAN_INTERVAL = 10;
+
     private final ElementalSlime slime;
     private final Map<UUID, Long> exposureSince = new HashMap<>();
     private LivingEntity selected;
+    private int scanCooldown;
+    private boolean usable;
 
     public ElementalSlimeTerritoryGoal(ElementalSlime slime) {
         this.slime = slime;
@@ -45,6 +56,14 @@ public final class ElementalSlimeTerritoryGoal extends Goal {
         int tolerance = toleranceTicks(slime.variant());
         // 结盟个体只跟着哥布林的目标打，不自己圈地盘。
         if (tolerance <= 0 || slime.isTamed() || slime.isGoblinAlly()) return false;
+        // 没到点就沿用上次的扫描结论，不再每刻重查一遍周围实体。
+        if (--scanCooldown > 0) return usable;
+        scanCooldown = SCAN_INTERVAL;
+        usable = scan(tolerance);
+        return usable;
+    }
+
+    private boolean scan(int tolerance) {
         AABB area = slime.getBoundingBox().inflate(RANGE);
         var nearby = slime.level().getEntitiesOfClass(LivingEntity.class, area, slime::validTerritoryTarget);
         exposureSince.keySet().removeIf(id -> nearby.stream().noneMatch(entity -> entity.getUUID().equals(id)));
@@ -66,5 +85,6 @@ public final class ElementalSlimeTerritoryGoal extends Goal {
     public void start() {
         if (selected != null) slime.setTarget(selected);
         selected = null;
+        usable = false;
     }
 }

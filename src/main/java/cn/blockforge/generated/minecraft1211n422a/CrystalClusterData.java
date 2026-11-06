@@ -456,14 +456,29 @@ public final class CrystalClusterData extends SavedData {
         }
     }
 
-    /** 变异体：浓度 ≥ 19 时每秒回 4% 血；周围空闲的会被高浓度吸引着往矿簇走。 */
+    /** 变异体「往矿簇挪」多少刻才重新安排一次路（3 秒）。 */
+    private static final int LURE_REPATH_INTERVAL = 60;
+
+    /**
+     * 变异体：浓度 ≥ 19 时每秒回 4% 血；周围空闲的会被高浓度吸引着往矿簇走。
+     *
+     * <p>r336 性能：这里原来每秒对每座矿簇做一次「24 格内所有怪物」的查询，
+     * 再对每只空闲变异体直接调一次 {@code getNavigation().moveTo(...)}。
+     * 一片矿簇周围蹲着十几只变异体时，等于每秒发起十几条 A*（而且同一只怪物被几座矿簇
+     * 同时选中时还会重复算），服务器刻掉得很明显。现在改成：</p>
+     * <ol>
+     *   <li>查询时直接用谓词筛掉非变异体，不再把 24 格内所有怪物先收成一张表；</li>
+     *   <li>「往矿簇走」改为每 3 秒安排一次，并且走 {@link MobPathing#moveToPoint}
+     *       —— 它自带重算节流，路走不通时还会拉长间隔，不会再变成每秒一次的全量寻路。</li>
+     * </ol>
+     */
     private static void tickMutants(ServerLevel level, List<BlockPos> active) {
+        boolean lure = level.getGameTime() % LURE_REPATH_INTERVAL == 0;
         for (BlockPos cluster : active) {
             List<Monster> monsters = level.getEntitiesOfClass(Monster.class,
                     new net.minecraft.world.phys.AABB(cluster).inflate(LURE_RANGE),
-                    Mob::isAlive);
+                    mob -> mob.isAlive() && isManaMutant(mob));
             for (Monster monster : monsters) {
-                if (!isManaMutant(monster)) continue;
                 BlockPos pos = monster.blockPosition();
                 if (ManaConcentration.at(level, pos) >= REGEN_CONCENTRATION
                         && monster.getHealth() < monster.getMaxHealth()) {
@@ -473,11 +488,13 @@ public final class CrystalClusterData extends SavedData {
                             2, 0.2, 0.2, 0.2, 0.01);
                 }
                 // "喜欢高魔素浓度区域"：没有在打架、又离得比较远时，往矿簇方向挪。
-                if (monster.getTarget() != null) continue;
+                if (!lure || monster.getTarget() != null) continue;
                 double dx = cluster.getX() + 0.5 - monster.getX();
                 double dz = cluster.getZ() + 0.5 - monster.getZ();
                 if (dx * dx + dz * dz < 36.0) continue;
-                monster.getNavigation().moveTo(cluster.getX() + 0.5, cluster.getY() + 1.0, cluster.getZ() + 0.5, 0.8);
+                MobPathing.moveToPoint(monster,
+                        new net.minecraft.world.phys.Vec3(cluster.getX() + 0.5, cluster.getY() + 1.0, cluster.getZ() + 0.5),
+                        0.8);
             }
         }
     }

@@ -149,6 +149,12 @@ public final class CorruptedWither extends WitherBoss {
     private int regenAccumulator;
     private int rainTicks;
     private int fxTimer;
+    /**
+     * 【虚无反噬】的启动条件要看「场上还有没有聚合体」，以前每刻现查两遍 24 格内的聚合体实体。
+     * 聚合体不会凭空出现，10 刻的缓存完全够用，也让近身战里每刻少两次实体查询。
+     */
+    private int cachedAggregateCount = -1;
+    private long aggregateCountAt;
     /** 魔素 / 斗气池只初始化一次。 */
     private boolean poolsInitialized;
     /** 击杀生物回魔的累计值（小数部分先攒着）。 */
@@ -406,7 +412,7 @@ public final class CorruptedWither extends WitherBoss {
             if (volleyCharge == 0) launchVolley(target);
             return;
         }
-        if (volleyCooldown <= 0 && distance < 28.0D && aggregateCount(true) + aggregateCount(false) > 0) {
+        if (volleyCooldown <= 0 && distance < 28.0D && aggregateCountCached() > 0) {
             volleyCharge = VOLLEY_CHARGE_TICKS;
             this.entityData.set(DATA_CHARGING, Boolean.TRUE);
             if (level() instanceof ServerLevel serverLevel) {
@@ -620,6 +626,15 @@ public final class CorruptedWither extends WitherBoss {
     private List<CorruptedWitherAggregate> ownedAggregatesOf(ServerLevel serverLevel, boolean blue) {
         return serverLevel.getEntitiesOfClass(CorruptedWitherAggregate.class, getBoundingBox().inflate(24.0D),
                 aggregate -> aggregate.isOwnedBy(this) && aggregate.isBlue() == blue && aggregate.isOrbiting());
+    }
+
+    /** 聚合体总数（红 + 蓝），10 刻内直接复用上次的查询结果。 */
+    private int aggregateCountCached() {
+        long now = level().getGameTime();
+        if (cachedAggregateCount >= 0 && now - aggregateCountAt < 10L) return cachedAggregateCount;
+        aggregateCountAt = now;
+        cachedAggregateCount = aggregateCount(true) + aggregateCount(false);
+        return cachedAggregateCount;
     }
 
     public int aggregateCount(boolean blue) {

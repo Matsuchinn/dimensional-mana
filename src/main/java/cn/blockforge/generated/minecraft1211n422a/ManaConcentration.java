@@ -3,16 +3,51 @@ package cn.blockforge.generated.minecraft1211n422a;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 
 /**
  * 世界魔素浓度。大尺度平滑噪声保证同一群系内不会突变，群系盐值允许跨群系边界出现台阶。
  */
 public final class ManaConcentration {
+    /**
+     * 维度档案做成常量：以前 {@link #profile(ResourceKey)} 每次都 {@code new} 一个 record，
+     * 而浓度查询是「每只生物每秒一次」级别的调用，白白制造垃圾。
+     */
+    private static final DimensionProfile OVERWORLD_PROFILE = new DimensionProfile(10.0, 0.25, 0x4F564552574F52L);
+    private static final DimensionProfile NETHER_PROFILE = new DimensionProfile(8.0, 0.35, 0x4E45544845524CL);
+    private static final DimensionProfile END_PROFILE = new DimensionProfile(1.0, 0.05, 0x454E444D414E41L);
+
+    /**
+     * 群系偏移缓存的容量上限。群系由数据包定义，正常世界几十到几百个；
+     * 留出余量后如果还超（反复重载数据包），直接整表清空重来，不会无限涨。
+     */
+    private static final int BIOME_CACHE_LIMIT = 4096;
+
+    /**
+     * 群系 → [0,1) 盐值的缓存。
+     *
+     * <p>原来每次查浓度都要把 {@code ResourceLocation} 转成字符串再算一遍哈希，
+     * 等于每只生物每秒新建一个字符串。这里把「群系 → 盐值」缓存起来，结果是纯函数，永远不会过期。</p>
+     */
+    private static final Map<ResourceLocation, Double> BIOME_UNIT_CACHE = new ConcurrentHashMap<>();
+
+    /** 紫水晶类方块：调色板预筛和实际扫描必须用同一套判定，两边不能各写一份。 */
+    private static final Predicate<BlockState> AMETHYST_BLOCK = state ->
+            state.is(Blocks.AMETHYST_BLOCK) || state.is(Blocks.BUDDING_AMETHYST)
+                    || state.is(Blocks.AMETHYST_CLUSTER) || state.is(Blocks.LARGE_AMETHYST_BUD);
+
     public static double at(ServerLevel level, BlockPos pos) {
         DimensionProfile profile = profile(level);
         double smoothNoise = smoothValueNoise(level.getSeed() ^ profile.salt, pos.getX() / 16.0, pos.getZ() / 16.0);
@@ -66,14 +101,25 @@ public final class ManaConcentration {
     }
 
     private static DimensionProfile profile(ResourceKey<Level> dimension) {
-        if (dimension == Level.NETHER) return new DimensionProfile(8.0, 0.35, 0x4E45544845524CL);
-        if (dimension == Level.END) return new DimensionProfile(1.0, 0.05, 0x454E444D414E41L);
-        return new DimensionProfile(10.0, 0.25, 0x4F564552574F52L);
+        if (dimension == Level.NETHER) return NETHER_PROFILE;
+        if (dimension == Level.END) return END_PROFILE;
+        return OVERWORLD_PROFILE;
     }
 
     private static double biomeShift(Holder<Biome> biome, double variation) {
-        long hash = biome.unwrapKey().map(ResourceKey::location).map(Object::toString).map(ManaConcentration::hashString).orElse(0L);
-        return ((toUnit(hash) * 2.0) - 1.0) * variation * 0.32;
+        return ((biomeUnit(biome) * 2.0) - 1.0) * variation * 0.32;
+    }
+
+    /** 群系盐值：同一次数据包加载里固定不变，所以缓存起来重复用，不必每次重算字符串哈希。 */
+    private static double biomeUnit(Holder<Biome> biome) {
+        ResourceLocation id = biome.unwrapKey().map(ResourceKey::location).orElse(null);
+        if (id == null) return toUnit(0L);
+        Double cached = BIOME_UNIT_CACHE.get(id);
+        if (cached != null) return cached;
+        double value = toUnit(hashString(id.toString()));
+        if (BIOME_UNIT_CACHE.size() >= BIOME_CACHE_LIMIT) BIOME_UNIT_CACHE.clear();
+        BIOME_UNIT_CACHE.put(id, value);
+        return value;
     }
 
     private static double smoothValueNoise(long seed, double chunkX, double chunkZ) {
@@ -92,6 +138,10 @@ public final class ManaConcentration {
     }
 
     private static boolean isInsideAmethystGeode(ServerLevel level, BlockPos center) {
+        // 先问区块段的调色板：旁边这些段里连一块紫水晶都没有时，下面 125 格扫描一次都不用跑。
+        // 这是浓度查询里最贵的一段（每只生物每秒都会走到这里），预筛把它变成了几次调色板比对。
+        Boolean mayContain = sectionsMayContainAmethyst(level, center);
+        if (mayContain != null && !mayContain) return false;
         int amethyst = 0;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (int x = -8; x <= 8; x += 4) {
@@ -100,14 +150,48 @@ public final class ManaConcentration {
                     cursor.setWithOffset(center, x, y, z);
                     if (!level.isLoaded(cursor)) continue;
                     var state = level.getBlockState(cursor);
-                    if (state.is(Blocks.AMETHYST_BLOCK) || state.is(Blocks.BUDDING_AMETHYST)
-                            || state.is(Blocks.AMETHYST_CLUSTER) || state.is(Blocks.LARGE_AMETHYST_BUD)) {
+                    if (AMETHYST_BLOCK.test(state)) {
                         if (++amethyst >= 4) return true;
                     }
                 }
             }
         }
         return false;
+    }
+
+    /**
+     * 中心点 ±8 格覆盖到的区块段里，有没有任何一段「可能出现」紫水晶方块。
+     *
+     * @return {@code TRUE} 可能有（要继续实扫）、{@code FALSE} 肯定没有、
+     *         {@code null} 有区块还没加载好、判断不了（调用方按原来的方式老实扫）
+     */
+    private static Boolean sectionsMayContainAmethyst(ServerLevel level, BlockPos center) {
+        int minChunkX = (center.getX() - 8) >> 4;
+        int maxChunkX = (center.getX() + 8) >> 4;
+        int minChunkZ = (center.getZ() - 8) >> 4;
+        int maxChunkZ = (center.getZ() + 8) >> 4;
+        int minSectionY = (center.getY() - 8) >> 4;
+        int maxSectionY = (center.getY() + 8) >> 4;
+        boolean unknown = false;
+        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                LevelChunk chunk = level.getChunkSource().getChunkNow(chunkX, chunkZ);
+                if (chunk == null) {
+                    // 区块还没加载（比如实体站在区块边界）：判断不了，别拿「没有」当结论。
+                    unknown = true;
+                    continue;
+                }
+                LevelChunkSection[] sections = chunk.getSections();
+                for (int sectionY = minSectionY; sectionY <= maxSectionY; sectionY++) {
+                    int index = level.getSectionIndex(sectionY << 4);
+                    if (index < 0 || index >= sections.length) continue;
+                    LevelChunkSection section = sections[index];
+                    if (section == null || section.hasOnlyAir()) continue;
+                    if (section.maybeHas(AMETHYST_BLOCK)) return Boolean.TRUE;
+                }
+            }
+        }
+        return unknown ? null : Boolean.FALSE;
     }
 
     private static double smoothstep(double value) {

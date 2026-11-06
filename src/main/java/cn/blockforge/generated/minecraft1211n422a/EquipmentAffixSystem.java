@@ -346,15 +346,26 @@ public final class EquipmentAffixSystem {
             for (ItemEntity itemEntity : event.getDrops()) markPlayerDrop(itemEntity.getItem());
             return;
         }
-        Grade grade = gradeFor(entity);
-        School forced = forcedSchool(entity);
-        for (ItemEntity itemEntity : event.getDrops()) {
-            ItemStack stack = itemEntity.getItem();
-            if (!isEquipment(stack) || hasAffix(stack)) continue;
-            apply(stack, grade, forced == null ? schoolFor(stack, entity.getRandom()) : forced, entity.getRandom(), entity);
-            itemEntity.setItem(stack);
+        // 先判「这是不是会掉保底装备的 Boss」，再决定要不要去做 32 格玩家查询：
+        // 以前是每只生物死亡都查一次，刷怪塔里一秒几十只的时候这笔开销纯属白花。
+        boolean boss = isBossEntity(entity);
+        if (!event.getDrops().isEmpty()) {
+            Grade grade = gradeFor(entity);
+            School forced = forcedSchool(entity);
+            for (ItemEntity itemEntity : event.getDrops()) {
+                ItemStack stack = itemEntity.getItem();
+                if (!isEquipment(stack) || hasAffix(stack)) continue;
+                apply(stack, grade, forced == null ? schoolFor(stack, entity.getRandom()) : forced, entity.getRandom(), entity);
+                itemEntity.setItem(stack);
+            }
         }
-        if (killedByPlayer(event)) addBossEquipmentDrop(event);
+        if (boss && killedByPlayer(event)) addBossEquipmentDrop(event);
+    }
+
+    /** 会有「保底高品质装备」的四种 Boss；普通生物一律直接跳过那条判定。 */
+    private static boolean isBossEntity(LivingEntity entity) {
+        return entity instanceof CorruptedWither || entity instanceof WanderingSwordmaster
+                || entity instanceof EnderDragon || entity instanceof WitherBoss;
     }
 
     /**
