@@ -57,9 +57,9 @@ public final class EtchedSlateItem extends Item {
         super.appendHoverText(stack, context, tooltip, flag);
         MagicCircleBlueprint blueprint = blueprintOf(stack);
         if (blueprint != null) {
-            tooltip.add(Component.literal(blueprint.name()).withStyle(ChatFormatting.GOLD));
+            tooltip.add(MagicCircleBlueprint.displayName(blueprint.name()).copy().withStyle(ChatFormatting.GOLD));
             tooltip.addAll(blueprint.describe());
-            tooltip.add(Component.literal(blueprint.blockSummary()).withStyle(ChatFormatting.LIGHT_PURPLE));
+            tooltip.add(blueprint.blockSummary().copy().withStyle(ChatFormatting.LIGHT_PURPLE));
             tooltip.add(Component.translatable("tooltip.dimensional_mana.magiccircle.node.title")
                     .withStyle(ChatFormatting.GOLD));
             tooltip.addAll(blueprint.nodeDetailLines(8));

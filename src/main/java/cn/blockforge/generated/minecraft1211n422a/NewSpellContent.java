@@ -19,6 +19,7 @@ public final class NewSpellContent {
     public static final DeferredHolder<MobEffect, MobEffect> STUN = effect("spell_stun", false, 0xFFE471);
     public static final DeferredHolder<MobEffect, MobEffect> FROST = effect("frost_trail", false, 0xA8E5FF);
     public static final DeferredHolder<MobEffect, MobEffect> MUD = effect("mud_swamp", false, 0x806542);
+    public static final DeferredHolder<MobEffect, MobEffect> WOUNDED = effect("wounded", false, 0xB83A3A);
     public static final DeferredHolder<MobEffect, MobEffect> VINE_SLOW = effect("vine_slow", false, 0x63A647);
     public static final DeferredHolder<MobEffect, MobEffect> LIGHTNESS = effect("lightness", true, 0xBAFFDB);
     public static final DeferredHolder<MobEffect, MobEffect> LIFE_BLESSING = effect("life_blessing", true, 0x75E86F);

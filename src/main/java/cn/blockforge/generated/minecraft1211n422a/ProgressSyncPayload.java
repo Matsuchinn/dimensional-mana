@@ -10,7 +10,8 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 
 public record ProgressSyncPayload(int magicLevel, long magicExperience, int requiredExperience,
                                   int skillPoints, int spentSkillPoints, int[] skillLevels,
-                                  double affinity, double concentration, int dailyGrowths) implements CustomPacketPayload {
+                                  double affinity, double concentration, int dailyGrowths,
+                                  float elementalMastery) implements CustomPacketPayload {
     public static final Type<ProgressSyncPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
             GeneratedMod.MOD_ID, "progress_sync"));
     public static final StreamCodec<RegistryFriendlyByteBuf, ProgressSyncPayload> STREAM_CODEC = StreamCodec.of(
@@ -25,6 +26,7 @@ public record ProgressSyncPayload(int magicLevel, long magicExperience, int requ
                 buf.writeDouble(payload.affinity());
                 buf.writeDouble(payload.concentration());
                 buf.writeVarInt(payload.dailyGrowths());
+                buf.writeFloat(payload.elementalMastery());
             },
             buf -> {
                 int level = buf.readVarInt();
@@ -32,11 +34,11 @@ public record ProgressSyncPayload(int magicLevel, long magicExperience, int requ
                 int required = buf.readVarInt();
                 int points = buf.readVarInt();
                 int spent = buf.readVarInt();
-                int length = Math.min(32, buf.readVarInt());
+                int length = Math.max(0, Math.min(32, buf.readVarInt()));
                 int[] skills = new int[length];
                 for (int i = 0; i < length; i++) skills[i] = buf.readVarInt();
                 return new ProgressSyncPayload(level, experience, required, points, spent, skills,
-                        buf.readDouble(), buf.readDouble(), buf.readVarInt());
+                        buf.readDouble(), buf.readDouble(), buf.readVarInt(), buf.readFloat());
             }
     );
 
@@ -54,7 +56,7 @@ public record ProgressSyncPayload(int magicLevel, long magicExperience, int requ
                 MagicProgression.requirementForNextLevel(progress.magicLevel()), progress.skillPoints(),
                 progress.spentSkillPoints(), progress.skills().clone(),
                 mana.affinity() * MagicEquipment.affinityMultiplier(player), concentration,
-                progress.dailyExhaustionGrowths());
+                progress.dailyExhaustionGrowths(), ElementMastery.get(player));
     }
 
     public static void send(ServerPlayer player) {

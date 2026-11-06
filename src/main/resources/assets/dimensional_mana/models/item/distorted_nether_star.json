@@ -1,6 +1,13 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "dimensional_mana:item/distorted_nether_star"
-  }
+    "layer0": "dimensional_mana:item/distorted_nether_star_0"
+  },
+  "overrides": [
+    {"predicate": {"dimensional_mana:frame": 0.0}, "model": "dimensional_mana:item/distorted_nether_star_0"},
+    {"predicate": {"dimensional_mana:frame": 1.0}, "model": "dimensional_mana:item/distorted_nether_star_1"},
+    {"predicate": {"dimensional_mana:frame": 2.0}, "model": "dimensional_mana:item/distorted_nether_star_2"},
+    {"predicate": {"dimensional_mana:frame": 3.0}, "model": "dimensional_mana:item/distorted_nether_star_3"},
+    {"predicate": {"dimensional_mana:frame": 4.0}, "model": "dimensional_mana:item/distorted_nether_star_4"}
+  ]
 }

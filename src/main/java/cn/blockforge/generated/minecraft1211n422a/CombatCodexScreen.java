@@ -179,8 +179,10 @@ public final class CombatCodexScreen extends Screen {
         double speed = attackSpeed == null ? 0.0 : attackSpeed.getValue();
         drawRow(graphics, rightX, y += 15, "gui.dimensional_mana.combat_codex.attack_speed",
                 String.format(java.util.Locale.ROOT, "%.2f", speed), "gui.dimensional_mana.combat_codex.attack_speed.source");
-        double critChance = minecraft.level == null ? 0.0 : CriticalSystem.chance(minecraft.level.getDifficulty());
-        double critDamage = minecraft.level == null ? 1.0 : CriticalSystem.multiplier(minecraft.level.getDifficulty());
+        double critChance = minecraft.level == null ? 0.0
+                : CriticalSystem.chance(minecraft.level.getDifficulty(), player);
+        double critDamage = minecraft.level == null ? 1.0
+                : CriticalSystem.multiplier(minecraft.level.getDifficulty(), player);
         drawRow(graphics, rightX, y += 15, "gui.dimensional_mana.combat_codex.crit_chance",
                 String.format(java.util.Locale.ROOT, "%.0f%%", critChance * 100.0),
                 "gui.dimensional_mana.combat_codex.crit_chance.source");
@@ -195,8 +197,10 @@ public final class CombatCodexScreen extends Screen {
         TextFit.left(graphics, font, Component.translatable("gui.dimensional_mana.combat_codex.section.defense"),
                 leftX, y, 190, 0xFFFFC46B, false);
         y += 13;
+        // 完美格挡窗口现在会被「招架特化」词条拉长，这里显示自己实际的 tick 数（属性已同步到客户端）。
+        net.minecraft.world.entity.player.Player codexPlayer = net.minecraft.client.Minecraft.getInstance().player;
         drawRow(graphics, leftX, y, "gui.dimensional_mana.combat_codex.perfect_window",
-                BattleQiParry.PERFECT_WINDOW_TICKS + " tick",
+                BattleQiParry.perfectWindowTicks(codexPlayer) + " tick",
                 "gui.dimensional_mana.combat_codex.perfect_window.source");
         double parry = (1.0 - BattleQiParry.STANCE_DAMAGE_MULTIPLIER) * 100.0
                 + ClientQiState.skill(QiProgression.Skill.IRON_WALL) * 2.0;

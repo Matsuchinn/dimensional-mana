@@ -105,7 +105,8 @@ public final class QiSkills {
         Vec3 origin = player.position();
         Vec3 forward = forwardOf(player);
         float damage = (float)((0.8 * player.getAttributeValue(Attributes.ATTACK_DAMAGE) + 2.0)
-                * QiProgression.swordAuraMultiplier(player));
+                * QiProgression.swordAuraMultiplier(player)
+                * EquipmentAffixSystem.battleQiSkillMultiplier(player));
         int hits = 0;
         for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class,
                 player.getBoundingBox().inflate(IAI_RANGE + 1.5),
@@ -214,7 +215,8 @@ public final class QiSkills {
         }
         PENDING_SWORD_QI.remove(player.getUUID());
         float damage = (float)((1.5 * player.getAttributeValue(Attributes.ATTACK_DAMAGE) + 2.0)
-                * QiProgression.swordAuraMultiplier(player));
+                * QiProgression.swordAuraMultiplier(player)
+                * EquipmentAffixSystem.battleQiSkillMultiplier(player));
         // 无视护甲的物理段：走模组的穿透伤害类型，同样无视受击冷却，不会被前一刀的无敌帧吞掉。
         SpellDamage.hitResolved(player.level(), player, victim, damage);
         if (player.level() instanceof ServerLevel level) {
@@ -282,19 +284,24 @@ public final class QiSkills {
     }
 
     /**
-     * 自然斗气恢复：只有戴着剑士护符才有，1.0 点/秒，并且同步消耗等量魔素（1 点斗气 = 1 点魔素）。
+     * 自然斗气恢复：来源有两处——剑士护符固定 1.0 点/秒，以及「斗气额外恢复」词条每点 +0.15 点/秒；
+     * 两条相加后同步消耗等量魔素（1 点斗气 = 1 点魔素）。
      *
      * <p>「回气」不再参与自然恢复，它只在玩家凝聚斗气时生效（见 {@link ManaData#condenseBattleQi}）。
      * 魔素不够付的那一秒不恢复，也不把额度攒到以后；斗气溃散期间同样不恢复。</p>
      */
     private static void tickRegen(ServerPlayer player, long now) {
         if (now % 20L != 0L) return;
-        if (!SwordsmanCharmItem.worn(player)) return;
         if (player.hasEffect(GeneratedMod.BATTLE_QI_COLLAPSE)) return;
+        // 自然恢复有两条来源：剑士护符的固定 1.0/s，以及「斗气额外恢复」词条（每点 +0.15/s）。
+        // 两条都走同一本账（恢复 1 点斗气同样扣 1 点魔素），词条让不带护符的玩家也能自然回气。
+        double perSecond = (SwordsmanCharmItem.worn(player) ? SwordsmanCharmItem.REGEN_PER_SECOND : 0.0)
+                + EquipmentAffixSystem.battleQiRegenBonus(player);
+        if (perSecond <= 0.0) return;
         ManaData.Snapshot data = ManaData.get(player);
         if (data.battleQi() >= data.maxBattleQi()) return;
         var root = player.getPersistentData().getCompound(ManaData.ROOT_TAG);
-        double carry = root.getDouble("qiRegenCarry") + SwordsmanCharmItem.REGEN_PER_SECOND;
+        double carry = root.getDouble("qiRegenCarry") + perSecond;
         int whole = (int)Math.floor(carry);
         root.putDouble("qiRegenCarry", carry - whole);
         if (whole <= 0) return;

@@ -18,6 +18,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.event.entity.living.MobEffectEvent;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -45,11 +46,19 @@ public final class ElementReactionSystem {
     private static final Map<UUID, TimedCasterState> CORRUPTED = new HashMap<>();
     private static final Map<UUID, TimedCasterState> SPREADING = new HashMap<>();
     private static final Map<UUID, Long> FROZEN = new HashMap<>();
+    private static final Map<UUID, Float> FROZEN_MASTERY = new HashMap<>();
     /** 零下领域的深层冻结：4 次直接攻击才会解除，每 4 秒刷新冰附着。 */
     private static final Map<UUID, DeepFreeze> DEEP_FROZEN = new HashMap<>();
     private static final int DEEP_FREEZE_HITS = 4;
     private static final int DEEP_FREEZE_REFRESH = 80;
     private static final Map<UUID, Long> BLINDED = new HashMap<>();
+    /**
+     * 兜底附着表：给「连强制附加都吞掉」的实体（极少数模组实体会重写 addEffect）留一条后路。
+     * 正常路径走真实的 {@link MobEffectInstance}，这张表只在药效压根没挂上时才用。
+     * 键 = 实体 UUID，值 = 元素 → 到期游戏刻；奥术附着用 {@link #SHADOW_ARCANE}。
+     */
+    private static final Map<UUID, Map<ElementType, Long>> SHADOW = new HashMap<>();
+    private static final Map<UUID, Long> SHADOW_ARCANE = new HashMap<>();
     private static final List<PendingAreaDamage> PENDING_DAMAGE = new ArrayList<>();
     private static final List<PendingEchoDamage> PENDING_ECHO_DAMAGE = new ArrayList<>();
     private static final ResourceLocation SUPERCONDUCT_ARMOR = id("superconduct_armor");
@@ -96,9 +105,15 @@ public final class ElementReactionSystem {
                                             boolean protectPlayers) {
         if (incoming == null || !target.isAlive()) return new ElementalHit(damage, null);
         long now = target.level().getGameTime();
+        float mastery = ElementMastery.get(caster);
+        int masteryLevel = ElementMastery.level(mastery);
         // 元素结晶戒指：对应元素的法术伤害 +14%（每枚独立叠加）。
         double ringDamage = MagicEquipment.spellDamageMultiplier(caster, incoming.id());
         if (ringDamage != 1.0) damage *= (float)ringDamage;
+        if (caster instanceof Player player) {
+            double affixDamage = EquipmentAffixSystem.elementalDamageMultiplier(player, incoming.id());
+            if (affixDamage != 1.0) damage *= (float)affixDamage;
+        }
         // 共鸣核心：充能提供的对应元素增伤是独立乘区。
         double coreDamage = ResonanceCore.spellDamageMultiplier(caster, incoming.id());
         if (coreDamage != 1.0) damage *= (float)coreDamage;
@@ -146,14 +161,15 @@ public final class ElementReactionSystem {
         float beforeReaction = damage;
         float reactionDamage = 0.0F;
         switch (reaction) {
-            case VAPORIZE -> { damage *= 2.0F; reactionDamage = damage; }
+            case VAPORIZE -> { damage *= ElementMastery.amplifyMultiplier(mastery); reactionDamage = damage; }
             case MELT -> {
-                // 铁傀儡的「融化反应易伤 25%」：在融化反应本身的倍率上再乘一次独立乘区。
-                damage *= (float)(1.8 * (1.0 + MobCombatSystem.reactionVulnerability(target, "melt")));
+                // 融化易伤与元素精通分别作为独立乘区。
+                damage *= (float)(1.0 + MobCombatSystem.reactionVulnerability(target, "melt"));
+                damage *= ElementMastery.amplifyMultiplier(mastery);
                 reactionDamage = damage;
             }
             case OVERLOAD -> {
-                reactionDamage = damage * 2.5F;
+                reactionDamage = damage * 2.5F * ElementMastery.dramaticMultiplier(mastery);
                 PENDING_DAMAGE.add(new PendingAreaDamage(caster.getUUID(), target.getUUID(), server(target),
                         reactionDamage, now + 1, protectPlayers));
                 knockFrom(target.position(), target, 1.1);
@@ -165,66 +181,96 @@ public final class ElementReactionSystem {
                     damage = 0.0F;
                     reactionDamage = 0.0F;
                 } else {
-                    reactionDamage = damage * 0.24F;
+                    reactionDamage = damage * 0.24F * ElementMastery.dramaticMultiplier(mastery);
                     chain(caster, target, ElementType.WATER, ElementType.LIGHTNING, reactionDamage, 5, 8.0, 0.90F,
                             protectPlayers);
                 }
             }
             case SUPERCONDUCT -> {
-                damage *= 1.5F;
+                damage *= 1.5F * ElementMastery.dramaticMultiplier(mastery);
                 reactionDamage = damage;
                 // 金钟罩期间免疫破甲：超导的降护甲挂不上，反应本身的伤害加成照常。
                 if (!MetalSpells.immuneToArmorBreak(target))
                     timedModifier(target, Attributes.ARMOR, SUPERCONDUCT_ARMOR, -0.50,
                             AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, 160);
             }
-            case CATALYZE -> { damage *= 1.4F; reactionDamage = damage; }
+            case CATALYZE -> { damage *= 1.4F * ElementMastery.dramaticMultiplier(mastery); reactionDamage = damage; }
             case FREEZE -> {
                 reactionDamage = damage;
                 // 雨衣：受到的冻结时长减半（定身、减速与冰壳外观一起缩短）。
-                int frozenTicks = RainCoatItem.freezeTicks(target, FREEZE_TICKS);
+                int frozenTicks = RainCoatItem.freezeTicks(target, ElementMastery.extendDuration(FREEZE_TICKS, mastery));
                 FROZEN.put(target.getUUID(), now + frozenTicks);
+                FROZEN_MASTERY.put(target.getUUID(), mastery);
                 freezeSolid(target);
                 target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, frozenTicks, 9, false, true, true));
                 target.addEffect(new MobEffectInstance(MobEffects.DIG_SLOWDOWN, frozenTicks, 9, false, false, true));
             }
             case CHARGE -> target.addEffect(new MobEffectInstance(GeneratedMod.ARCANE_ECHO, ECHO_TICKS, 0, false, true, true));
-            case BURNING -> BURNING.put(target.getUUID(), new TimedCasterState(caster.getUUID(), now + 120, now + 20, true));
-            case CORRUPTION -> corruptPoison(caster, target, now);
+            case BURNING -> BURNING.put(target.getUUID(), new TimedCasterState(caster.getUUID(),
+                    now + ElementMastery.extendDuration(120, mastery), now + 20, true));
+            case CORRUPTION -> corruptPoison(caster, target, now, mastery);
             case SWIRL -> {
                 ElementType spread = incoming == ElementType.WIND ? match.existing() : incoming;
                 int duration = incoming == ElementType.WIND ? existingTicks : incomingTicks;
-                spreadAttachment(target, spread, 5.0, duration);
+                spreadAttachment(target, spread, 5.0, ElementMastery.extendDuration(duration, mastery));
+                float swirlExtra = damage * Math.max(0.0F, mastery) * 0.01F;
+                if (swirlExtra > 0.0F) {
+                    ServerLevel level = server(target);
+                    level.getEntitiesOfClass(LivingEntity.class, target.getBoundingBox().inflate(3.0 + masteryLevel),
+                            entity -> entity != target && entity != caster && entity.isAlive()).forEach(entity ->
+                            SpellDamage.hitResolvedElement(level, caster, entity, spread.id(), swirlExtra));
+                }
                 // 风爆步留下的“风袭”：扩散反应本身不额外结算伤害，但每次扩散都会引爆一次 48 点爆炸伤。
                 WindSpells.windAssaultBlast(caster, target);
             }
             case MIRE -> {
                 reactionDamage = damage;
-                // 雨靴：泥沼的减速与跳跃压制都挂不上，反应本身的伤害照常结算。
+                int duration = ElementMastery.extendDuration(60 + masteryLevel * 10, mastery);
+                // 雨靴：泥沼减速免疫，反应伤害仍然结算。
                 if (!RainBootsItem.worn(target)) {
-                    timedModifier(target, Attributes.MOVEMENT_SPEED, MIRE_SPEED, -0.60,
-                            AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, 100);
+                    double slow = Math.min(0.90, 0.40 + masteryLevel * 0.05);
+                    timedModifier(target, Attributes.MOVEMENT_SPEED, MIRE_SPEED, -slow,
+                            AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, duration);
                     timedModifier(target, Attributes.JUMP_STRENGTH, MIRE_JUMP, -0.50,
-                            AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, 100);
+                            AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, duration);
+                    if (masteryLevel >= 8) target.addEffect(new MobEffectInstance(NewSpellContent.STUN,
+                            ElementMastery.extendDuration(30, mastery), 0, false, true, true));
                 }
             }
-            case SPREAD -> SPREADING.put(target.getUUID(), new TimedCasterState(caster.getUUID(), now + 60, now + 20, false));
+            case SPREAD -> {
+                SPREADING.put(target.getUUID(), new TimedCasterState(caster.getUUID(),
+                        now + ElementMastery.extendDuration(60, mastery), now + 20, false));
+                spreadAttachment(target, incoming == ElementType.WATER ? ElementType.NATURE : incoming,
+                        3.0 + masteryLevel, ElementMastery.extendDuration(ElementType.NATURE.attachmentTicks(), mastery));
+            }
             case SMELT -> {
                 reactionDamage = damage;
-                // 金钟罩期间免疫破甲：熔蚀的降护甲挂不上，反应本身的伤害照样结算。
+                int duration = ElementMastery.extendDuration(100 + masteryLevel * 20, mastery);
+                double armorBreak = Math.min(0.75, 0.25 + masteryLevel * 0.05);
                 if (!MetalSpells.immuneToArmorBreak(target))
-                    timedModifier(target, Attributes.ARMOR, SMELT_ARMOR, -0.40,
-                            AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, 120);
+                    timedModifier(target, Attributes.ARMOR, SMELT_ARMOR, -armorBreak,
+                            AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL, duration);
+                if (masteryLevel == 10) target.addEffect(new MobEffectInstance(NewSpellContent.WOUNDED,
+                        duration, 0, false, true, true));
             }
-            case PURIFY -> { damage = purify(target, damage); reactionDamage = damage; }
+            case PURIFY -> {
+                damage = purify(target, damage, masteryLevel);
+                reactionDamage = damage;
+            }
             case SHOCKWAVE -> {
                 reactionDamage = damage * 0.15F;
                 chain(caster, target, null, ElementType.SOUND, reactionDamage, 5, 8.0, 1.0F, protectPlayers);
+                if (masteryLevel >= 5) target.addEffect(new MobEffectInstance(NewSpellContent.STUN,
+                        ElementMastery.extendDuration(20, mastery), 0, false, true, true));
+                knockFrom(target.position(), target, 3.0 + 0.5 * masteryLevel);
             }
             case BLIND -> {
                 reactionDamage = damage;
-                BLINDED.put(target.getUUID(), now + 60);
-                target.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 60, 0, false, true, true));
+                int duration = ElementMastery.extendDuration(60 + masteryLevel * 20, mastery);
+                BLINDED.put(target.getUUID(), now + duration);
+                target.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, duration, 0, false, true, true));
+                if (masteryLevel >= 6) target.addEffect(new MobEffectInstance(MobEffects.CONFUSION,
+                        duration, 0, false, true, true));
             }
         }
         // 元素结晶戒指：戒指元素参与了本次反应时，反应造成的伤害 +7%（每枚独立叠加）。
@@ -236,7 +282,8 @@ public final class ElementReactionSystem {
         if (echo && reactionDamage > 0.0F) {
             target.removeEffect(GeneratedMod.ARCANE_ECHO);
             PENDING_ECHO_DAMAGE.add(new PendingEchoDamage(
-                    caster.getUUID(), target.getUUID(), server(target), reactionDamage * 0.30F, now + 1));
+                    caster.getUUID(), target.getUUID(), server(target), reactionDamage
+                            * ElementMastery.chargeEchoMultiplier(mastery), now + 1));
         }
         // 植入寄生：每次元素反应都会额外触发一次强制激发（反应伤害 ×0.55 的木伤）。
         WoodSpells.parasiteReaction(caster, target, reactionDamage);
@@ -248,6 +295,10 @@ public final class ElementReactionSystem {
         applyArcane(caster, target);
         double ringDamage = MagicEquipment.spellDamageMultiplier(caster, MagicEquipment.ARCANE);
         if (ringDamage != 1.0) damage = (float)(damage * ringDamage);
+        if (caster instanceof Player player) {
+            double affixDamage = EquipmentAffixSystem.elementalDamageMultiplier(player, MagicEquipment.ARCANE);
+            if (affixDamage != 1.0) damage *= (float)affixDamage;
+        }
         double coreDamage = ResonanceCore.spellDamageMultiplier(caster, MagicEquipment.ARCANE);
         return coreDamage == 1.0 ? damage : (float)(damage * coreDamage);
     }
@@ -264,6 +315,8 @@ public final class ElementReactionSystem {
         LAST_REACTION.put(target.getUUID(), now);
         announceReaction(caster, target, Reaction.CHARGE);
         target.addEffect(new MobEffectInstance(GeneratedMod.ARCANE_ECHO, ECHO_TICKS, 0, false, true, true));
+        int masteryLevel = ElementMastery.level(ElementMastery.get(caster));
+        if (masteryLevel > 0) ManaData.restoreMana(caster, 5.0 * masteryLevel, false);
     }
 
     /** 供生物施法 AI 判断某个元素现在能否和目标身上的附着组成反应。 */
@@ -305,13 +358,18 @@ public final class ElementReactionSystem {
             // 持续期间静默维持冰冻值；每秒补发一次冰壳包（中途走进视野也能看到），
             // 碎裂声和冰晶爆发只在触发那一刻演一次，否则会一秒响二十次。
             keepFrozen(living, now);
-            if (living.canFreeze() && now % FREEZE_DAMAGE_INTERVAL == 0)
-                SpellDamage.apply(living, level.damageSources().freeze(), FREEZE_DAMAGE);
+            float frozenMastery = FROZEN_MASTERY.getOrDefault(living.getUUID(), 0.0F);
+            if (frozenMastery > 0.0F && living.canFreeze() && now % FREEZE_DAMAGE_INTERVAL == 0) {
+                float freezeDamage = ElementMastery.freezeDamage(frozenMastery);
+                if (SpellDamage.apply(living, level.damageSources().freeze(), freezeDamage))
+                    ReactionVisualPayload.send(living, "freeze_damage", 0xFFA8ECFF);
+            }
             if (now % 4 == 0) freezeCrystals(level, living);
         } else {
             // 冰晶状态结束：清掉冰冻值，客户端的发蓝外观跟着恢复（真在细雪里的话原版下一帧会再冻上）。
             if (FROZEN.remove(living.getUUID()) != null && living.getTicksFrozen() > 0)
                 living.setTicksFrozen(0);
+            FROZEN_MASTERY.remove(living.getUUID());
         }
         if (BLINDED.getOrDefault(living.getUUID(), 0L) <= now) BLINDED.remove(living.getUUID());
         DeepFreeze deep = DEEP_FROZEN.get(living.getUUID());
@@ -468,6 +526,45 @@ public final class ElementReactionSystem {
                 && attacker.getRandom().nextBoolean();
     }
 
+    public static boolean frozen(LivingEntity target) {
+        return target != null && FROZEN.getOrDefault(target.getUUID(), 0L) > target.level().getGameTime();
+    }
+
+    /** 碎冰：物理冲击解除冻结，并按本次已结算伤害追加独立伤害。 */
+    public static void shatterFrozen(LivingEntity target, DamageSource source, float finalDamage) {
+        if (target == null || !frozen(target) || finalDamage <= 0.0F) return;
+        if (target.getPersistentData().getBoolean("DimensionalManaShatterDamage")) return;
+        CombatElement.Kind kind = CombatElement.kindOf(source);
+        if (kind != CombatElement.Kind.PHYSICAL && kind != CombatElement.Kind.EXPLOSION) return;
+        if (kind == CombatElement.Kind.PHYSICAL && source.getDirectEntity() != source.getEntity()
+                && !(source.getDirectEntity() instanceof net.minecraft.world.entity.projectile.AbstractArrow)) return;
+        LivingEntity attacker = source.getEntity() instanceof LivingEntity living ? living : null;
+        // 碎冰的精通只属于这次造成物理冲击的攻击者。不能回退到冻结时保存的施法者精通，
+        // 否则玩家自己先给自己附冰后，被别的玩家/生物打碎时，会错误使用玩家自己的 EM。
+        float mastery = attacker == null ? 0.0F : ElementMastery.get(attacker);
+        float extra = finalDamage * 0.40F * ElementMastery.dotMultiplier(mastery)
+                * CriticalSystem.recentCriticalMultiplier(target);
+        FROZEN.remove(target.getUUID());
+        FROZEN_MASTERY.remove(target.getUUID());
+        target.removeEffect(MobEffects.MOVEMENT_SLOWDOWN);
+        target.removeEffect(MobEffects.DIG_SLOWDOWN);
+        target.setTicksFrozen(0);
+        target.getPersistentData().putBoolean("DimensionalManaShatterDamage", true);
+        try {
+            target.hurt(target.damageSources().generic(), extra);
+        } finally {
+            target.getPersistentData().remove("DimensionalManaShatterDamage");
+        }
+        if (target.level() instanceof ServerLevel level) {
+            ReactionVisualPayload.send(target, "shatter", 0xFFD8FAFF);
+            Vec3 at = target.getBoundingBox().getCenter();
+            level.sendParticles(net.minecraft.core.particles.ParticleTypes.ITEM_SNOWBALL, at.x, at.y, at.z,
+                    18, 0.45, 0.55, 0.45, 0.08);
+            level.playSound(null, at.x, at.y, at.z, net.minecraft.sounds.SoundEvents.GLASS_BREAK,
+                    net.minecraft.sounds.SoundSource.HOSTILE, 1.0F, 1.25F);
+        }
+    }
+
     /** 超导对物理打击补足“护甲降到零以下则转为易伤”的效果。 */
     public static float modifyPhysicalDamage(LivingEntity victim, DamageSource source, float damage) {
         if (victim.getPersistentData().getLong(modifierKey(SUPERCONDUCT_ARMOR)) <= victim.level().getGameTime()) return damage;
@@ -479,7 +576,8 @@ public final class ElementReactionSystem {
 
     public static void clearAll() {
         LAST_REACTION.clear(); BURNING.clear(); CORRUPTED.clear(); SPREADING.clear();
-        FROZEN.clear(); DEEP_FROZEN.clear(); BLINDED.clear(); PENDING_DAMAGE.clear(); PENDING_ECHO_DAMAGE.clear();
+        FROZEN.clear(); FROZEN_MASTERY.clear(); DEEP_FROZEN.clear(); BLINDED.clear(); PENDING_DAMAGE.clear(); PENDING_ECHO_DAMAGE.clear();
+        SHADOW.clear(); SHADOW_ARCANE.clear();
     }
 
     private static void awardReactionAdvancements(LivingEntity caster, Reaction reaction) {
@@ -497,7 +595,7 @@ public final class ElementReactionSystem {
         // 充能放在冻结之后，因此火、水、奥术共存时仍会优先得到蒸发。
         for (Reaction reaction : Reaction.priorityOrder()) {
             if (reaction == Reaction.CHARGE) {
-                if (target.hasEffect(GeneratedMod.ARCANE_ATTACHMENT)) return new Match(reaction, incoming);
+                if (hasArcaneAttachment(target)) return new Match(reaction, incoming);
                 continue;
             }
             for (ElementType existing : ElementType.values()) {
@@ -508,6 +606,17 @@ public final class ElementReactionSystem {
             }
         }
         return null;
+    }
+
+    /** 目标身上有没有奥术附着（真实药效优先，免疫实体看影子表）。 */
+    private static boolean hasArcaneAttachment(LivingEntity target) {
+        if (target.hasEffect(GeneratedMod.ARCANE_ATTACHMENT)) return true;
+        if (target.level().isClientSide) return false;
+        Long until = SHADOW_ARCANE.get(target.getUUID());
+        if (until == null) return false;
+        if (until > target.level().getGameTime()) return true;
+        SHADOW_ARCANE.remove(target.getUUID());
+        return false;
     }
 
     /** 两种元素相撞会得到哪个反应；没有反应返回 {@code null}（同元素也不算）。 */
@@ -534,8 +643,8 @@ public final class ElementReactionSystem {
 
     private static void charge(LivingEntity target, ElementType element, int elementTicks) {
         target.removeEffect(GeneratedMod.ARCANE_ATTACHMENT);
-        int cap = element.shortAttachment() ? 15 * 20 : 25 * 20;
-        replace(target, element, Math.min(cap, Math.max(1, elementTicks) * 2));
+        SHADOW_ARCANE.remove(target.getUUID());
+        replace(target, element, Math.min(element.maxAttachmentTicks(), Math.max(1, elementTicks) * 2));
     }
 
     private static void attachArcane(LivingEntity caster, LivingEntity target) {
@@ -544,6 +653,10 @@ public final class ElementReactionSystem {
         MobEffectInstance old = target.getEffect(GeneratedMod.ARCANE_ATTACHMENT);
         int duration = old == null ? ticks : Math.max(old.getDuration(), ticks);
         target.addEffect(new MobEffectInstance(GeneratedMod.ARCANE_ATTACHMENT, duration, 0, false, true, true));
+        if (target.getEffect(GeneratedMod.ARCANE_ATTACHMENT) == null && !target.level().isClientSide) {
+            long until = target.level().getGameTime() + Math.max(1, duration);
+            SHADOW_ARCANE.merge(target.getUUID(), until, Math::max);
+        }
     }
 
     /** 附着时长 = 元素基础时长 × 施法者对应元素戒指加成。 */
@@ -615,18 +728,71 @@ public final class ElementReactionSystem {
     /** 给目标挂上元素附着（已有附着时取更长时长）；法阵触发块的元素槽也走这里。 */
     public static void attach(LivingEntity target, ElementType element, int ticks) {
         Holder<MobEffect> effect = GeneratedMod.elementEffect(element);
-        int adjusted = targetAttachmentTicks(target, element, ticks);
+        int cap = element.maxAttachmentTicks();
+        int adjusted = Math.min(cap, targetAttachmentTicks(target, element, ticks));
         MobEffectInstance old = target.getEffect(effect);
-        int duration = old == null ? adjusted : Math.max(old.getDuration(), adjusted);
-        target.addEffect(new MobEffectInstance(effect, duration, 0, false, true, true));
+        int duration = old == null ? adjusted : Math.min(cap, Math.max(old.getDuration(), adjusted));
+        target.addEffect(new MobEffectInstance(effect, Math.max(1, duration), 0, false, true, true));
+        // 免疫 / 被别的模组拦下的实体：药效挂不上就走影子表，反应照样能结算。
+        if (target.getEffect(effect) == null) shadowAttach(target, element, duration);
+        else shadowRemove(target, element);
+    }
+
+    /**
+     * 元素附着与全部法术状态强制存在：无视「亡灵不吃药、凋零 / 末影龙 / 监守者不吃任何药效、
+     * 别的模组自定义免疫」这类判定，让十二种元素附着、奥术附着，以及光 / 木 / 毒 / 雷 / 风 /
+     * 冰 / 音这些高级魔法留下的高级状态（光蚀、寄生、猛毒、鸩毒、爆震、风袭、深层冻结……）
+     * 真正落到目标身上。
+     *
+     * <p>原版在 {@code MobEffectEvent.Applicable} 的默认结果里才去问 {@code canBeAffected}，
+     * 因此这里直接给出「可以附加」的结果，附着层数、反应判定、界面状态栏就都有真实数据了。
+     * 用 {@code EventPriority.LOWEST} 注册，保证别的模组先表态后我们再兜底放行。</p>
+     *
+     * <p><b>只对非玩家生效</b>：玩家本来就不存在「药水免疫」，而神圣庇护、奥萝拉护符这些
+     * 玩家侧的免疫是设计好的防御手段，不能被这里的兜底放行推翻。</p>
+     */
+    public static void allowForcedAttachment(MobEffectEvent.Applicable event) {
+        MobEffectInstance instance = event.getEffectInstance();
+        if (instance == null) return;
+        LivingEntity entity = event.getEntity();
+        if (entity.level().isClientSide) return;
+        if (entity instanceof net.minecraft.world.entity.player.Player) return;
+        if (isForcedSpellEffect(instance.getEffect())) event.setResult(MobEffectEvent.Applicable.Result.APPLY);
+    }
+
+    /**
+     * 这条药效算不算「本模组必须要落地」的法术状态。
+     *
+     * <p>{@link SpellStatusEffect} 是 {@link NewSpellContent} 里全部法术状态的基类，
+     * 光蚀 / 寄生 / 猛毒 / 鸩毒 / 爆震 / 风袭 / 磐石外壳 / 伏特状态等等都走它；
+     * 再加上十二种元素附着与奥术附着，以及魔蚀凋零的【魔蚀】。</p>
+     */
+    private static boolean isForcedSpellEffect(Holder<MobEffect> effect) {
+        if (effect == null) return false;
+        if (isElementAttachment(effect)) return true;
+        MobEffect value = effect.value();
+        if (value instanceof SpellStatusEffect) return true;
+        return GeneratedMod.MAGIC_EROSION != null && value == GeneratedMod.MAGIC_EROSION.value();
+    }
+
+    /** 这个药效是不是本模组的元素附着（十二种元素 + 奥术附着）。 */
+    private static boolean isElementAttachment(Holder<MobEffect> effect) {
+        if (effect == null) return false;
+        if (GeneratedMod.ARCANE_ATTACHMENT != null && effect.value() == GeneratedMod.ARCANE_ATTACHMENT.value()) return true;
+        for (ElementType element : ElementType.values()) {
+            Holder<MobEffect> held = GeneratedMod.elementEffect(element);
+            if (held != null && held.value() == effect.value()) return true;
+        }
+        return false;
     }
 
     /** 精确改写反应后的剩余时长；与 attach 的“只取更长时长”语义分开。 */
     private static void replace(LivingEntity target, ElementType element, int ticks) {
         remove(target, element);
         Holder<MobEffect> effect = GeneratedMod.elementEffect(element);
-        target.addEffect(new MobEffectInstance(effect,
-                Math.max(1, targetAttachmentTicks(target, element, ticks)), 0, false, true, true));
+        int duration = Math.min(element.maxAttachmentTicks(), targetAttachmentTicks(target, element, ticks));
+        target.addEffect(new MobEffectInstance(effect, Math.max(1, duration), 0, false, true, true));
+        if (target.getEffect(effect) == null) shadowAttach(target, element, duration);
     }
 
     /**
@@ -644,11 +810,56 @@ public final class ElementReactionSystem {
 
     private static void remove(LivingEntity target, ElementType element) {
         target.removeEffect(GeneratedMod.elementEffect(element));
+        shadowRemove(target, element);
     }
 
     private static int remaining(LivingEntity target, ElementType element) {
         MobEffectInstance effect = target.getEffect(GeneratedMod.elementEffect(element));
-        return effect == null ? 0 : effect.getDuration();
+        if (effect != null) return effect.getDuration();
+        return shadowRemaining(target, element);
+    }
+
+    /** 影子表：药效没挂上时记一条「到什么时候为止算附着」。 */
+    private static void shadowAttach(LivingEntity target, ElementType element, int ticks) {
+        if (target.level().isClientSide) return;
+        long now = target.level().getGameTime();
+        long until = now + Math.max(1, ticks);
+        pruneShadow(now);
+        Map<ElementType, Long> byElement = SHADOW.computeIfAbsent(target.getUUID(), key -> new EnumMap<>(ElementType.class));
+        long previous = byElement.getOrDefault(element, Long.MIN_VALUE);
+        if (until > previous) byElement.put(element, until);
+    }
+
+    private static void shadowRemove(LivingEntity target, ElementType element) {
+        Map<ElementType, Long> byElement = SHADOW.get(target.getUUID());
+        if (byElement == null) return;
+        byElement.remove(element);
+        if (byElement.isEmpty()) SHADOW.remove(target.getUUID());
+    }
+
+    private static int shadowRemaining(LivingEntity target, ElementType element) {
+        if (target.level().isClientSide) return 0;
+        Map<ElementType, Long> byElement = SHADOW.get(target.getUUID());
+        if (byElement == null) return 0;
+        Long until = byElement.get(element);
+        if (until == null) return 0;
+        long remain = until - target.level().getGameTime();
+        if (remain <= 0) {
+            byElement.remove(element);
+            if (byElement.isEmpty()) SHADOW.remove(target.getUUID());
+            return 0;
+        }
+        return (int) Math.min(Integer.MAX_VALUE, remain);
+    }
+
+    /** 影子表不会自己过期：表大了就清一遍过期条目，避免长期运行的服务器里攒垃圾。 */
+    private static void pruneShadow(long now) {
+        if (SHADOW.isEmpty()) return;
+        if (SHADOW.size() < 256) return;
+        SHADOW.entrySet().removeIf(entry -> {
+            entry.getValue().entrySet().removeIf(element -> element.getValue() <= now);
+            return entry.getValue().isEmpty();
+        });
     }
 
     private static Map<ElementType, Integer> active(LivingEntity target) {
@@ -694,19 +905,34 @@ public final class ElementReactionSystem {
                 entity -> entity != source && entity.isAlive()).forEach(entity -> attach(entity, element, duration));
     }
 
-    private static void corruptPoison(LivingEntity caster, LivingEntity target, long now) {
+    private static void corruptPoison(LivingEntity caster, LivingEntity target, long now, float mastery) {
         MobEffectInstance poison = target.getEffect(MobEffects.POISON);
         if (poison != null) target.addEffect(new MobEffectInstance(MobEffects.POISON,
-                Math.max(1, (int)(poison.getDuration() * 1.5F)), poison.getAmplifier(), poison.isAmbient(), true, true));
-        CORRUPTED.put(target.getUUID(), new TimedCasterState(caster.getUUID(), now + 120, now + 25, true));
+                ElementMastery.extendDuration(Math.max(1, (int)(poison.getDuration() * 1.5F)), mastery),
+                poison.getAmplifier(), poison.isAmbient(), true, true));
+        CORRUPTED.put(target.getUUID(), new TimedCasterState(caster.getUUID(),
+                now + ElementMastery.extendDuration(120, mastery), now + 25, true));
     }
 
-    private static float purify(LivingEntity target, float damage) {
+    private static float purify(LivingEntity target, float damage, int masteryLevel) {
         MobEffectInstance poison = target.getEffect(MobEffects.POISON);
         int seconds = poison == null ? 0 : (int)Math.ceil(poison.getDuration() / 20.0);
-        target.removeEffect(MobEffects.POISON);
+        int removeCount = 1 + masteryLevel;
+        Holder<MobEffect>[] negative = new Holder[]{MobEffects.POISON, MobEffects.WITHER, MobEffects.BLINDNESS,
+                MobEffects.CONFUSION, MobEffects.MOVEMENT_SLOWDOWN, MobEffects.DIG_SLOWDOWN,
+                GeneratedMod.MANA_EXHAUSTION, NewSpellContent.WOUNDED};
+        for (int i = 0; i < negative.length && removeCount > 0; i++) {
+            if (target.removeEffect(negative[i])) removeCount--;
+        }
         CORRUPTED.remove(target.getUUID());
-        // 净化：按中毒剩余秒数强化本次光伤害，额外倍率上限 230%（每剩 1 秒 +10%）。
+        // 净化按精通等级清除负面并恢复生命；本次光伤害仍保留原有剩余中毒强化。
+        float heal = 2.0F + 2.0F * masteryLevel;
+        float missing = Math.max(0.0F, target.getMaxHealth() - target.getHealth());
+        target.heal(heal);
+        if (masteryLevel == 10) {
+            float overflow = Math.max(0.0F, heal - missing);
+            if (overflow > 0.0F) target.setAbsorptionAmount(target.getAbsorptionAmount() + overflow);
+        }
         return damage * (1.0F + Math.min(2.3F, seconds * 0.10F));
     }
 
@@ -717,7 +943,8 @@ public final class ElementReactionSystem {
         if (now < state.nextAt()) return;
         LivingEntity caster = living(level.getEntity(state.caster()));
         if (caster != null) SpellDamage.hitElement(level, caster, target, ElementType.FIRE.id(),
-                SpellAttributes.calculateSecondarySpellDamage(caster, target, 4.0F, state.firstDamage()));
+                SpellAttributes.calculateSecondarySpellDamage(caster, target, 4.0F, state.firstDamage())
+                        * ElementMastery.dotMultiplier(ElementMastery.get(caster)));
         BURNING.put(target.getUUID(), state.next(now + 20));
         attach(target, ElementType.FIRE, ElementType.FIRE.attachmentTicks());
     }
@@ -731,7 +958,8 @@ public final class ElementReactionSystem {
         if (now < state.nextAt()) return;
         LivingEntity caster = living(level.getEntity(state.caster()));
         if (caster != null) SpellDamage.hitElement(level, caster, target, ElementType.POISON.id(),
-                SpellAttributes.calculateSecondarySpellDamage(caster, target, 1.0F, state.firstDamage()));
+                SpellAttributes.calculateSecondarySpellDamage(caster, target, 1.0F, state.firstDamage())
+                        * ElementMastery.dotMultiplier(ElementMastery.get(caster)));
         CORRUPTED.put(target.getUUID(), state.next(now + 25));
     }
 

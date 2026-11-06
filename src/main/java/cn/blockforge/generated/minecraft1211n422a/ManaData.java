@@ -8,11 +8,16 @@ import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.resources.ResourceLocation;
 
 public final class ManaData {
     /** 玩家/生物身上存魔素与斗气的根标签；跨类读取时用同一个常量，避免拼错。 */
     public static final String ROOT_TAG = "DimensionalMana";
     private static final String ROOT = ROOT_TAG;
+    private static final ResourceLocation BATTLE_QI_COATING =
+            ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "aura_coating");
 
     public record Snapshot(double mana, double maxMana, double affinity, int battleQi, int maxBattleQi, int permanentBattleQiBonus, int exhaustionTicks) {}
 
@@ -29,14 +34,37 @@ public final class ManaData {
             maxMana *= MagicEquipment.maxManaMultiplier(player);
             // 集齐全部元素天赋后的独立乘区：永久 +10%。
             maxMana *= ElementTalentData.fullSetMultiplier(player);
-            maxBattleQi = (int)Math.round(maxBattleQi * MagicProgression.maxBattleQiMultiplier(player) * casketMultiplier);
+            // 装备词条：百分比乘区之后再加固定值，换装后由词条系统立即同步。
+            maxMana = maxMana * (1.0 + EquipmentAffixSystem.manaPercentBonus(player) / 100.0)
+                    + EquipmentAffixSystem.manaFlatBonus(player);
+            maxBattleQi = (int)Math.round(maxBattleQi * MagicProgression.maxBattleQiMultiplier(player) * casketMultiplier
+                    * battleQiCoatingMultiplier(player)
+                    * (1.0 + EquipmentAffixSystem.battleQiPercentBonus(player) / 100.0));
+            maxBattleQi += EquipmentAffixSystem.battleQiFlatBonus(player);
             // 斗气进阶的「斗气强化」：每级直接在最终上限上加 10 点（不吃百分比乘区）。
             maxBattleQi += t.getCompound("qiSkills").getInt("battle_qi") * QiProgression.BATTLE_QI_PER_RANK;
         }
         maxMana = Math.min(maxMana, ManaConfig.GLOBAL_MANA_CAP.get());
         maxBattleQi = Math.min(maxBattleQi, ManaConfig.GLOBAL_BATTLE_QI_CAP.get());
-        return new Snapshot(t.getDouble("mana"), maxMana, t.getDouble("affinity"),
+        double affinity = t.getDouble("affinity");
+        if (entity instanceof Player player) affinity += EquipmentAffixSystem.manaAffinityBonus(player);
+        return new Snapshot(t.getDouble("mana"), maxMana, affinity,
                 t.getInt("battleQi"), maxBattleQi, t.getInt("permanentBattleQiBonus"), t.getInt("exhaustionTicks"));
+    }
+
+    /** 斗气缠绕按四件护甲附魔等级叠加；每级让最终斗气上限提高 4%。 */
+    private static double battleQiCoatingMultiplier(Player player) {
+        int level = 0;
+        for (ItemStack armor : player.getArmorSlots()) {
+            if (armor.isEmpty()) continue;
+            level += enchantmentLevel(armor);
+        }
+        return 1.0 + level * 0.04;
+    }
+
+    private static int enchantmentLevel(ItemStack stack) {
+        // 走“实际生效等级”：魔精钢装备的附魔按 +1 级结算，斗气缠绕 4 级就是 5 级的效果。
+        return MojiangSteelEvents.effectiveEnchantmentLevel(stack, BATTLE_QI_COATING);
     }
 
     public static void init(LivingEntity entity) {

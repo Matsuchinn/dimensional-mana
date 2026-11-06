@@ -33,7 +33,7 @@ public final class CriticalConfig {
         ENABLED = b.comment("是否启用生物暴击系统；关掉后所有暴击饰品只保留面板效果，不再掷暴击")
                 .translation("config.dimensional_mana.critical.enabled")
                 .define("enabled", true);
-        PLAYER_ATTACKS_CAN_CRIT = b.comment("玩家的近战是否也吃这套暴击判定（原版跳劈暴击始终保留）")
+        PLAYER_ATTACKS_CAN_CRIT = b.comment("玩家的近战与弓弩箭矢是否也吃这套暴击判定（原版跳劈暴击始终保留）")
                 .translation("config.dimensional_mana.critical.player_attacks")
                 .define("player_attacks_can_crit", true);
         SHOW_EFFECTS = b.comment("暴击命中时是否播放暴击粒子与音效")

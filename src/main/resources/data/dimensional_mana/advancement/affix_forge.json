@@ -1,0 +1,13 @@
+{
+  "parent": "dimensional_mana:root",
+  "display": {
+    "icon": {"id": "dimensional_mana:magic_crystal_anvil"},
+    "title": {"translate": "advancement.dimensional_mana.affix_forge.title"},
+    "description": {"translate": "advancement.dimensional_mana.affix_forge.description"},
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {"done": {"trigger": "minecraft:impossible"}}
+}

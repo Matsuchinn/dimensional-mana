@@ -47,6 +47,11 @@ public enum MagicCircleBlockType {
     public String fallbackName() { return fallbackName; }
     public String translationKey() { return "gui.dimensional_mana.magiccircle.block." + id; }
 
+    /** 界面里显示的块名（跟着玩家语言走；{@link #fallbackName()} 只留给日志与内部判断）。 */
+    public net.minecraft.network.chat.Component displayName() {
+        return net.minecraft.network.chat.Component.translatable(translationKey());
+    }
+
     public boolean isCore() { return this == CORE; }
     public boolean isTrigger() { return this == TRIGGER; }
     public boolean isOutput() { return this == OUTPUT; }

@@ -281,8 +281,7 @@ public final class MagicCirclePowders {
      * 认不得的粉末退回 {@code shortName}，宁可显示中文缩写也不显示裸 id。</p>
      */
     public static Component displayName(String itemId) {
-        if (itemId == null || itemId.isEmpty()) return Component.literal("-");
-        Powder powder = BY_ITEM.get(itemId);
+        Powder powder = itemId == null || itemId.isEmpty() ? null : BY_ITEM.get(itemId);
         if (powder == null) return Component.literal("-");
         ElementType element = elementOf(itemId);
         if (element != null) {
@@ -291,11 +290,26 @@ public final class MagicCirclePowders {
         }
         if (isArcane(itemId)) return Component.translatable("message.dimensional_mana.magiccircle.element.arcane");
         String path = ResourceLocation.parse(itemId).getPath();
-        return switch (path) {
-            case "redstone", "sugar", "gunpowder", "blaze_powder", "glowstone_dust", "lapis_dust",
-                 "amethyst_dust" -> Component.translatable("message.dimensional_mana.magiccircle.powder." + path);
-            default -> Component.literal(shortName(itemId));
-        };
+        return Component.translatable("message.dimensional_mana.magiccircle.powder." + path);
+    }
+
+    /**
+     * 界面里的粉末<b>短名</b>（绘制台列表、节点详情、蓝图提示用）。
+     *
+     * <p>和 {@link #displayName} 是同一套语言键，区别只在空槽：空槽返回「空」这个词，
+     * 而不是一个短横线，免得英文界面里出现裸符号。认不得的粉末退回 {@code -}。</p>
+     */
+    public static Component displayShort(String itemId) {
+        if (itemId == null || itemId.isEmpty()) {
+            return Component.translatable("tooltip.dimensional_mana.magiccircle.node.empty");
+        }
+        if (BY_ITEM.get(itemId) == null) return Component.literal("-");
+        return displayName(itemId);
+    }
+
+    /** 这个粉是不是指定的元素（给门控解析做语义判断，不再拿中文短名比字符串）。 */
+    public static boolean isElement(String itemId, ElementType element) {
+        return element != null && elementOf(itemId) == element;
     }
 
     /** 16 种染料的短名；不是染料就回「?」。 */

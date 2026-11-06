@@ -189,6 +189,8 @@ public final class ElementalSlime extends Slime {
         setHealth((float)max);
         getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(ELEMENT_DAMAGE[difficultyIndex()] * value.damageScale());
         refreshDimensions();
+        // 体型决定天生元素精通（幼崽 8 / 成熟 24 / 精英 72），换档后缓存必须重算。
+        ElementMastery.invalidate(this);
     }
 
     public void tame(Player player) {

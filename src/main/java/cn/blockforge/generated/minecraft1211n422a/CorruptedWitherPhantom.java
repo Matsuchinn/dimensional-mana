@@ -18,8 +18,10 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.WitherSkull;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 import java.util.UUID;
@@ -27,9 +29,12 @@ import java.util.UUID;
 /**
  * 凋零幻影（Corrupted Wither Phantom）：魔蚀凋零二阶段挨打时原地分出来的一模一样的影子。
  *
- * <p>它没有 AI、不移动、不掉落，唯一的作用是当诱饵：玩家砍到它，它当场炸开，造成
+ * <p>它没有 AI、不移动、不掉落，主要作用是当诱饵：玩家砍到它，它当场炸开，造成
  * 20 点真实伤害并附加【凋零Ⅲ】+【魔蚀Ⅲ】各 10 秒。爆炸后还会留 10 刻的「正在爆」状态，
  * 让客户端把冲击波圆环画完再消失（{@link CorruptedWitherPhantomRenderer}）。</p>
+ *
+ * <p><b>开火</b>：存在期间每 1.25 秒朝最近的生物发射一颗原版凋零骷髅头，逼玩家在
+ * 「砍分身」和「躲弹幕」之间做选择；目标死掉或跑掉就自动换下一个。</p>
  *
  * <p><b>朝向</b>：它没有 AI，{@link #aiStep()} 以前是空实现，连带把「身体 / 头跟着 yaw 走」
  * 的那一步也省掉了——所以分身在游戏里永远朝着出生时的固定方向。现在这里手动补上跟随，
@@ -47,6 +52,13 @@ public final class CorruptedWitherPhantom extends WitherBoss {
     public static final int SHOCKWAVE_TICKS = 10;
     /** 存活上限：12 秒没人碰就自己散掉。 */
     public static final int LIFETIME = 240;
+    /** 分身开火的间隔：1.25 秒（25 刻）一颗原版凋零骷髅头。 */
+    public static final int SKULL_INTERVAL = 25;
+    /** 骷髅头的初速与散布：和本体普通攻击一个手感。 */
+    private static final float SKULL_SPEED = 1.15F;
+    private static final float SKULL_SPREAD = 0.9F;
+    /** 分身自己找目标的半径。 */
+    private static final double ATTACK_RANGE = 48.0D;
 
     private static final EntityDataAccessor<Boolean> DATA_EXPLODING =
             SynchedEntityData.defineId(CorruptedWitherPhantom.class, EntityDataSerializers.BOOLEAN);
@@ -67,6 +79,7 @@ public final class CorruptedWitherPhantom extends WitherBoss {
     private UUID ownerId;
     private UUID faceTargetId;
     private int faceTimer;
+    private int skullTimer = SKULL_INTERVAL;
     private int shockwaveTicks;
 
     public CorruptedWitherPhantom(EntityType<? extends CorruptedWitherPhantom> type, Level level) {
@@ -176,6 +189,63 @@ public final class CorruptedWitherPhantom extends WitherBoss {
             return;
         }
         tickFacing();
+        // 分身不是纯摆设：存在期间每 1.25 秒朝最近的生物甩一颗原版凋零骷髅头。
+        if (--skullTimer <= 0) {
+            skullTimer = SKULL_INTERVAL;
+            fireSkull(owner);
+        }
+    }
+
+    // ---------------------------------------------------------------- 分身的凋零骷髅头
+    /**
+     * 朝最近的生物发射一颗<b>原版</b>凋零骷髅头。
+     *
+     * <p>用原版 {@link WitherSkull} 而不是侵蚀头，是为了和本体那套弹幕保持一致的观感：
+     * 黑色小骷髅头、惯性大、爆炸会破坏地形。骷髅头的发射者是分身本身，
+     * 所以受击事件里还要额外把「分身打出的骷髅头」算进自己人（见
+     * {@link CorruptedWitherEvents#protectOwnSummons}）。</p>
+     */
+    private void fireSkull(CorruptedWither owner) {
+        if (!(level() instanceof ServerLevel serverLevel)) return;
+        LivingEntity target = resolveAttackTarget(serverLevel, owner);
+        if (target == null) return;
+        Vec3 from = new Vec3(getX(), getY() + 2.6D, getZ());
+        Vec3 aim = target.getEyePosition().subtract(from);
+        if (aim.lengthSqr() < 1.0E-4D) return;
+        WitherSkull skull = new WitherSkull(serverLevel, this, aim);
+        skull.setPos(from.x, from.y, from.z);
+        skull.setDangerous(false);
+        skull.shoot(aim.x, aim.y, aim.z, SKULL_SPEED, SKULL_SPREAD);
+        serverLevel.addFreshEntity(skull);
+        serverLevel.playSound(null, from.x, from.y, from.z, CorruptedWitherSounds.get("shoot"),
+                SoundSource.HOSTILE, 1.2F, 1.3F);
+        // 开火的同时把三个头也瞄过去，不然子弹飞出去的瞬间头还在看别处。
+        setHeadAim(yawTo(target), pitchTo(target));
+    }
+
+    /** 最近的、可以打的生物；没有就返回 null（这一轮不开火）。 */
+    private LivingEntity resolveAttackTarget(ServerLevel serverLevel, CorruptedWither owner) {
+        List<LivingEntity> candidates = serverLevel.getEntitiesOfClass(LivingEntity.class,
+                getBoundingBox().inflate(ATTACK_RANGE), entity -> isAttackable(entity, owner));
+        LivingEntity best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (LivingEntity candidate : candidates) {
+            double distance = distanceToSqr(candidate);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    /** 能打的对象：活着的生物，排除本体、自己人、音元素史莱姆和观战 / 创造玩家。 */
+    private boolean isAttackable(LivingEntity entity, CorruptedWither owner) {
+        if (entity == this || !entity.isAlive() || entity.isRemoved()) return false;
+        if (entity == owner || owner.isOwnSummon(entity)) return false;
+        if (entity instanceof WitherBoss) return false;
+        if (entity instanceof Player player) return !player.isCreative() && !player.isSpectator();
+        return !CorruptedWither.isUntouchable(entity);
     }
 
     // ---------------------------------------------------------------- 朝向攻击者
@@ -275,8 +345,22 @@ public final class CorruptedWitherPhantom extends WitherBoss {
     @Override
     public boolean hurt(DamageSource source, float amount) {
         if (level().isClientSide || isExploding()) return false;
+        // 近身开火时骷髅头就在脚边炸：那一发不能算到分身头上，不然它等于「开一枪自己就碎」。
+        if (isOwnSkull(source)) return false;
         explode();
         return true;
+    }
+
+    /** 这一下是不是「自己人」射出的凋零骷髅头（分身自己、本体、同一只本体的其它分身）。 */
+    private boolean isOwnSkull(DamageSource source) {
+        if (!(source.getDirectEntity() instanceof WitherSkull skull)) return false;
+        Entity shooter = skull.getOwner();
+        if (shooter == this || shooter instanceof CorruptedWither) return true;
+        if (shooter instanceof CorruptedWitherPhantom other) {
+            CorruptedWither owner = owner();
+            return owner != null && other.owner() == owner;
+        }
+        return false;
     }
 
     /** 被砍中：真实伤害 + 双状态，然后留 10 刻画冲击波。 */
@@ -287,7 +371,10 @@ public final class CorruptedWitherPhantom extends WitherBoss {
         CorruptedWither owner = owner();
         List<LivingEntity> victims = serverLevel.getEntitiesOfClass(LivingEntity.class,
                 new AABB(blockPosition()).inflate(BLAST_RADIUS),
-                entity -> entity.isAlive() && entity != owner && !(entity instanceof CorruptedWitherPhantom));
+                entity -> entity.isAlive() && entity != owner
+                        && !(entity instanceof CorruptedWitherPhantom)
+                        // 音元素史莱姆不吃这套：炸上去只掉 0 血，白白浪费一次爆炸的观感。
+                        && !CorruptedWither.isUntouchable(entity));
         for (LivingEntity victim : victims) {
             victim.invulnerableTime = 0;
             victim.hurt(serverLevel.damageSources().magic(), BLAST_DAMAGE);

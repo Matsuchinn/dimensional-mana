@@ -32,6 +32,7 @@
     "dimensional_mana:raw_lesser_mana_crystal_block",
     "dimensional_mana:raw_medium_mana_crystal_block",
     "dimensional_mana:raw_advanced_mana_crystal_block",
-    "dimensional_mana:raw_supreme_mana_crystal_block"
+    "dimensional_mana:raw_supreme_mana_crystal_block",
+    "dimensional_mana:weapon_workbench"
   ]
 }

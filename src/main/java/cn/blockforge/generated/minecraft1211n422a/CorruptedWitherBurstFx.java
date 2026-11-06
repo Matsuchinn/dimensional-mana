@@ -156,7 +156,7 @@ public final class CorruptedWitherBurstFx {
     // ---------------------------------------------------------------- 渲染入口
     public static void render(RenderLevelStageEvent event) {
         if (BURSTS.isEmpty()) return;
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_ENTITIES) return;
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_WEATHER) return;
         Vec3 camera = event.getCamera().getPosition();
         Vec3 right = new Vec3(event.getCamera().getLeftVector()).scale(-1.0D);
         Vec3 up = new Vec3(event.getCamera().getUpVector());
@@ -168,8 +168,8 @@ public final class CorruptedWitherBurstFx {
             PoseStack.Pose snapshot = pose.last();
             try (ByteBufferBuilder memory = new ByteBufferBuilder(1_048_576)) {
                 MultiBufferSource.BufferSource source = MultiBufferSource.immediate(memory);
-                VertexConsumer glow = source.getBuffer(CorruptedWitherRenderTypes.BURST_GLOW);
-                VertexConsumer metal = source.getBuffer(CorruptedWitherRenderTypes.BURST_METAL);
+                VertexConsumer glow = source.getBuffer(CorruptedWitherRenderTypes.burstGlow());
+                VertexConsumer metal = source.getBuffer(CorruptedWitherRenderTypes.burstMetal());
                 for (Burst burst : BURSTS) {
                     if (burst.pos.distanceToSqr(camera) > FX_RANGE * FX_RANGE) continue;
                     float time = burst.age + partial;

@@ -43,6 +43,19 @@
           "name": "dimensional_mana:distorted_nether_star"
         }
       ]
+    },
+    {
+      "rolls": 1,
+      "bonus_rolls": 0,
+      "conditions": [
+        {"condition": "minecraft:random_chance", "chance": 0.5}
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "dimensional_mana:mojing_steel_smithing_template"
+        }
+      ]
     }
   ]
 }

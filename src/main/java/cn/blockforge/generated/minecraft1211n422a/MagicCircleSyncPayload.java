@@ -148,7 +148,7 @@ public record MagicCircleSyncPayload(
         buf.writeVarInt(payload.disorder());
         buf.writeDouble(payload.efficiency());
         buf.writeVarInt(payload.problems().size());
-        for (String problem : payload.problems()) buf.writeUtf(problem, 512);
+        for (String problem : payload.problems()) buf.writeUtf(problem, 4096);
         buf.writeVarInt(payload.powders().size());
         for (PowderView powder : payload.powders()) {
             buf.writeUtf(powder.itemId(), 128);
@@ -208,7 +208,7 @@ public record MagicCircleSyncPayload(
 
         int problemCount = Math.max(0, Math.min(64, buf.readVarInt()));
         List<String> problems = new ArrayList<>(problemCount);
-        for (int i = 0; i < problemCount; i++) problems.add(buf.readUtf(512));
+        for (int i = 0; i < problemCount; i++) problems.add(buf.readUtf(4096));
 
         int powderCount = Math.max(0, Math.min(256, buf.readVarInt()));
         List<PowderView> powders = new ArrayList<>(powderCount);

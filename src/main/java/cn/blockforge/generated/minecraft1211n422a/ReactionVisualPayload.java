@@ -29,9 +29,14 @@ public record ReactionVisualPayload(int entityId, String reactionId, int color,
     }
 
     public static void send(LivingEntity target, Reaction reaction) {
+        send(target, reaction.id(), reaction.color());
+    }
+
+    /** 供碎冰、冻结伤害等不属于元素组合枚举的战斗表现复用同一套跳字。 */
+    public static void send(LivingEntity target, String textId, int color) {
         Vec3 head = target.position().add(0, target.getBbHeight(), 0);
         PacketDistributor.sendToPlayersTrackingEntityAndSelf(target,
-                new ReactionVisualPayload(target.getId(), reaction.id(), reaction.color(), head.x, head.y, head.z));
+                new ReactionVisualPayload(target.getId(), textId, color, head.x, head.y, head.z));
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }

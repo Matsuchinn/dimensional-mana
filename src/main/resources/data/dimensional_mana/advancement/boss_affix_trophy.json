@@ -1,0 +1,13 @@
+{
+  "parent": "dimensional_mana:affix_forge",
+  "display": {
+    "icon": {"id": "minecraft:netherite_sword"},
+    "title": {"translate": "advancement.dimensional_mana.boss_affix_trophy.title"},
+    "description": {"translate": "advancement.dimensional_mana.boss_affix_trophy.description"},
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {"done": {"trigger": "minecraft:impossible"}}
+}

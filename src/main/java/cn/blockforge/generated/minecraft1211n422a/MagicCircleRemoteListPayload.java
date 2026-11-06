@@ -41,7 +41,7 @@ public record MagicCircleRemoteListPayload(
             buf.writeVarInt(entry.x());
             buf.writeVarInt(entry.y());
             buf.writeVarInt(entry.z());
-            buf.writeUtf(entry.name(), 48);
+            buf.writeUtf(entry.name(), 128);
             buf.writeBoolean(entry.running());
             buf.writeVarInt(entry.layers());
             buf.writeVarInt(entry.distance());

@@ -34,7 +34,7 @@ public final class AncientFragmentLoot {
         ResourceLocation name = event.getName();
         if (!name.getNamespace().equals("minecraft")) return;
         if (name.getPath().equals(ANCIENT_CITY_CHEST)) {
-            event.getTable().addPool(LootPool.lootPool()
+            StructureChestLoot.addPool(event.getTable(), LootPool.lootPool()
                     .name("dimensional_mana_ancient_magic_fragment")
                     .setRolls(ConstantValue.exactly(1))
                     .add(LootItem.lootTableItem(fragment())
@@ -42,7 +42,7 @@ public final class AncientFragmentLoot {
                             .when(AncientFragmentLimitCondition::new))
                     .build());
         } else if (name.getPath().equals(END_SHIP_CHEST)) {
-            event.getTable().addPool(LootPool.lootPool()
+            StructureChestLoot.addPool(event.getTable(), LootPool.lootPool()
                     .name("dimensional_mana_end_ship_ancient_magic_fragment")
                     .setRolls(ConstantValue.exactly(1))
                     .add(LootItem.lootTableItem(fragment())

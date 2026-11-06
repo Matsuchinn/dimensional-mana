@@ -139,6 +139,30 @@ public final class TextFit {
     }
 
     /**
+     * 右对齐绘制，太宽时整体缩小字号（最小 {@link #MIN_SCALE}）再截断。
+     *
+     * <p>属性面板的数值用它：位数会随等级和属性上限变化（“15” 和 “154000000”），
+     * 右对齐让一列数字的末位对齐，超宽时缩字保证永远不顶出面板。</p>
+     */
+    public static void rightShrunk(GuiGraphics graphics, Font font, Component text, int rightX, int y,
+                                   int maxWidth, int color) {
+        if (text == null || maxWidth <= 0) return;
+        int width = font.width(text);
+        float scale = width <= maxWidth ? 1.0F : Math.max(MIN_SCALE, maxWidth / (float) width);
+        Component shown = scale <= MIN_SCALE ? clamp(font, text, maxWidth) : text;
+        if (scale >= 0.999F) {
+            graphics.drawString(font, shown, rightX - font.width(shown), y, color, false);
+            return;
+        }
+        var pose = graphics.pose();
+        pose.pushPose();
+        pose.translate(rightX, y, 0.0F);
+        pose.scale(scale, scale, 1.0F);
+        graphics.drawString(font, shown, -font.width(shown), 0, color, false);
+        pose.popPose();
+    }
+
+    /**
      * 多行绘制：最多 maxLines 行，行距 lineHeight；返回实际占用的高度。
      *
      * <p>给「卡片里的一段说明」用：中文两行、英文可能四行，这里统一裁到卡片放得下的行数。</p>

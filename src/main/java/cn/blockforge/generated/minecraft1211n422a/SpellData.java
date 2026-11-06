@@ -215,6 +215,18 @@ public final class SpellData {
         CompoundTag slots = spellTag.getCompound(SLOTS);
         SpellDefinition[] spells = SpellDefinition.values();
         CompoundTag awarded = spellTag.getCompound("insightAwardedSpells");
+        // 解锁会把每个法术标记成“顿悟已发”，所以先把还没顿悟的法术按正常逐次规则
+        // 一次性折算成魔素上限补给玩家，防止作弊解锁后基础上限永远卡在低位。
+        int lesser = 0, medium = 0, advanced = 0;
+        for (SpellDefinition spell : spells) {
+            if (awarded.getBoolean(spell.id())) continue;
+            switch (spell.grade()) {
+                case "medium" -> medium++;
+                case "advanced" -> advanced++;
+                default -> lesser++;
+            }
+        }
+        MagicProgression.grantInsightsBulk(player, lesser, medium, advanced);
         for (SpellDefinition spell : spells) {
             progress.putInt(spell.id(), REQUIRED_SUCCESSES);
             awarded.putBoolean(spell.id(), true);

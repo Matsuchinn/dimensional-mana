@@ -120,6 +120,7 @@ public final class ClientModEvents {
         NeoForge.EVENT_BUS.addListener(ClientModEvents::movementInput);
         NeoForge.EVENT_BUS.addListener(ClientModEvents::antiVoidFogColor);
         NeoForge.EVENT_BUS.addListener(ClientModEvents::antiVoidFogDistance);
+        NeoForge.EVENT_BUS.addListener(ClientModEvents::replaceMagicCrystalAnvilScreen);
         NeoForge.EVENT_BUS.addListener(ClientSpellVisuals::tick);
         NeoForge.EVENT_BUS.addListener(ClientSpellVisuals::render);
         NeoForge.EVENT_BUS.addListener(ClientParryVisuals::tick);
@@ -315,6 +316,8 @@ public final class ClientModEvents {
 
     private static void clientTick(ClientTickEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
+        // 魔精钢护甲的四帧动态贴图：资源包重载后在这里重新登记。
+        MojiangSteelArmorTextures.tick(event);
         migrateQiWheelDefault(minecraft);
         ClientSpellState.clientTick();
         syncWindFrenzySensitivity(minecraft);
@@ -744,11 +747,21 @@ public final class ClientModEvents {
         event.setFogShape(FogShape.SPHERE);
     }
 
+    private static void replaceMagicCrystalAnvilScreen(ScreenEvent.Opening event) {
+        if (!(event.getNewScreen() instanceof net.minecraft.client.gui.screens.inventory.AnvilScreen anvil)) return;
+        if (!anvil.getTitle().equals(Component.translatable("container.dimensional_mana.magic_crystal_anvil"))) return;
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null && anvil.getMenu() instanceof net.minecraft.world.inventory.AnvilMenu menu) {
+            event.setNewScreen(new MagicCrystalAnvilScreen(menu, minecraft.player.getInventory(), anvil.getTitle()));
+        }
+    }
+
     private static void registerScreens(RegisterMenuScreensEvent event) {
         event.register(GeneratedMod.GRINDER_MENU.get(), GrinderScreen::new);
         event.register(GeneratedMod.MANA_FORGE_MENU.get(), ManaFurnaceScreen::new);
         event.register(GeneratedMod.PROFESSIONAL_FURNACE_MENU.get(), ManaFurnaceScreen::new);
         event.register(GeneratedMod.CRYSTAL_PROCESSOR_MENU.get(), CrystalProcessorScreen::new);
+        event.register(GeneratedMod.WEAPON_WORKBENCH_MENU.get(), WeaponWorkbenchScreen::new);
         event.register(GeneratedMod.ADVENTURER_TRADE_MENU.get(), AdventurerTradeScreen::new);
     }
 
@@ -794,6 +807,17 @@ public final class ClientModEvents {
                     "effect.dimensional_mana.battle_qi_collapse.damage_taken").withStyle(ChatFormatting.RED));
             event.getTooltip().add(Component.translatable(
                     "effect.dimensional_mana.battle_qi_collapse.damage_dealt").withStyle(ChatFormatting.DARK_RED));
+            return;
+        }
+        // 元素精通强化：直接写这一级给多少精通，和状态页上的总精通对得上。
+        if (event.getEffectInstance().is(GeneratedMod.ELEMENTAL_MASTERY)) {
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.elemental_mastery.bonus",
+                    String.format(java.util.Locale.ROOT, "%.0f",
+                            ElementalMasteryEffect.bonus(event.getEffectInstance().getAmplifier())))
+                    .withStyle(ChatFormatting.AQUA));
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.elemental_mastery.repeat").withStyle(ChatFormatting.DARK_GRAY));
             return;
         }
         if (!event.getEffectInstance().is(GeneratedMod.MANA_EXHAUSTION)) return;

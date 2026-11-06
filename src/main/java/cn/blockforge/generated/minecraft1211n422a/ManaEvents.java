@@ -82,15 +82,26 @@ public final class ManaEvents {
         ProgressSyncPayload.send(player);
         SpellSyncPayload.send(player);
         ElementTalentSyncPayload.send(player);
+        ElementMastery.invalidate(player);
+        ProgressSyncPayload.send(player);
         // 大师施法手套的施法计数、披风的凝聚球开关：登录时补一次，物品描述立刻就是正确的状态。
         MagicToggleSyncPayload.send(player);
     }
 
+    public void onEquipmentChange(net.neoforged.neoforge.event.entity.living.LivingEquipmentChangeEvent event) {
+        if (!event.getEntity().level().isClientSide) {
+            ElementMastery.invalidate(event.getEntity());
+            if (event.getEntity() instanceof ServerPlayer player) ProgressSyncPayload.send(player);
+        }
+    }
+
     public void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            ElementMastery.forget(player.getUUID());
             SpellCasting.clearTransientState(player);
             BattleQiParry.clear(player);
             QiSkills.clear(player);
+            PhysicalAffixEffects.clear(player);
         }
     }
 
@@ -99,6 +110,7 @@ public final class ManaEvents {
             SpellCasting.clearTransientState(player);
             BattleQiParry.clear(player);
             QiSkills.clear(player);
+            PhysicalAffixEffects.clear(player);
         }
     }
 
@@ -107,6 +119,7 @@ public final class ManaEvents {
             SpellCasting.clearTransientState(player);
             BattleQiParry.clear(player);
             QiSkills.clear(player);
+            PhysicalAffixEffects.clear(player);
         }
         ManaData.copy(event.getOriginal(), event.getEntity());
         MagicProgression.init(event.getEntity());
@@ -163,6 +176,11 @@ public final class ManaEvents {
         }
         // 刻蚀真伤交给伤害类型标签直达生命值，不再经过斗气、法术状态或外壳减免。
         if (MagicEtchingSystem.isTrueDamage(event.getSource())) {
+            event.setInvulnerabilityTicks(0);
+            return;
+        }
+        // 虚无凋零射线的「持续笼罩」真伤同理：绕开斗气、披风、元素镀层这些乘区，按 1000 点整结算。
+        if (CorruptedWitherBeam.isTrueDamage(event.getSource())) {
             event.setInvulnerabilityTicks(0);
             return;
         }
@@ -302,6 +320,8 @@ public final class ManaEvents {
         resisted *= MobCombatSystem.curseMultiplier(victim, event.getSource());
         event.setNewDamage(resisted);
         if (victim.hasEffect(GeneratedMod.MANA_EXHAUSTION)) event.setNewDamage(event.getNewDamage() * 1.30F);
+        // 碎冰读取这里的最终受击值：暴击、斗气、元素抗性和护甲都已经完成。
+        ElementReactionSystem.shatterFrozen(victim, event.getSource(), event.getNewDamage());
         if (event.getSource().getEntity() instanceof LivingEntity attacker) {
             if (attacker.hasEffect(GeneratedMod.MANA_EXHAUSTION)) {
                 event.setNewDamage(event.getNewDamage() * 0.40F);
@@ -329,6 +349,8 @@ public final class ManaEvents {
         event.setNewDamage(MetalSpells.absorbBell(victim, event.getNewDamage(), event.getSource()));
         // 磐石外壳在护甲/韧性/药水减伤之后接住实际伤害；外壳破裂后溢出的部分才落到生命值。
         event.setNewDamage(EarthSpells.absorbShell(victim, event.getNewDamage(), event.getSource()));
+        // 最终值包含自定义护盾吸收后的结算结果，碎冰只在这一刻解除冻结。
+        ElementReactionSystem.shatterFrozen(victim, event.getSource(), event.getNewDamage());
     }
 
     /** 玩家挖到铁矿或高级以上魔晶矿时，叫醒附近的守矿史莱姆。 */
@@ -498,6 +520,10 @@ public final class ManaEvents {
             }
         }
         if (living.tickCount % 20 != 0) return;
+        // 元素精通的来源会变（喝药、换饰品、命令修改）：每秒比对一次，值真的变了才推给状态页。
+        if (living instanceof ServerPlayer masteryPlayer && ElementMastery.changedSinceSync(masteryPlayer)) {
+            ProgressSyncPayload.send(masteryPlayer);
+        }
         ManaData.Snapshot d = ManaData.get(living);
         int exhaustion = Math.max(0, d.exhaustionTicks() - 20);
         ManaData.setExhaustion(living, exhaustion);
@@ -655,6 +681,7 @@ public final class ManaEvents {
         if (event.getEntity() instanceof ServerPlayer player) {
             BattleQiParry.clear(player);
             QiSkills.clear(player);
+            PhysicalAffixEffects.clear(player);
         }
     }
 
@@ -664,6 +691,26 @@ public final class ManaEvents {
 
     public void onEffectAdded(net.neoforged.neoforge.event.entity.living.MobEffectEvent.Added event) {
         MobSkills.onEffectAdded(event);
+        // 元素精通药水的等级 / 时长一变，缓存里的精通就要重算，并把新数值推给状态页。
+        if (event.getEffectInstance().is(GeneratedMod.ELEMENTAL_MASTERY)) syncMastery(event.getEntity());
+    }
+
+    /** 元素精通效果结束（到期或被清掉）时同样要重算，否则面板会一直挂着药水加成。 */
+    public void onEffectExpired(net.neoforged.neoforge.event.entity.living.MobEffectEvent.Expired event) {
+        if (event.getEffectInstance() != null && event.getEffectInstance().is(GeneratedMod.ELEMENTAL_MASTERY)) {
+            syncMastery(event.getEntity());
+        }
+    }
+
+    public void onEffectRemoved(net.neoforged.neoforge.event.entity.living.MobEffectEvent.Remove event) {
+        if (event.getEffectInstance() != null && event.getEffectInstance().is(GeneratedMod.ELEMENTAL_MASTERY)) {
+            syncMastery(event.getEntity());
+        }
+    }
+
+    private static void syncMastery(net.minecraft.world.entity.LivingEntity entity) {
+        ElementMastery.invalidate(entity);
+        if (entity instanceof ServerPlayer player) ProgressSyncPayload.send(player);
     }
 
     public void onMobEntityJoin(EntityJoinLevelEvent event) {
@@ -688,12 +735,7 @@ public final class ManaEvents {
     }
 
     private static int enchantmentLevel(ItemStack stack, ResourceLocation id) {
-        var registry = stack.getItem().builtInRegistryHolder().unwrapKey();
-        if (stack.isEmpty() || registry.isEmpty()) return 0;
-        final int[] found = {0};
-        EnchantmentHelper.runIterationOnItem(stack, (holder, level) -> holder.unwrapKey().ifPresent(key -> {
-            if (key.location().equals(id)) found[0] = Math.max(found[0], level);
-        }));
-        return found[0];
+        // 同样走“实际生效等级”，让魔精钢装备的附魔 +1 在这里也成立。
+        return MojiangSteelEvents.effectiveEnchantmentLevel(stack, id);
     }
 }

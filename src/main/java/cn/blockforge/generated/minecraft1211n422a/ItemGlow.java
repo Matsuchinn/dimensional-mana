@@ -18,12 +18,18 @@ public final class ItemGlow {
     public static final int RESONANCE_CORE = 12;
     /** 特级魔精钢。 */
     public static final int SPECIAL_MAGIC_STEEL = 8;
+    /** 畸变下界之心：黑紫色腐化光环。 */
+    public static final int DISTORTED_NETHER_HEART = 15;
+    /** 武备强化石：暖金色的锻造辉光。 */
+    public static final int ARMAMENT_STONE = 7;
 
     private static final Map<String, Integer> LEVELS = Map.of(
             "superconducting_crystal_dust", SUPERCONDUCTING_DUST,
             "superconducting_crystal", SUPERCONDUCTING_CRYSTAL,
             ResonanceCore.ITEM_ID, RESONANCE_CORE,
-            "special_magic_steel", SPECIAL_MAGIC_STEEL);
+            "special_magic_steel", SPECIAL_MAGIC_STEEL,
+            GeneratedMod.DISTORTED_NETHER_STAR_ID, DISTORTED_NETHER_HEART,
+            ArmamentStoneLoot.ITEM_ID, ARMAMENT_STONE);
 
     /** 物品 id 的亮度；没有设定的物品返回 0（不发光）。 */
     public static int of(String itemId) {

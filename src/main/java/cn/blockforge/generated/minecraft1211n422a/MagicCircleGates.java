@@ -107,6 +107,10 @@ public final class MagicCircleGates {
         public String semantic() { return semantic; }
         public CompareOperator defaultOperator() { return defaultOperator; }
         public String label() { return label; }
+        public String translationKey() {
+            return "message.dimensional_mana.magiccircle.gate.domain." + name().toLowerCase(Locale.ROOT);
+        }
+        public Component displayName() { return Component.translatable(translationKey()); }
     }
 
     /** 语义粉 → 判定主域；不是七种原版粉返回 null。 */
@@ -172,7 +176,7 @@ public final class MagicCircleGates {
      * <p>和 {@link #thresholdText} 的区别：这里返回 Component，单位也跟着语言走
      * （中文「3 格」、英文「3 blocks」）；老的大白话解析句还在用 String 版。</p>
      */
-    private static Component thresholdComponent(Domain domain, double value) {
+    public static Component thresholdComponent(Domain domain, double value) {
         return switch (domain) {
             case LIFE, RESOURCE -> Component.literal(Math.round(value * 100.0) + "%");
             case STATUS -> detail("threshold.seconds", String.format(Locale.ROOT, "%.1f", value));
@@ -736,6 +740,134 @@ public final class MagicCircleGates {
             case ATTACH -> "元素附着层数 " + op.symbol() + " " + thresholdText(domain, value);
         };
         return "当周围 " + radius + " 格内 " + target + body + " 时放行。";
+    }
+
+    // ---------------------------------------------------------------- 可翻译解析句
+
+    /**
+     * 和 {@link #describe(String, String, String, String, String)} 同一句话，但整句走语言键：
+     * 绘制台门控页签、聊天里的「[条件解析]」都改用它，英文客户端不会再冒出汉字。
+     */
+    public static Component describeComponent(MagicCircleNetwork.Node node) {
+        return describeComponent(node.semantic(), node.element(), node.power(), node.dye(), node.gate());
+    }
+
+    public static Component describeComponent(MagicCircleSyncPayload.NodeView node) {
+        return describeComponent(node.semantic(), node.element(), node.power(), node.dye(), node.gate());
+    }
+
+    public static Component describeComponent(String semantic, String element, String power, String dye, String gate) {
+        Domain domain = domainOf(semantic);
+        if (domain == null) {
+            return Component.translatable("message.dimensional_mana.magiccircle.gate.sentence.no_semantic");
+        }
+        CompareOperator op = operatorOf(domain, gate);
+        double value = threshold(domain, Math.max(0, MagicCircleDecl.dyeTier(dye)));
+        Component radius = Component.literal(String.valueOf(scanRadius(power)));
+        Component target = element == null || element.isEmpty() ? Component.empty()
+                : Component.translatable("message.dimensional_mana.magiccircle.gate.sentence.target",
+                        elementPhraseComponent(element));
+        Component body = switch (domain) {
+            case LIFE -> Component.translatable("message.dimensional_mana.magiccircle.gate.sentence.body.life",
+                    op.symbol(), thresholdComponent(domain, value));
+            case RESOURCE -> Component.translatable("message.dimensional_mana.magiccircle.gate.sentence.body.resource",
+                    op.symbol(), thresholdComponent(domain, value));
+            case STATUS -> Component.translatable("message.dimensional_mana.magiccircle.gate.sentence.body.status",
+                    op.symbol(), thresholdComponent(domain, value));
+            case COUNT -> Component.translatable("message.dimensional_mana.magiccircle.gate.sentence.body.count",
+                    op.symbol(), thresholdComponent(domain, value));
+            case ATTACH -> Component.translatable("message.dimensional_mana.magiccircle.gate.sentence.body.attach",
+                    op.symbol(), thresholdComponent(domain, value));
+            case ENVIRONMENT -> environmentPhraseComponent(element, op, value);
+            case ACTION -> actionPhraseComponent(element, op, value);
+        };
+        return Component.translatable("message.dimensional_mana.magiccircle.gate.sentence.frame", radius, target, body);
+    }
+
+    /** 触发节点（底座模式）的解析句后半，可翻译版本。 */
+    public static Component gateShortComponent(MagicCircleNetwork.Node gateNode) {
+        Domain domain = domainOf(gateNode.semantic());
+        if (domain == null) {
+            return Component.translatable("message.dimensional_mana.magiccircle.gate.short.none");
+        }
+        CompareOperator op = operatorOf(domain, gateNode.gate());
+        double value = threshold(domain, Math.max(0, MagicCircleDecl.dyeTier(gateNode.dye())));
+        Component target = gateNode.element().isEmpty() ? Component.empty()
+                : Component.translatable("message.dimensional_mana.magiccircle.gate.short.prefix",
+                        elementPhraseComponent(gateNode.element()));
+        return Component.translatable("message.dimensional_mana.magiccircle.gate.short.body", target,
+                domain.displayName(), op.symbol(), thresholdComponent(domain, value));
+    }
+
+    private static Component environmentPhraseComponent(String element, CompareOperator op, double value) {
+        if (element == null || element.isEmpty()
+                || MagicCirclePowders.isElement(element, ElementType.METAL)
+                || MagicCirclePowders.isElement(element, ElementType.NATURE)) {
+            return Component.translatable("message.dimensional_mana.magiccircle.gate.phrase.environment.value",
+                    op.symbol(), Component.literal(String.valueOf((int) value)));
+        }
+        return Component.translatable(op == CompareOperator.LESS_THAN
+                        ? "message.dimensional_mana.magiccircle.gate.phrase.environment.none"
+                        : "message.dimensional_mana.magiccircle.gate.phrase.environment.has",
+                MagicCirclePowders.displayName(element));
+    }
+
+    private static Component actionPhraseComponent(String element, CompareOperator op, double value) {
+        if (element == null || element.isEmpty()) {
+            return Component.translatable("message.dimensional_mana.magiccircle.gate.phrase.action.redstone",
+                    op.symbol(), Component.literal(String.valueOf((int) value)));
+        }
+        if (MagicCirclePowders.isArcane(element)) {
+            return Component.translatable("message.dimensional_mana.magiccircle.gate.phrase.action.distance",
+                    op.symbol(), Component.literal(String.valueOf((int) value)));
+        }
+        return Component.translatable("message.dimensional_mana.magiccircle.gate.phrase.action.detected",
+                actionComponentFor(element));
+    }
+
+    /** 元素列的判定含义（可翻译）：解析句括号里的那半句。 */
+    public static Component elementPhraseComponent(String elementItem) {
+        ElementType element = MagicCirclePowders.elementOf(elementItem);
+        String key = element == null ? null : switch (element) {
+            case FIRE -> "fire";
+            case WATER -> "water";
+            case ICE -> "ice";
+            case LIGHTNING -> "lightning";
+            case POISON -> "poison";
+            case LIGHT -> "light";
+            case WIND -> "wind";
+            case EARTH -> "earth";
+            case METAL -> "metal";
+            case NATURE -> "nature";
+            case SOUND -> "sound";
+        };
+        if (key == null) {
+            if (MagicCirclePowders.isArcane(elementItem)) {
+                return Component.translatable("message.dimensional_mana.magiccircle.gate.phrase.element.arcane");
+            }
+            return MagicCirclePowders.displayName(elementItem);
+        }
+        return Component.translatable("message.dimensional_mana.magiccircle.gate.phrase.element." + key);
+    }
+
+    /** 动作列的可翻译名字（判定明细与解析句共用）。 */
+    private static Component actionComponentFor(String elementItem) {
+        ElementType element = MagicCirclePowders.elementOf(elementItem);
+        if (element == null) return Component.translatable(DETAIL_KEY + "action.name.other");
+        String key = switch (element) {
+            case METAL -> "shield";
+            case NATURE -> "eat";
+            case FIRE -> "attack";
+            case WATER -> "swim";
+            case ICE -> "sneak";
+            case LIGHTNING -> "sprint";
+            case POISON -> "hurt";
+            case LIGHT -> "look";
+            case WIND -> "fall";
+            case EARTH -> "stand";
+            case SOUND -> "jump";
+        };
+        return Component.translatable(DETAIL_KEY + "action.name." + key);
     }
 
     private static String environmentPhrase(String element, CompareOperator op, double value) {

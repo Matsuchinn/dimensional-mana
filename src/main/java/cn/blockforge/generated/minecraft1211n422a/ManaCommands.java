@@ -1,6 +1,7 @@
 package cn.blockforge.generated.minecraft1211n422a;
 
 import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.ChatFormatting;
@@ -32,12 +33,24 @@ public final class ManaCommands {
                         .then(Commands.argument("player", EntityArgument.player())
                                 .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
                                 .executes(context -> showStatus(context.getSource(), EntityArgument.getPlayer(context, "player")))))
+                // 武备词条的实际数值：一条条打在聊天栏，方便核对「属性查得到、也真的在生效」。
+                .then(Commands.literal("affixes")
+                        .executes(context -> showAffixes(context.getSource(), context.getSource().getPlayerOrException()))
+                        .then(Commands.argument("player", EntityArgument.player())
+                                .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                                .executes(context -> showAffixes(context.getSource(), EntityArgument.getPlayer(context, "player")))))
                 .then(antiVoidCommand())
                 .then(Commands.literal("combat")
                         .executes(context -> showCombat(context.getSource()))
                         .then(Commands.argument("target", EntityArgument.entity())
                                 .executes(context -> showCombat(context.getSource(),
-                                        EntityArgument.getEntity(context, "target")))))
+                                        EntityArgument.getEntity(context, "target"))))
+                        // 自己的伤害减免三段拆解：护甲值 → 保护附魔 → 魔精钢独立减伤。
+                        .then(Commands.literal("reduction")
+                                .executes(context -> showReduction(context.getSource(), 6.0F))
+                                .then(Commands.argument("damage", FloatArgumentType.floatArg(0.1F, 1000.0F))
+                                        .executes(context -> showReduction(context.getSource(),
+                                                FloatArgumentType.getFloat(context, "damage"))))))
                 .then(mobCommand())
                 .then(Commands.literal("mana")
                         .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
@@ -75,7 +88,8 @@ public final class ManaCommands {
                                         IntegerArgumentType.getInteger(context, "radius")))))
                 .then(cooldownCommand())
                 .then(manaCostCommand())
-                .then(spellCritCommand()));
+                .then(spellCritCommand())
+                 .then(elementalMasteryCommand()));
     }
 
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> antiVoidCommand() {
@@ -436,10 +450,14 @@ public final class ManaCommands {
                 .withStyle(ChatFormatting.LIGHT_PURPLE), false);
         source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.spell_crit")
                 .withStyle(ChatFormatting.RED), false);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.elemental_mastery")
+                .withStyle(ChatFormatting.LIGHT_PURPLE), false);
         source.sendSuccess(() -> Component.literal("/dimensional_mana magiccircle register|status|list|unregister")
                 .withStyle(ChatFormatting.LIGHT_PURPLE), false);
         source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.locate_cluster")
                 .withStyle(ChatFormatting.LIGHT_PURPLE), false);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.affixes")
+                .withStyle(ChatFormatting.GOLD), false);
         source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.combat")
                 .withStyle(ChatFormatting.GOLD), false);
         source.sendSuccess(() -> Component.literal("/dimensional_mana mob list|show|set|remove|reset|refresh")
@@ -456,9 +474,107 @@ public final class ManaCommands {
         return 1;
     }
 
+    /**
+     * /dimensional_mana affixes [玩家]：把词条给出的实际数值逐条打在聊天栏。
+     *
+     * <p>这些数值全部来自真实注册的属性（见 {@link SpellAttributes}），所以这里读到的就是战斗里用的那一份：
+     * 面板上显示、外部属性模组能读到、实际结算也按它算，三者一致。</p>
+     */
+    private static int showAffixes(CommandSourceStack source, ServerPlayer player) {
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.affixes.header",
+                player.getDisplayName()).withStyle(ChatFormatting.GOLD), false);
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.armor_penetration"),
+                format(EquipmentAffixSystem.armorPenetration(player)));
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.lifesteal_percent"),
+                format(EquipmentAffixSystem.lifestealPercent(player)) + "%");
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.battle_qi_regen"),
+                format(EquipmentAffixSystem.battleQiRegenBonus(player)) + "/s");
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.battle_qi_skill_power"),
+                format(EquipmentAffixSystem.battleQiSkillMultiplier(player) * 100.0) + "%");
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.combo_damage_percent"),
+                format(EquipmentAffixSystem.comboDamagePercent(player)) + "%/层");
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.execute_damage_percent"),
+                format(EquipmentAffixSystem.executeDamagePercent(player)) + "%");
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.mikiri_damage_percent"),
+                format(EquipmentAffixSystem.mikiriDamagePercent(player)) + "%");
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.parry_window_bonus"),
+                Integer.toString(EquipmentAffixSystem.parryWindowBonus(player)));
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.arrow_damage_flat"),
+                format(EquipmentAffixSystem.arrowDamageFlat(player)));
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.arrow_damage_percent"),
+                format(EquipmentAffixSystem.arrowDamagePercent(player)) + "%");
+        // 护甲值 / 盔甲韧性直接读原版属性（包含装备本身给的那部分）。
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.armor_value"),
+                format(player.getAttributeValue(Attributes.ARMOR)));
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.armor_toughness"),
+                format(player.getAttributeValue(Attributes.ARMOR_TOUGHNESS)));
+        EquipmentAffixSystem.elementalAddition(player).forEach((element, value) ->
+                line(source, "command.dimensional_mana.affixes.line",
+                        Component.translatable("attribute.name.dimensional_mana.element_addition_" + element),
+                        format(value)));
+        return 1;
+    }
+
+    private static void line(CommandSourceStack source, String key, Component name, String value) {
+        source.sendSuccess(() -> Component.translatable(key, name, value).withStyle(ChatFormatting.GRAY), false);
+    }
+
     // ------------------------------------------------------------ 战斗结算自检
 
     /** 准心 12 格内对着的生物；没有就返回 null。 */
+    /**
+     * /dimensional_mana combat reduction [伤害]：把自己挨打时的减伤拆成三段打在聊天栏。
+     *
+     * <p>顺序与实战完全一致：原版护甲值与韧性 → 原版保护附魔（EPF）→
+     * {@link MojiangSteelEvents} 的魔精钢独立减伤。哪一段没吃到，数字一眼就能看出来。</p>
+     */
+    private static int showReduction(CommandSourceStack source, float rawDamage) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.translatable("command.dimensional_mana.combat.no_target"));
+            return 0;
+        }
+        ServerLevel level = player.serverLevel();
+        // 用「通用伤害」取样：它不吃护甲穿透，也不属于保护附魔的免疫类型，适合当基准。
+        DamageSource sample = level.damageSources().generic();
+        float armor = player.getArmorValue();
+        float toughness = (float)player.getAttributeValue(Attributes.ARMOR_TOUGHNESS);
+        float afterArmor = CombatRules.getDamageAfterAbsorb(player, rawDamage, sample, armor, toughness);
+        float epf = net.minecraft.world.item.enchantment.EnchantmentHelper
+                .getDamageProtection(level, player, sample);
+        float afterProtection = CombatRules.getDamageAfterMagicAbsorb(afterArmor, epf);
+        double independent = MojiangSteelEvents.independentMultiplier(player);
+        float finalDamage = afterProtection * (float)independent;
+
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.reduction.header",
+                format(rawDamage)).withStyle(ChatFormatting.WHITE), false);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.reduction.armor",
+                format(armor), format(toughness), format(afterArmor),
+                percent(1.0 - afterArmor / rawDamage)).withStyle(ChatFormatting.AQUA), false);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.reduction.protection",
+                format(epf), format(afterProtection),
+                percent(1.0 - afterProtection / Math.max(0.0001F, afterArmor)))
+                .withStyle(ChatFormatting.LIGHT_PURPLE), false);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.reduction.independent",
+                percent(1.0 - independent), format(finalDamage)).withStyle(ChatFormatting.GOLD), false);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.reduction.total",
+                percent(1.0 - finalDamage / rawDamage), format(finalDamage))
+                .withStyle(ChatFormatting.GREEN), false);
+        return 1;
+    }
+
     private static int showCombat(CommandSourceStack source) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {
@@ -955,6 +1071,55 @@ public final class ManaCommands {
         source.sendSuccess(() -> Component.translatable("command.dimensional_mana.spell_crit.status",
                 player.getDisplayName(), critPercent(total), critPercent(total - cheat), critPercent(cheat))
                 .withStyle(ChatFormatting.RED), false);
+        return 1;
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> elementalMasteryCommand() {
+        return Commands.literal("elemental_mastery")
+                .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .executes(context -> elementalMasteryStatus(context.getSource(), context.getSource().getPlayerOrException()))
+                .then(Commands.literal("status")
+                        .executes(context -> elementalMasteryStatus(context.getSource(), context.getSource().getPlayerOrException()))
+                        .then(Commands.argument("player", EntityArgument.player())
+                                .executes(context -> elementalMasteryStatus(context.getSource(), EntityArgument.getPlayer(context, "player")))))
+                .then(Commands.literal("set")
+                        .then(Commands.argument("value", FloatArgumentType.floatArg(0.0F, 1_000_000.0F))
+                                .executes(context -> setElementalMastery(context.getSource(), context.getSource().getPlayerOrException(),
+                                        FloatArgumentType.getFloat(context, "value"))))
+                        .then(Commands.argument("player", EntityArgument.player())
+                                .then(Commands.argument("value", FloatArgumentType.floatArg(0.0F, 1_000_000.0F))
+                                        .executes(context -> setElementalMastery(context.getSource(), EntityArgument.getPlayer(context, "player"),
+                                                FloatArgumentType.getFloat(context, "value"))))))
+                .then(Commands.literal("clear")
+                        .executes(context -> clearElementalMastery(context.getSource(), context.getSource().getPlayerOrException()))
+                        .then(Commands.argument("player", EntityArgument.player())
+                                .executes(context -> clearElementalMastery(context.getSource(), EntityArgument.getPlayer(context, "player")))));
+    }
+
+    private static int setElementalMastery(CommandSourceStack source, ServerPlayer player, float value) {
+        ElementMastery.setCheat(player, value);
+        ProgressSyncPayload.send(player);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.elemental_mastery.set",
+                player.getDisplayName(), format(value), ElementMastery.level(ElementMastery.get(player)))
+                .withStyle(ChatFormatting.LIGHT_PURPLE), true);
+        return 1;
+    }
+
+    private static int clearElementalMastery(CommandSourceStack source, ServerPlayer player) {
+        boolean removed = ElementMastery.clearCheat(player);
+        ProgressSyncPayload.send(player);
+        source.sendSuccess(() -> Component.translatable(removed
+                        ? "command.dimensional_mana.elemental_mastery.clear"
+                        : "command.dimensional_mana.elemental_mastery.clear_none",
+                player.getDisplayName()).withStyle(ChatFormatting.YELLOW), true);
+        return 1;
+    }
+
+    private static int elementalMasteryStatus(CommandSourceStack source, ServerPlayer player) {
+        float value = ElementMastery.get(player);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.elemental_mastery.status",
+                player.getDisplayName(), format(value), ElementMastery.level(value), format(ElementMastery.cheatValue(player)))
+                .withStyle(ChatFormatting.AQUA), false);
         return 1;
     }
 

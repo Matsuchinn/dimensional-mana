@@ -25,6 +25,7 @@ final class ClientItemAnimations {
             register("superconducting_crystal", 4, 200);
             // 高等魔法刻蚀改成 4 帧呼吸式动画：符文亮度与高光随帧循环起落。
             register("greater_magic_etching", 4, 170);
+            register("distorted_nether_star", 5, 180);
         });
     }
 

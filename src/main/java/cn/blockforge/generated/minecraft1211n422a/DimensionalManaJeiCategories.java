@@ -135,6 +135,8 @@ public final class DimensionalManaJeiCategories {
 
         private static List<ItemStack> ingredientStacks(String id, int count) {
             if (id == null || id.isBlank()) return List.of();
+            // 药水标记：#potion:elemental_mastery_2 → 对应那一瓶药水。
+            if (ElementalMasteryPotions.isToken(id)) return List.of(ElementalMasteryPotions.stack(id, count));
             if ("#magic_fragment".equals(id)) {
                 List<ItemStack> stacks = new ArrayList<>();
                 for (String grade : GeneratedMod.FRAGMENT_GRADES) {

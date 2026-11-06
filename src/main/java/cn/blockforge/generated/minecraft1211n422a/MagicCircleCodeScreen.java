@@ -143,7 +143,7 @@ public final class MagicCircleCodeScreen extends Screen {
             return Component.translatable("gui.dimensional_mana.magiccircle.code.hand_worn");
         }
         return Component.translatable("gui.dimensional_mana.magiccircle.code.hand_carrier",
-                carrier.fallbackName(), carrier.maxNodes(), carrier.maxLayers());
+                Component.translatable(carrier.translationKey()), carrier.maxNodes(), carrier.maxLayers());
     }
 
     /** 第一行从头显示（看得见 DM1- 前缀），第二行从尾往前截（刚粘进来的最后一段一定看得见）。 */
@@ -346,7 +346,7 @@ public final class MagicCircleCodeScreen extends Screen {
         if (local.ok()) {
             MagicCircleBlueprint blueprint = local.blueprint();
             preview = Component.translatable("gui.dimensional_mana.magiccircle.code.note_valid",
-                    blueprint.name(), blueprint.nodeCount(), blueprint.filledLayerCount());
+                    MagicCircleBlueprint.displayName(blueprint.name()), blueprint.nodeCount(), blueprint.filledLayerCount());
             previewOk = true;
         } else {
             preview = Component.translatable("gui.dimensional_mana.magiccircle.code.note_invalid",

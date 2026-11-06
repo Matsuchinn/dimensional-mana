@@ -214,7 +214,7 @@ public final class MagicCircleDrawing {
             }
             player.displayClientMessage(Component.translatable(
                     "message.dimensional_mana.magiccircle.blueprint.already_studied",
-                    sampleLayer + 1, blueprint.name()).withStyle(ChatFormatting.YELLOW), false);
+                    sampleLayer + 1, MagicCircleBlueprint.displayName(blueprint.name())).withStyle(ChatFormatting.YELLOW), false);
             if (exist != null) send(player, network, exist);
             return;
         }
@@ -272,7 +272,7 @@ public final class MagicCircleDrawing {
         MagicCircleProjectionEvents.firstStudyReward(player, blueprint);
         player.displayClientMessage(Component.translatable(
                 "message.dimensional_mana.magiccircle.blueprint.edit_mode",
-                blueprint.name(), copied, targetLayer + 1).withStyle(ChatFormatting.AQUA), false);
+                MagicCircleBlueprint.displayName(blueprint.name()), copied, targetLayer + 1).withStyle(ChatFormatting.AQUA), false);
         player.displayClientMessage(Component.translatable(
                 "message.dimensional_mana.magiccircle.blueprint.edit_mode_hint")
                 .withStyle(ChatFormatting.GRAY), false);
@@ -946,28 +946,32 @@ public final class MagicCircleDrawing {
         MagicCircleNetwork.Node after = layer.nodes().get(index);
         if (after.type() == MagicCircleBlockType.CONDITION
                 && MagicCircleGates.isGateMode(after.semantic(), after.gate())) {
-            player.displayClientMessage(Component.literal("[条件解析] " + MagicCircleGates.describe(after))
-                    .withStyle(ChatFormatting.AQUA), false);
+            player.displayClientMessage(Component.translatable(
+                    "message.dimensional_mana.magiccircle.gate.chat_prefix",
+                    MagicCircleGates.describeComponent(after)).withStyle(ChatFormatting.AQUA), false);
         } else if (after.type() == MagicCircleBlockType.TRIGGER) {
-            String base = MagicCircleGraph.triggerBaseMode(layer, index) ? "触发解析] 魔力起点已就绪：判定交给上游门控条件，"
-                    + MagicCircleGraph.baseGateSummary(layer, index) + "。"
-                    : "触发解析] 当外部" + triggerMediumName(after) + "到来时，法阵启动。";
-            player.displayClientMessage(Component.literal("[" + base).withStyle(ChatFormatting.AQUA), false);
+            Component base = MagicCircleGraph.triggerBaseMode(layer, index)
+                    ? Component.translatable("message.dimensional_mana.magiccircle.trigger.chat_base",
+                            MagicCircleGraph.baseGateSummary(layer, index))
+                    : Component.translatable("message.dimensional_mana.magiccircle.trigger.chat_wait",
+                            triggerMediumName(after));
+            player.displayClientMessage(base.copy().withStyle(ChatFormatting.AQUA), false);
         }
         send(player, network, session);
     }
 
-    /** 触发节点语义粉对应的检测媒介大白话（解析句用）。 */
-    private static String triggerMediumName(MagicCircleNetwork.Node node) {
-        return switch (node.semantic()) {
-            case "dimensional_mana:amethyst_dust" -> "魔素检测";
-            case "minecraft:sugar" -> "生命检测";
-            case "minecraft:glowstone_dust" -> "生物数量检测";
-            case "minecraft:gunpowder" -> "爆炸检测";
-            case "dimensional_mana:lapis_dust" -> "经验检测";
-            case "minecraft:blaze_powder" -> "元素反应检测";
-            default -> "红石信号";
+    /** 触发节点语义粉对应的检测媒介大白话（解析句用，跟着语言走）。 */
+    private static Component triggerMediumName(MagicCircleNetwork.Node node) {
+        String key = switch (node.semantic()) {
+            case "dimensional_mana:amethyst_dust" -> "mana";
+            case "minecraft:sugar" -> "life";
+            case "minecraft:glowstone_dust" -> "count";
+            case "minecraft:gunpowder" -> "explosion";
+            case "dimensional_mana:lapis_dust" -> "experience";
+            case "minecraft:blaze_powder" -> "reaction";
+            default -> "redstone";
         };
+        return Component.translatable("message.dimensional_mana.magiccircle.trigger.medium." + key);
     }
 
     /**
@@ -1029,19 +1033,21 @@ public final class MagicCircleDrawing {
         if (node.type() != MagicCircleBlockType.CONDITION) return;
         String intent = payload.powder() == null ? "" : payload.powder();
         MagicCircleNetwork.Node updated;
-        String message;
+        Component message;
         if (intent.equals("mode")) {
             String gate = MagicCircleGates.toggleMode(node.gate(), node.semantic());
             boolean toGate = gate.startsWith(MagicCircleGates.MODE_GATE);
             updated = node.withGate(gate).withDeclare(toGate ? "" : node.declare());
-            message = toGate ? "条件节点切到门控模式：判定装语义粉，边界声明已清空"
-                    : "条件节点切到声明模式：门控判定停用，回到边界声明编辑器";
+            message = Component.translatable(toGate
+                    ? "message.dimensional_mana.magiccircle.gate.mode.gate"
+                    : "message.dimensional_mana.magiccircle.gate.mode.declare");
         } else if (intent.equals("op")) {
             String gate = MagicCircleGates.toggleOperator(node.gate(), node.semantic());
             updated = node.withGate(gate);
             MagicCircleGates.CompareOperator op = MagicCircleGates.operatorOf(
                     MagicCircleGates.domainOf(node.semantic()), gate);
-            message = "比较符已翻转为 " + op.symbol() + "（底层只存枚举，没有隐藏的反转标记）";
+            message = Component.translatable("message.dimensional_mana.magiccircle.gate.op.flipped",
+                    op.symbol());
         } else {
             return;
         }
@@ -1052,10 +1058,11 @@ public final class MagicCircleDrawing {
         pushUndo(session, layer);
         layer.setNode(index, updated);
         MagicCircleNetworks.markDirty(level);
-        player.displayClientMessage(Component.literal(message).withStyle(ChatFormatting.GREEN), false);
+        player.displayClientMessage(message.copy().withStyle(ChatFormatting.GREEN), false);
         if (MagicCircleGates.isGateMode(updated.semantic(), updated.gate())) {
-            player.displayClientMessage(Component.literal("[条件解析] " + MagicCircleGates.describe(updated))
-                    .withStyle(ChatFormatting.AQUA), false);
+            player.displayClientMessage(Component.translatable(
+                    "message.dimensional_mana.magiccircle.gate.chat_prefix",
+                    MagicCircleGates.describeComponent(updated)).withStyle(ChatFormatting.AQUA), false);
         }
         send(player, network, session);
     }
@@ -1397,7 +1404,7 @@ public final class MagicCircleDrawing {
         if (!blueprint.fits(carrier)) {
             player.displayClientMessage(Component.translatable(
                     "message.dimensional_mana.magiccircle.blueprint.capacity_full",
-                    carrier.fallbackName(), carrier.maxNodes(), blueprint.nodeCount(),
+                    Component.translatable(carrier.translationKey()), carrier.maxNodes(), blueprint.nodeCount(),
                     carrier.maxLayers(), blueprint.filledLayerCount())
                     .withStyle(ChatFormatting.RED), false);
             return;
@@ -1413,7 +1420,7 @@ public final class MagicCircleDrawing {
         if (!player.getInventory().add(written)) player.drop(written, false);
         player.displayClientMessage(Component.translatable(
                 "message.dimensional_mana.magiccircle.blueprint.transcribed",
-                blueprint.name(), carrier.fallbackName(), blueprint.nodeCount(), blueprint.filledLayerCount())
+                MagicCircleBlueprint.displayName(blueprint.name()), Component.translatable(carrier.translationKey()), blueprint.nodeCount(), blueprint.filledLayerCount())
                 .withStyle(ChatFormatting.GREEN), false);
         player.displayClientMessage(Component.translatable(
                 "message.dimensional_mana.magiccircle.blueprint.transcribed_hint")
@@ -1436,7 +1443,7 @@ public final class MagicCircleDrawing {
         if (!blueprint.fits(carrier)) {
             player.displayClientMessage(Component.translatable(
                     "message.dimensional_mana.magiccircle.blueprint.capacity_full",
-                    carrier.fallbackName(), carrier.maxNodes(), blueprint.nodeCount(),
+                    Component.translatable(carrier.translationKey()), carrier.maxNodes(), blueprint.nodeCount(),
                     carrier.maxLayers(), blueprint.filledLayerCount())
                     .withStyle(ChatFormatting.RED), false);
             return;
@@ -1455,7 +1462,7 @@ public final class MagicCircleDrawing {
         session.bpDone = true;
         player.displayClientMessage(Component.translatable(
                 "message.dimensional_mana.magiccircle.blueprint.transcribed_slot",
-                blueprint.name(), carrier.fallbackName(), blueprint.nodeCount(), blueprint.filledLayerCount())
+                MagicCircleBlueprint.displayName(blueprint.name()), Component.translatable(carrier.translationKey()), blueprint.nodeCount(), blueprint.filledLayerCount())
                 .withStyle(ChatFormatting.GREEN), false);
         send(player, network, session);
     }

@@ -74,6 +74,11 @@ public final class ManaFurnaceBlockEntity extends AbstractFurnaceBlockEntity {
     public void setRecipeUsed(RecipeHolder<?> recipe) {
         Level level = this.level;
         if (recipe != null && level != null && !level.isClientSide) {
+            // 饰品回收的经验必须保留给玩家；加工台联动只接管普通烧炼产物。
+            if (recipe.id().getPath().startsWith("recycle_accessory_")) {
+                super.setRecipeUsed(recipe);
+                return;
+            }
             CrystalProcessorBlockEntity processor = linkedProcessor();
             if (processor != null) {
                 int mana = linkedMana(kind, recipe.value().getResultItem(level.registryAccess()));

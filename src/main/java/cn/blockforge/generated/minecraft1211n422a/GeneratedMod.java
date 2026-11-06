@@ -143,6 +143,11 @@ public final class GeneratedMod {
     public static final List<String> QI_ITEM_IDS = new ArrayList<>();
     /** 「次元物语：魔导」创造页自己收着的新东西，主创造页不再重复放一遍。 */
     public static final List<String> ARCANE_ITEM_IDS = new ArrayList<>();
+    /**
+     * 魔精钢装备：按需求直接摆进原版对应的创造页（战斗 / 工具 / 材料），
+     * 所以主创造页不再重复收一份。
+     */
+    public static final List<String> VANILLA_TAB_ITEM_IDS = new ArrayList<>();
     public static final List<String> FRAGMENT_GRADES = List.of("lesser", "medium", "advanced", "supreme", "special");
     public static final List<String> SCHOOL_IDS = List.of("destruction", "protection", "healing", "blessing", "curse",
             "control", "summon", "movement", "divination", "psychic", "time", "space", "chaos");
@@ -168,6 +173,9 @@ public final class GeneratedMod {
             PlantEffects.Unknown::new);
     public static final DeferredHolder<MobEffect, MobEffect> VESPER_CURSE = EFFECTS.register("vesper_curse",
             PlantEffects.Curse::new);
+    /** 元素精通强化：元素精通药水的属性型效果，Ⅰ级 +8，每升一级再多 +8。 */
+    public static final DeferredHolder<MobEffect, MobEffect> ELEMENTAL_MASTERY = EFFECTS.register("elemental_mastery",
+            ElementalMasteryEffect::new);
     /** 强化补魔剂多回的那 15%：存在物品组件上，不需要为每一级补魔剂各开一个物品。 */
     public static final DeferredHolder<net.minecraft.core.component.DataComponentType<?>,
             net.minecraft.core.component.DataComponentType<Float>> POTION_BOOST = DATA_COMPONENTS.register("potion_boost",
@@ -236,6 +244,30 @@ public final class GeneratedMod {
             () -> new Potion("pseudomana_veil", new MobEffectInstance(PSEUDOMANA_VEIL, 60 * 20)));
     public static final DeferredHolder<Potion, Potion> LONG_PSEUDOMANA_VEIL_POTION = POTIONS.register("long_pseudomana_veil",
             () -> new Potion("long_pseudomana_veil", new MobEffectInstance(PSEUDOMANA_VEIL, 180 * 20)));
+
+    // ── 元素精通药水线 ──────────────────────────────────────────────────────
+    // Ⅰ~Ⅵ 六档，基础 15 秒、红石延长版 30 秒；Ⅰ级 +8 精通，每升一级再多 +8。
+    // 药水本身用原版药水瓶，所以火药喷溅、龙息滞留这些原版规则天然通用。
+
+    /** 普通版元素精通药水Ⅰ~Ⅵ（15 秒）。 */
+    public static final List<DeferredHolder<Potion, Potion>> ELEMENTAL_MASTERY_POTIONS =
+            registerElementalMasteryPotions(false);
+    /** 红石延长版元素精通药水Ⅰ~Ⅵ（30 秒）。 */
+    public static final List<DeferredHolder<Potion, Potion>> LONG_ELEMENTAL_MASTERY_POTIONS =
+            registerElementalMasteryPotions(true);
+
+    private static List<DeferredHolder<Potion, Potion>> registerElementalMasteryPotions(boolean extended) {
+        List<DeferredHolder<Potion, Potion>> out = new ArrayList<>(ElementalMasteryPotions.MAX_LEVEL);
+        for (int level = 1; level <= ElementalMasteryPotions.MAX_LEVEL; level++) {
+            String id = ElementalMasteryPotions.id(level, extended);
+            final int amplifier = level - 1;
+            final int ticks = extended ? ElementalMasteryPotions.LONG_TICKS : ElementalMasteryPotions.BASE_TICKS;
+            out.add(POTIONS.register(id, () -> new Potion(id,
+                    new MobEffectInstance(ELEMENTAL_MASTERY, ticks, amplifier))));
+        }
+        return List.copyOf(out);
+    }
+
     public static final DeferredHolder<SoundEvent, SoundEvent> MANA_FORGE_BURN = SOUNDS.register("mana_forge_burn",
             () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "mana_forge_burn")));
     public static final DeferredHolder<SoundEvent, SoundEvent> PROFESSIONAL_FURNACE_BURN = SOUNDS.register("professional_furnace_burn",
@@ -244,6 +276,10 @@ public final class GeneratedMod {
             () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "pure_liquid_mana_bubble")));
     public static final DeferredHolder<SoundEvent, SoundEvent> CRYSTAL_PROCESS_COMPLETE = SOUNDS.register("crystal_process_complete",
             () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "crystal_process_complete")));
+    public static final DeferredHolder<SoundEvent, SoundEvent> MAGIC_CRYSTAL_ANVIL_BREAK = SOUNDS.register("magic_crystal_anvil_break",
+            () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "magic_crystal_anvil_break")));
+    public static final DeferredHolder<SoundEvent, SoundEvent> MAGIC_CRYSTAL_ANVIL_PLACE = SOUNDS.register("magic_crystal_anvil_place",
+            () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "magic_crystal_anvil_place")));
     public static final DeferredHolder<SoundEvent, SoundEvent> CODEX_PAGE_TURN = SOUNDS.register("codex_page_turn",
             () -> SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(MOD_ID, "codex_page_turn")));
     public static final DeferredHolder<SoundEvent, SoundEvent> CODEX_SPACE_OPEN = SOUNDS.register("codex_space_open",
@@ -422,6 +458,10 @@ public final class GeneratedMod {
             () -> new MenuType<>((id, inventory) -> new ManaFurnaceMenu(id, inventory, ManaCookingRecipe.FurnaceKind.PROFESSIONAL), FeatureFlags.DEFAULT_FLAGS));
     public static final DeferredHolder<MenuType<?>, MenuType<CrystalProcessorMenu>> CRYSTAL_PROCESSOR_MENU = MENUS.register("crystal_processor",
             () -> new MenuType<>(CrystalProcessorMenu::new, FeatureFlags.DEFAULT_FLAGS));
+    /** 武备加工台：两个格子 + 锻造按钮，强化与洗练都靠菜单的 clickMenuButton 结算。 */
+    public static final DeferredHolder<MenuType<?>, MenuType<WeaponWorkbenchMenu>> WEAPON_WORKBENCH_MENU = MENUS.register(
+            WeaponWorkbenchBlock.BLOCK_ID,
+            () -> new MenuType<>(WeaponWorkbenchMenu::new, FeatureFlags.DEFAULT_FLAGS));
     /** 冒险者交易界面：窗口 id + 实体 id，客户端靠实体 id 找回那只冒险者。 */
     public static final DeferredHolder<MenuType<?>, MenuType<AdventurerTradeMenu>> ADVENTURER_TRADE_MENU = MENUS.register(
             "adventurer_trade", () -> net.neoforged.neoforge.common.extensions.IMenuTypeExtension.create(
@@ -431,6 +471,10 @@ public final class GeneratedMod {
     /** 加料食物（卢梅莉亚粉末 + 任意食物）：产物要按食物现场生成，只能走特制配方。 */
     public static final DeferredHolder<RecipeSerializer<?>, RecipeSerializer<PlantFood>> PLANT_FOOD_SERIALIZER =
             RECIPE_SERIALIZERS.register("plant_food", PlantFood.Serializer::new);
+    /** 合成方格修装备：两件同类装备拼耐久，惩罚清零并丢掉附魔与词条。 */
+    public static final DeferredHolder<RecipeSerializer<?>, RecipeSerializer<EquipmentRecombineRecipe>> EQUIPMENT_RECOMBINE_SERIALIZER =
+            RECIPE_SERIALIZERS.register("equipment_recombine",
+                    () -> new net.minecraft.world.item.crafting.SimpleCraftingRecipeSerializer<>(EquipmentRecombineRecipe::new));
     public static final DeferredHolder<RecipeSerializer<?>, RecipeSerializer<ManaCookingRecipe>> MANA_FORGE_RECIPE_SERIALIZER = RECIPE_SERIALIZERS.register(
             "mana_forge_smelting", () -> new SimpleCookingSerializer<>((group, category, ingredient, result, experience, cookingTime) ->
                     new ManaCookingRecipe(ManaCookingRecipe.FurnaceKind.MANA_FORGE, group, category, ingredient, result, experience, cookingTime), 200));
@@ -645,6 +689,20 @@ public final class GeneratedMod {
         MOD_BLOCKS.put("crystal_processor", crystalProcessor);
         MOD_ITEMS.put("crystal_processor", ITEMS.register("crystal_processor",
                 () -> new CrystalProcessorItem(crystalProcessor.get(), new Item.Properties().rarity(Rarity.RARE))));
+        // 魔晶铁砧沿用原版铁砧界面，永不损坏；词条合成由武备事件接管。
+        // 归到「次元物语：魔素」页，紧跟在上面几台工作方块之后（注册顺序就是创造页顺序）。
+        device("magic_crystal_anvil", () -> new MagicCrystalAnvilBlock(
+                BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_PURPLE).strength(5.0F, 1200.0F)
+                        .requiresCorrectToolForDrops().noOcclusion()), Rarity.EPIC);
+        // 武备加工台：强化装备、敲击升级、词条洗练，排在魔晶铁砧后面。
+        device("weapon_workbench", () -> new WeaponWorkbenchBlock(
+                BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_PURPLE).strength(5.0F, 600.0F)
+                        .requiresCorrectToolForDrops().sound(SoundType.METAL)
+                        .lightLevel(state -> 6)), Rarity.EPIC);
+        // 武备强化石：武备加工台的第二种材料，满级武备用它把副词条一路顶到满。
+        MOD_ITEMS.put(ArmamentStoneLoot.ITEM_ID, ITEMS.register(ArmamentStoneLoot.ITEM_ID,
+                () -> new ArmamentStoneItem(new Item.Properties().rarity(Rarity.EPIC)
+                        .component(net.minecraft.core.component.DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true))));
 
         simple("raw_lesser_mana_crystal", Rarity.COMMON);
         simple("raw_medium_mana_crystal", Rarity.UNCOMMON);
@@ -770,6 +828,9 @@ public final class GeneratedMod {
             magicItem(relic.id(), ITEMS.register(relic.id(), () -> new RelicAccessoryItem(
                     relicProperties(relic), relic)));
         }
+        // 元素精通护符：通用饰品 / 魔法饰品 / 护符三个栏位都能戴，佩戴 +50 元素精通。
+        magicItem(ElementalMasteryCharmItem.ITEM_ID, ITEMS.register(ElementalMasteryCharmItem.ITEM_ID,
+                () -> new ElementalMasteryCharmItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE))));
         // 雨靴：脚饰栏位，工作台用两个水元素结晶粉末 + 两个皮革合成。
         magicItem(RainBootsItem.ITEM_ID, ITEMS.register(RainBootsItem.ITEM_ID,
                 () -> new RainBootsItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON))));
@@ -811,6 +872,8 @@ public final class GeneratedMod {
         registerMovedSpawnEggs();
         registerElementalSlimes();
         registerGoblins();
+        // r317 魔精钢：四件护甲、五把工具与锻造模板，进原版战斗 / 工具 / 材料创造页。
+        MojiangSteelEquipment.register();
         registerMagicCircle();
         registerCrystalZombie();
         registerManaCreeper();
@@ -1111,6 +1174,10 @@ public final class GeneratedMod {
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<CrystalProcessorBlockEntity>> CRYSTAL_PROCESSOR_BLOCK_ENTITY = BLOCK_ENTITIES.register(
             "crystal_processor", () -> BlockEntityType.Builder.of(CrystalProcessorBlockEntity::new,
                     MOD_BLOCKS.get("crystal_processor").get()).build(null));
+    /** 武备加工台：只存两个格子，没有 tick。 */
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<WeaponWorkbenchBlockEntity>> WEAPON_WORKBENCH_BLOCK_ENTITY =
+            BLOCK_ENTITIES.register(WeaponWorkbenchBlock.BLOCK_ID, () -> BlockEntityType.Builder.of(
+                    WeaponWorkbenchBlockEntity::new, MOD_BLOCKS.get(WeaponWorkbenchBlock.BLOCK_ID).get()).build(null));
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<MagicCircleBaseBlockEntity>> MAGIC_CIRCLE_BASE_BLOCK_ENTITY =
             BLOCK_ENTITIES.register("magic_circle_base", () -> BlockEntityType.Builder.of(MagicCircleBaseBlockEntity::new,
                     MOD_BLOCKS.get("magic_circle_base").get()).build(null));
@@ -1123,7 +1190,8 @@ public final class GeneratedMod {
             .icon(() -> new ItemStack(MOD_ITEMS.get("special_mana_crystal").get()))
             .displayItems((parameters, output) -> MOD_ITEMS.forEach((id, item) -> {
                 if (!MAGIC_ITEM_IDS.contains(id) && !NATURAL_ITEM_IDS.contains(id)
-                        && !QI_ITEM_IDS.contains(id) && !ARCANE_ITEM_IDS.contains(id)) output.accept(item.get());
+                        && !QI_ITEM_IDS.contains(id) && !ARCANE_ITEM_IDS.contains(id)
+                        && !VANILLA_TAB_ITEM_IDS.contains(id)) output.accept(item.get());
             })).build());
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> MAGIC_CREATIVE_TAB = CREATIVE_TABS.register("magic", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.dimensional_mana.magic"))
@@ -1142,13 +1210,15 @@ public final class GeneratedMod {
             })
             .build());
 
-    /** 魔法创造页收尾的药水清单：魔蚀Ⅰ~Ⅳ、长效魔蚀Ⅰ~Ⅳ、蔽魔、长效蔽魔。 */
+    /** 魔法创造页收尾的药水清单：魔蚀Ⅰ~Ⅳ、长效魔蚀Ⅰ~Ⅳ、蔽魔、长效蔽魔、元素精通Ⅰ~Ⅵ 与长效版。 */
     public static List<net.minecraft.core.Holder<Potion>> brewedPotionLine() {
         List<net.minecraft.core.Holder<Potion>> line = new ArrayList<>();
         line.addAll(MAGIC_EROSION_POTIONS);
         line.addAll(LONG_MAGIC_EROSION_POTIONS);
         line.add(PSEUDOMANA_VEIL_POTION);
         line.add(LONG_PSEUDOMANA_VEIL_POTION);
+        line.addAll(ELEMENTAL_MASTERY_POTIONS);
+        line.addAll(LONG_ELEMENTAL_MASTERY_POTIONS);
         return line;
     }
 
@@ -1218,6 +1288,10 @@ public final class GeneratedMod {
         accessories.sort(Comparator.comparingInt(GeneratedMod::accessoryRank));
         ordered.addAll(accessories);
         for (String id : MAGIC_ITEM_IDS) if (id.endsWith("_general_staff")) ordered.add(id);
+        // 魔精钢装备紧跟法杖：护甲 → 剑 → 斧 → 镐 → 锹 → 锄；锻造模板属于材料，留在后面的杂项里。
+        for (String id : MojiangSteelEquipment.EQUIPMENT_IDS) {
+            if (MAGIC_ITEM_IDS.contains(id)) ordered.add(id);
+        }
         for (String id : MAGIC_ITEM_IDS) if (id.endsWith("_spawn_egg")) ordered.add(id);
         for (String id : MAGIC_ITEM_IDS) if (!ordered.contains(id)) ordered.add(id);
         return ordered;
@@ -1240,6 +1314,7 @@ public final class GeneratedMod {
         if (MagicEquipment.ENHANCE_RING.equals(id)) return 20;
         if ("wisdom_ring".equals(id)) return 30;
         if ("magic_amulet".equals(id)) return 40;
+        if (ElementalMasteryCharmItem.ITEM_ID.equals(id)) return 45;
         if (MagicEquipment.MANA_AMULET.equals(id)) return 50;
         if (MagicEquipment.FOCUS_CLOAK.equals(id) || MagicEquipment.DEFLECT_CLOAK.equals(id)
                 || MagicEquipment.MASTER_CLOAK.equals(id)) return 60;
@@ -1288,6 +1363,8 @@ public final class GeneratedMod {
 
     public GeneratedMod(IEventBus modBus, ModContainer container) {
         NewSpellContent.init();
+        // 内置属性上限修复：先抬一次（原版属性这时候已就位），注册完成后再在实体属性注册前补一次。
+        AttributeLimits.apply();
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
         FLUIDS.register(modBus);
@@ -1304,6 +1381,7 @@ public final class GeneratedMod {
         BLOCK_ENTITIES.register(modBus);
         RECIPE_TYPES.register(modBus);
         RoughEquipment.ARMOR_MATERIALS.register(modBus);
+        MojiangSteelEquipment.ARMOR_MATERIALS.register(modBus);
         RECIPE_SERIALIZERS.register(modBus);
         DATA_COMPONENTS.register(modBus);
         LOOT_CONDITIONS.register(modBus);
@@ -1345,6 +1423,7 @@ public final class GeneratedMod {
         modBus.addListener(ParryStancePayload::register);
         modBus.addListener(QiSyncPayload::register);
         modBus.addListener(QiActionPayload::register);
+        modBus.addListener(AnvilManaPayload::register);
         modBus.addListener(OpenCombatCodexPayload::register);
         modBus.addListener(MagicCircleSyncPayload::register);
         modBus.addListener(MagicCircleActionPayload::register);
@@ -1353,11 +1432,33 @@ public final class GeneratedMod {
         modBus.addListener(MagicCircleCodeResultPayload::register);
         modBus.addListener(CorruptedWitherFxPayload::register);
         modBus.addListener(CorruptedWitherBurstPayload::register);
+        // r317：魔精钢装备摆进原版战斗 / 工具 / 材料创造页。
+        modBus.addListener(GeneratedMod::addVanillaTabItems);
         if (FMLEnvironment.dist == Dist.CLIENT) ClientModEvents.register(modBus);
         ManaEvents events = new ManaEvents();
         FragmentLootEvents fragmentLoot = new FragmentLootEvents();
         AccessoryLootEvents accessoryLoot = new AccessoryLootEvents();
         NeoForge.EVENT_BUS.addListener(ManaCommands::register);
+        // r317 魔精钢：护甲独立减伤、附魔结算 +1、附魔台高等级相性、末地宝箱模板。
+        NeoForge.EVENT_BUS.addListener(MojiangSteelEvents::onDamagePre);
+        // 《次元物语：武备》：自然掉落生成词条、Tooltip、铁砧合成和装备属性结算。
+        NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onLivingDrops);
+        NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onTooltip);
+        NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onAnvilUpdate);
+        NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onEquipmentChange);
+        NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onAnvilRepair);
+        NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onGrindstonePlace);
+        NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onItemEntityJoin);
+        NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onLootTableLoad);
+        NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onContainerOpen);
+        // 弓、弩、投掷三叉戟命中时补算物理伤害词条（弹射物不吃近战那条攻击伤害属性）。
+        NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onRangedIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(MojiangSteelEvents::onGetEnchantmentLevel);
+        NeoForge.EVENT_BUS.addListener(MojiangSteelEvents::onEnchantmentLevelSet);
+        NeoForge.EVENT_BUS.addListener(MojiangSteelEvents::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(MojiangSteelEvents::addChestLoot);
+        NeoForge.EVENT_BUS.addListener(MojiangSteelEvents::onTooltip);
         NeoForge.EVENT_BUS.addListener(ManaFurnaceRecipeBridge::onServerStarted);
         NeoForge.EVENT_BUS.addListener(ManaFurnaceRecipeBridge::onDatapackSync);
         // 末影龙复活：死亡拦截排在其它死亡处理之前，取消之后别人才看得到 isCanceled()。
@@ -1377,6 +1478,7 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onBlockBreak);
         NeoForge.EVENT_BUS.addListener(events::onJoin);
+        NeoForge.EVENT_BUS.addListener(events::onEquipmentChange);
         NeoForge.EVENT_BUS.addListener(events::onLogin);
         NeoForge.EVENT_BUS.addListener(events::onLogout);
         NeoForge.EVENT_BUS.addListener(events::onDimensionChange);
@@ -1386,6 +1488,9 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(events::onWake);
         NeoForge.EVENT_BUS.addListener(CriticalSystem::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(events::onIncomingDamage);
+        // r332 物理词条扩充：受击阶段记下破甲 / 连击 / 处决 / 见切加成（要排在斗气减伤之后、
+        // 护甲结算之前，破甲才反推得准）。
+        NeoForge.EVENT_BUS.addListener(PhysicalAffixEffects::onIncomingDamage);
         // r230 晶化行尸：致命伤拦截要排在 ManaEvents 的受击链之后（/kill 先被收窄成有限值才拦得住）。
         NeoForge.EVENT_BUS.addListener(CrystallizedZombieEvents::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(CrystallizedZombieEvents::onDamagePost);
@@ -1445,6 +1550,9 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(RelicEffects::onLevelTick);
         NeoForge.EVENT_BUS.addListener(RelicLoot::addChestLoot);
         NeoForge.EVENT_BUS.addListener(RelicLoot::addEntityDrops);
+        // r332：先把破甲多出来的伤害与连击 / 处决 / 见切乘区算进去，再走 ManaEvents 的
+        // 抗性、诅咒等乘法，保证这些增伤和其它乘区叠加方式一致。
+        NeoForge.EVENT_BUS.addListener(PhysicalAffixEffects::onDamagePre);
         NeoForge.EVENT_BUS.addListener(events::onDamagePre);
         NeoForge.EVENT_BUS.addListener(events::onStruckByLightning);
         NeoForge.EVENT_BUS.addListener(events::onBlockBreak);
@@ -1477,6 +1585,8 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::effectRemoved);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::effectExpired);
         NeoForge.EVENT_BUS.addListener(PoisonSpells::allowForcedPoison);
+        // 元素附着强制存在：免疫药水的怪（凋零 / 末影龙 / 监守者 / 别的模组自定义免疫）也吃得到附着。
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ElementReactionSystem::allowForcedAttachment);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::afterDamage);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::attack);
         NeoForge.EVENT_BUS.addListener(NewSpellSystem::jump);
@@ -1497,14 +1607,22 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(fragmentLoot::addWitchDrops);
         NeoForge.EVENT_BUS.addListener(AncientFragmentLoot::addChestLoot);
         NeoForge.EVENT_BUS.addListener(AncientFragmentLoot::addEntityDrops);
+        // 武备强化石：普通宝箱 2%、幽匿古城 40%（每处最多 4 颗）、凋零 20%、监守者 8%。
+        NeoForge.EVENT_BUS.addListener(ArmamentStoneLoot::addChestLoot);
+        NeoForge.EVENT_BUS.addListener(ArmamentStoneLoot::addEntityDrops);
         // r211：法阵案例残片进三处宝箱（祭坛 55%、哥布林 25%、村庄 40%，各有每处上限）。
         NeoForge.EVENT_BUS.addListener(BlueprintFragmentLoot::addChestLoot);
         NeoForge.EVENT_BUS.addListener(accessoryLoot::onLootTableLoad);
         NeoForge.EVENT_BUS.addListener(accessoryLoot::onVillagerTrades);
         NeoForge.EVENT_BUS.addListener(events::onDamagePost);
+        // r332：落地之后结算物理吸血与元素附加（必须在 events::onDamagePost 之后，拿到的是最终伤害）。
+        NeoForge.EVENT_BUS.addListener(PhysicalAffixEffects::onDamagePost);
         NeoForge.EVENT_BUS.addListener(events::onDeath);
         NeoForge.EVENT_BUS.addListener(events::onHeal);
         NeoForge.EVENT_BUS.addListener(events::onEffectAdded);
+        // 元素精通药水生效 / 到期 / 被清：三种情况都要让精通缓存失效，状态页才不会停在旧数值。
+        NeoForge.EVENT_BUS.addListener(events::onEffectExpired);
+        NeoForge.EVENT_BUS.addListener(events::onEffectRemoved);
         NeoForge.EVENT_BUS.addListener(events::onMobEntityJoin);
         NeoForge.EVENT_BUS.addListener(events::onExplosion);
         NeoForge.EVENT_BUS.addListener(events::onLevelTick);
@@ -1566,6 +1684,9 @@ public final class GeneratedMod {
     }
 
     private void createEntityAttributes(EntityAttributeCreationEvent event) {
+        // 注册阶段的第二次上限修复：把本模组自己注册的属性（法术强度、暴击率……）也一起抬起来，
+        // 这样任何实体在建属性表时读到的都已经是修好后的上限。
+        AttributeLimits.apply();
         event.put(WANDERING_WITCH.get(), WanderingWitch.createAttributes().build());
         event.put(ADVENTURER.get(), Adventurer.createAttributes().build());
         for (ElementalSlimeVariant variant : ElementalSlimeVariant.values())
@@ -1653,6 +1774,28 @@ public final class GeneratedMod {
             case SHAMAN -> 0x6A3FA0;
             case CHIEF -> 0x8B1A1A;
         };
+    }
+
+    /**
+     * 魔精钢装备按需求进原版创造页：四件护甲、剑、斧进「战斗」，
+     * 镐、锹、锄进「工具与实用物品」，锻造模板进「原材料」。
+     */
+    private static void addVanillaTabItems(net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent event) {
+        List<String> ids;
+        if (event.getTabKey().equals(net.minecraft.world.item.CreativeModeTabs.COMBAT)) {
+            ids = MojiangSteelEquipment.COMBAT_TAB_IDS;
+        } else if (event.getTabKey().equals(net.minecraft.world.item.CreativeModeTabs.TOOLS_AND_UTILITIES)) {
+            ids = MojiangSteelEquipment.TOOLS_TAB_IDS;
+        } else if (event.getTabKey().equals(net.minecraft.world.item.CreativeModeTabs.INGREDIENTS)) {
+            ids = MojiangSteelEquipment.INGREDIENT_TAB_IDS;
+        } else {
+            return;
+        }
+        for (String id : ids) {
+            DeferredItem<? extends Item> item = MOD_ITEMS.get(id);
+            if (item != null) event.accept(new ItemStack(item.get()),
+                    CreativeModeTab.TabVisibility.PARENT_AND_SEARCH_TABS);
+        }
     }
 
     private static void simple(String name, Rarity rarity) {
@@ -1743,12 +1886,13 @@ public final class GeneratedMod {
     }
 
     private void addTalentScrollChestLoot(net.neoforged.neoforge.event.LootTableLoadEvent event) {
-        if (!event.getName().getNamespace().equals("minecraft") || !event.getName().getPath().startsWith("chests/")) return;
+        // 结构宝箱通用池：原版与其它模组新增结构的宝箱都算，判定见 StructureChestLoot。
+        if (!StructureChestLoot.isForeignStructureChest(event.getName())) return;
         LootPool.Builder pool = LootPool.lootPool().name("dimensional_mana_talent_scroll")
                 .setRolls(ConstantValue.exactly(1))
                 .when(LootItemRandomChanceCondition.randomChance(0.00005F));
         for (ElementType element : ElementType.values()) pool.add(LootItem.lootTableItem(MOD_ITEMS.get(element.scrollId()).get()));
-        event.getTable().addPool(pool.build());
+        StructureChestLoot.addPool(event.getTable(), pool.build());
     }
 
     private void brewingRecipes(RegisterBrewingRecipesEvent event) {
@@ -1791,5 +1935,18 @@ public final class GeneratedMod {
                 PotionContents.createItemStack(Items.POTION, PSEUDOMANA_VEIL_POTION));
         // 红石：延长到 3 分钟；喷溅 / 滞留同样自动。
         event.getBuilder().addMix(PSEUDOMANA_VEIL_POTION, Items.REDSTONE, LONG_PSEUDOMANA_VEIL_POTION);
+
+        // ── 元素精通药水线 ──
+        // 基础：上方 1 份超导魔晶粉 + 下方最多 3 瓶魔素调和剂 → 一次酿 3 瓶元素精通Ⅰ。
+        // 调和剂不是药水，走通用配方接口；三格底部会各自产出一瓶，正好“一次酿三瓶”。
+        event.getBuilder().addRecipe(
+                Ingredient.of(MOD_ITEMS.get("mana_harmonizer").get()),
+                Ingredient.of(MOD_ITEMS.get("superconducting_crystal_dust").get()),
+                ElementalMasteryPotions.stack(ElementalMasteryPotions.token(1, false), 1));
+        // 红石：15 秒翻倍成 30 秒；喷溅 / 滞留同理自动套用。
+        for (int level = 1; level <= ElementalMasteryPotions.MAX_LEVEL; level++) {
+            event.getBuilder().addMix(ELEMENTAL_MASTERY_POTIONS.get(level - 1), Items.REDSTONE,
+                    LONG_ELEMENTAL_MASTERY_POTIONS.get(level - 1));
+        }
     }
 }

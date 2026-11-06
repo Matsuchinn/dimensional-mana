@@ -63,6 +63,8 @@ public final class MagicAchievements {
         boolean staff = false;
         boolean supremeStaff = false;
         boolean poison = false;
+        boolean affix = false;
+        boolean bossAffix = false;
         var inventory = player.getInventory();
         for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
             ItemStack stack = inventory.getItem(slot);
@@ -74,6 +76,11 @@ public final class MagicAchievements {
             if (matches(item, "ancient_magic_steel_billet")) billet = true;
             if (matches(item, GENERAL_STAFFS)) staff = true;
             if (matches(item, "special_general_staff")) supremeStaff = true;
+            if (EquipmentAffixSystem.hasAffix(stack)) {
+                affix = true;
+                if (EquipmentAffixSystem.isBossAffix(stack)) bossAffix = true;
+            }
+            if (matches(item, "magic_crystal_anvil")) affix = true;
             if (!poison && stack.has(DataComponents.POTION_CONTENTS)) {
                 PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
                 if (contents != null && contents.is(GeneratedMod.POISON_III)) poison = true;
@@ -86,6 +93,8 @@ public final class MagicAchievements {
         if (staff) MagicProgression.awardAdvancement(player, "first_staff");
         if (supremeStaff) MagicProgression.awardAdvancement(player, "supreme_staff");
         if (poison) MagicProgression.awardAdvancement(player, "poison_iii");
+        if (affix) MagicProgression.awardAdvancement(player, "affix_forge");
+        if (bossAffix) MagicProgression.awardAdvancement(player, "boss_affix_trophy");
     }
 
     /** Curios 栏位上的饰品成就：首次佩戴、元素戒指图鉴、手套、披风、护符与共鸣核心。 */

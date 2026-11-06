@@ -193,6 +193,11 @@ public final class MagicCircleDecl {
 
         public String translationKey() { return "group.dimensional_mana.declare." + name; }
 
+        /** 缺声明时「建议参数」那句的语言键（按组 id 长名，如 summon / teleport）。 */
+        public String parametersKey() {
+            return "message.dimensional_mana.magiccircle.graph.params." + name;
+        }
+
         /** 主参数标签的语言键。 */
         public String primaryKey() {
             return switch (this) {
@@ -218,7 +223,21 @@ public final class MagicCircleDecl {
             };
         }
 
-        /** 主参数单位后缀（试运行预览与报错文案直接拼数字用；平台文案本来就是中文短词）。 */
+        /** 主参数单位的语言键（界面拼数字用；空串表示没有单位）。 */
+        public String primaryUnitKey() {
+            return switch (this) {
+                case SUMMON, COUNT -> "gui.dimensional_mana.magiccircle.decl.unit.count";
+                case HEAL -> "gui.dimensional_mana.magiccircle.decl.unit.point";
+                case DAMAGE, DISORDER -> "gui.dimensional_mana.magiccircle.decl.unit.percent";
+                case INTERACT -> "gui.dimensional_mana.magiccircle.decl.unit.blocks_minute";
+                case PURIFY, STATUS -> "gui.dimensional_mana.magiccircle.decl.unit.targets";
+                case INFO, SIGNAL, TELEPORT -> "gui.dimensional_mana.magiccircle.decl.unit.blocks";
+                case ENERGY -> "gui.dimensional_mana.magiccircle.decl.unit.mana";
+                default -> "";
+            };
+        }
+
+        /** 主参数单位后缀（内部日志 / 旧文案用；界面走 {@link #primaryUnitKey()}）。 */
         public String primaryUnit() {
             return switch (this) {
                 case SUMMON, COUNT -> " 只";

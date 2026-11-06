@@ -37,13 +37,14 @@ public final class ArcaneCodexGuideScreen extends Screen {
     private static final int PANEL_HEIGHT = 268;
     private static final int RECIPE_ENTRIES_PER_PAGE = 18;
     private static final List<GuidePage> PAGES = List.of(
-            page("basics", 8), page("crystals", 9), page("furnaces", 9), page("processor", 13),
-            page("grinding", 8), page("potions", 13), page("exploration", 8), page("enchantments", 12),
+            page("basics", 8), page("crystals", 9), page("furnaces", 9), page("processor", 14),
+            page("grinding", 8), page("potions", 15), page("exploration", 8), page("enchantments", 12),
             page("magic_equipment", 12), page("progression", 9), page("magic_system", 8), page("schools", 13),
             page("media", 8), page("element_talents", 5), page("element_talents_more", 5),
             page("implemented_spells", 6), page("implemented_spells_more", 6),
             page("reaction_rules", 6), page("reaction_priority", 7), page("reaction_charge", 6),
             page("reaction_amplify", 6), page("reaction_status", 5), page("reaction_secondary", 6),
+            page("elemental_mastery", 12),
             page("living_casters", 6), page("new_spells_rules", 6), page("new_fire_water", 6),
             page("new_ice_lightning", 7), page("new_wind_earth", 6), page("new_nature_metal", 6),
             page("new_light_poison", 6), page("new_sound", 6), page("new_advanced_arcane", 6),
@@ -51,9 +52,10 @@ public final class ArcaneCodexGuideScreen extends Screen {
             page("new_thunder", 8), page("new_wind_storm", 9), page("new_earth_stone", 9),
             page("new_arcane_chaos", 9), page("new_nature_tree", 9), page("new_metal_ward_swords", 8),
             page("new_light_shelter_rift", 9), page("new_poison_pair", 9), page("new_sound_bells", 9),
-            page("achievements", 9), page("adventurer_trade", 9), page("element_plating", 10),
-            page("furnace_link", 9), page("mob_combat", 11), page("relics", 18), page("battle_qi_parry", 8),
-            page("plants", 18), page("mana_stone", 6)
+            page("achievements", 9), page("equipment_affixes", 7), page("adventurer_trade", 10), page("element_plating", 10),
+            page("furnace_link", 9), page("mob_combat", 11), page("relics", 19), page("battle_qi_parry", 8),
+            page("plants", 18), page("mana_stone", 6), page("weapon_workbench", 12),
+            page("physical_affixes", 12)
     );
     /**
      * 章节里按 id 引用页面，不再手写页码：页码一改就容易对不上，之前“元素镀层”那一页
@@ -64,7 +66,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
             chapter("magic", Items.ENCHANTED_BOOK, "magic_system", "schools", "media", "element_talents",
                     "element_talents_more", "tiers"),
             chapter("reactions", Items.BLAZE_POWDER, "reaction_rules", "reaction_priority", "reaction_charge",
-                    "reaction_amplify", "reaction_status", "reaction_secondary"),
+                    "reaction_amplify", "reaction_status", "reaction_secondary", "elemental_mastery"),
             chapter("spells", Items.AMETHYST_SHARD, "implemented_spells", "implemented_spells_more",
                     "new_spells_rules", "new_fire_water", "new_ice_lightning", "new_wind_earth",
                     "new_nature_metal", "new_light_poison", "new_sound", "new_advanced_arcane",
@@ -72,14 +74,15 @@ public final class ArcaneCodexGuideScreen extends Screen {
                     "new_arcane_chaos", "new_nature_tree", "new_metal_ward_swords", "new_light_shelter_rift",
                     "new_poison_pair", "new_sound_bells"),
             chapter("crystals", Items.AMETHYST_CLUSTER, "crystals", "grinding"),
-            chapter("devices", Items.CRAFTING_TABLE, "furnaces", "processor", "furnace_link", "element_plating"),
+            chapter("devices", Items.CRAFTING_TABLE, "furnaces", "processor", "weapon_workbench", "furnace_link",
+                    "element_plating"),
             chapter("nature", Items.OAK_SAPLING, "plants"),
             chapter("recipes", Items.KNOWLEDGE_BOOK),
             chapter("bestiary", Items.SLIME_BALL),
             chapter("exploration", Items.SPYGLASS, "exploration", "living_casters", "adventurer_trade",
                     "mob_combat", "mana_stone"),
-            chapter("progression", Items.EXPERIENCE_BOTTLE, "enchantments", "magic_equipment", "progression",
-                    "insight", "achievements", "relics", "battle_qi_parry")
+            chapter("progression", Items.EXPERIENCE_BOTTLE, "enchantments", "magic_equipment", "equipment_affixes",
+                    "physical_affixes", "progression", "insight", "achievements", "relics", "battle_qi_parry")
     );
     private static final ResourceLocation ARCANE_ICON = ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID,
             "textures/mob_effect/arcane_attachment.png");
@@ -441,6 +444,21 @@ public final class ArcaneCodexGuideScreen extends Screen {
             };
             subjects.add(new BestiarySubject("goblin_" + variant.id(),
                     "entity.dimensional_mana." + variant.entityId(), color, variant.spawnEggId()));
+        }
+        // 蚀魔一族（含 Boss）、矿簇守卫与游荡 NPC：id 同时决定详情页的语言键前缀。
+        record Extra(String id, int color, String egg) { }
+        for (Extra extra : List.of(
+                new Extra("corrupted_wither", 0xFF7E4FB8, "corrupted_wither_spawn_egg"),
+                new Extra("corrupted_skeleton", 0xFF93A0B6, "corrupted_skeleton_spawn_egg"),
+                new Extra("corrupted_weaver", 0xFF5F8A6E, "corrupted_weaver_spawn_egg"),
+                new Extra("void_shade", 0xFF3A2E58, "void_shade_spawn_egg"),
+                new Extra("crystallized_zombie", 0xFF6FB2C9, "crystallized_zombie_spawn_egg"),
+                new Extra("mana_creeper", 0xFF4AC4A2, "mana_creeper_spawn_egg"),
+                new Extra("wandering_witch", 0xFF9A5CC0, "wandering_witch_spawn_egg"),
+                new Extra("adventurer", 0xFFC98F4A, "adventurer_spawn_egg"),
+                new Extra("wandering_swordmaster", 0xFFD8B85A, "wandering_swordmaster_spawn_egg"))) {
+            subjects.add(new BestiarySubject(extra.id(),
+                    "entity.dimensional_mana." + extra.id(), extra.color(), extra.egg()));
         }
         return List.copyOf(subjects);
     }
@@ -854,11 +872,18 @@ public final class ArcaneCodexGuideScreen extends Screen {
             Component note = Component.translatable("gui.dimensional_mana.guide.recipes.alternatives_hint");
             if (holder.value() instanceof AbstractCookingRecipe cooking) {
                 String seconds = String.format(Locale.ROOT, "%.1f", cooking.getCookingTime() / 20.0F);
-                note = holder.id().getPath().startsWith("recycle_")
-                        ? Component.translatable(holder.id().getPath().contains("arcane_fragment")
-                                ? "gui.dimensional_mana.guide.recipe.arcane_recycling_note"
-                                : "gui.dimensional_mana.guide.recipe.fragment_recycling_note", seconds)
-                        : Component.translatable("gui.dimensional_mana.guide.recipe.cooking_time", seconds);
+                // 回收配方分三种说法：奥术碎片 ×3、元素/学派碎片 ×2、饰品整件拆成对应档位的魔晶。
+                String path = holder.id().getPath();
+                if (path.startsWith("recycle_accessory_")) {
+                    note = Component.translatable(
+                            "gui.dimensional_mana.guide.recipe.accessory_recycling_note", seconds);
+                } else if (path.startsWith("recycle_")) {
+                    note = Component.translatable(path.contains("arcane_fragment")
+                            ? "gui.dimensional_mana.guide.recipe.arcane_recycling_note"
+                            : "gui.dimensional_mana.guide.recipe.fragment_recycling_note", seconds);
+                } else {
+                    note = Component.translatable("gui.dimensional_mana.guide.recipe.cooking_time", seconds);
+                }
             }
             recipes.add(new GuideRecipe(result.copy(), ingredients, recipeWidth, recipeHeight, kind,
                     productCategory(result), descriptionType, note, holder.id().toString()));
@@ -978,6 +1003,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
 
     private static GuideIngredient processorIngredient(String id, int count) {
         if (id == null || id.isBlank()) return new GuideIngredient(List.of());
+        // 药水标记：#potion:elemental_mastery_2 → 那一瓶元素精通药水。
+        if (ElementalMasteryPotions.isToken(id)) return single(ElementalMasteryPotions.stack(id, count));
         // 加工配方里的占位材料必须先展开成具体物品；漏掉一个就会去 MOD_ITEMS 里查到 null 而崩掉整本图鉴。
         if (id.equals("#magic_fragment")) return anyElementOrSchoolFragment();
         if (id.startsWith("#element_fragment:"))
@@ -1102,6 +1129,21 @@ public final class ArcaneCodexGuideScreen extends Screen {
                     1, 2, "brewing", "alchemy", "brewing",
                     Component.translatable("gui.dimensional_mana.guide.recipe.brewing_veil_long_note"),
                     GeneratedMod.MOD_ID + ":manual/brewing/pseudomana_veil_long"));
+        }
+        // 元素精通线：超导魔晶粉放在上方，魔素调和剂放在下方 → 一次酿三瓶元素精通Ⅰ；红石翻倍到 30 秒。
+        ItemStack masteryDust = modStack("superconducting_crystal_dust", 1);
+        ItemStack masteryHarmonizer = modStack("mana_harmonizer", 1);
+        ItemStack masteryI = ElementalMasteryPotions.stack(ElementalMasteryPotions.token(1, false), 1);
+        ItemStack masteryLongI = ElementalMasteryPotions.stack(ElementalMasteryPotions.token(1, true), 1);
+        if (!masteryDust.isEmpty() && !masteryHarmonizer.isEmpty() && !masteryI.isEmpty() && !masteryLongI.isEmpty()) {
+            recipes.add(new GuideRecipe(masteryI, List.of(single(masteryDust), single(masteryHarmonizer)),
+                    1, 2, "brewing", "alchemy", "brewing",
+                    Component.translatable("gui.dimensional_mana.guide.recipe.brewing_mastery_note"),
+                    GeneratedMod.MOD_ID + ":manual/brewing/elemental_mastery"));
+            recipes.add(new GuideRecipe(masteryLongI, List.of(single(new ItemStack(Items.REDSTONE)), single(masteryI)),
+                    1, 2, "brewing", "alchemy", "brewing",
+                    Component.translatable("gui.dimensional_mana.guide.recipe.brewing_mastery_long_note"),
+                    GeneratedMod.MOD_ID + ":manual/brewing/elemental_mastery_long"));
         }
         ItemStack thickPotion = PotionContents.createItemStack(Items.POTION, Potions.THICK);
         List<GuideIngredient> harmonizerIngredients =

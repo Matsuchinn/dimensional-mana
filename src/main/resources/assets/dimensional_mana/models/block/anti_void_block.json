@@ -1,4 +1,3 @@
 {
-  "parent": "minecraft:block/cube_all",
-  "textures": { "all": "dimensional_mana:block/anti_void_block" }
+  "parent": "minecraft:block/air"
 }

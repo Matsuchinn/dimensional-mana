@@ -1,0 +1,8 @@
+{
+  "type": "dimensional_mana:professional_smelting",
+  "category": "misc",
+  "ingredient": {"tag": "dimensional_mana:recyclable_accessories/t3"},
+  "result": {"id": "dimensional_mana:medium_mana_crystal", "count": 1},
+  "experience": 40.0,
+  "cookingtime": 200
+}

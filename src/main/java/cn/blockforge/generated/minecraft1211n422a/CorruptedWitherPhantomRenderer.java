@@ -68,7 +68,7 @@ public final class CorruptedWitherPhantomRenderer extends WitherBossRenderer {
         float t = Mth.clamp(phantom.shockwaveRatio(), 0.0F, 1.0F);
         float radius = 0.6F + t * 6.5F;
         float alpha = (1.0F - t) * 0.85F;
-        VertexConsumer glow = buffers.getBuffer(SpellRenderTypes.GLOW);
+        VertexConsumer glow = buffers.getBuffer(CorruptedWitherRenderTypes.glow());
         pose.pushPose();
         pose.translate(0.0D, 1.6D, 0.0D);
         PoseStack.Pose snapshot = pose.last();

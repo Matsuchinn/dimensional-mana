@@ -17,7 +17,7 @@ import net.minecraft.world.phys.Vec3;
  * 【虚无凋零射线】的渲染：一根纯黑柱体，外面裹两层发光面片，再套几层向内收缩的旋转 Quad。
  *
  * <ul>
- *   <li>主体：{@link CorruptedWitherRenderTypes#BEAM_CORE} 的纯黑圆柱，普通混合、不反光；</li>
+ *   <li>主体：{@link CorruptedWitherRenderTypes#beamCore()} 的纯黑圆柱，普通混合、不反光；</li>
  *   <li>内层：纯白加色柱，比黑柱略细，负责「刺眼的核心」；</li>
  *   <li>外层：半透明紫色，半径带正弦噪音，一路抖动像被空间撕开；</li>
  *   <li>扭曲层：三层半径不断向内收缩、高速旋转的半透明面片，模拟热浪扭曲；</li>
@@ -84,7 +84,7 @@ public final class CorruptedWitherBeamRenderer extends EntityRenderer<CorruptedW
         if (!beam.isFiring()) {
             // 蓄力阶段：端头能量球 + 两道向外扩张、逐渐变淡的光环。
             float orbRadius = 0.35F + charge * 1.1F;
-            VertexConsumer glow = buffers.getBuffer(SpellRenderTypes.GLOW);
+            VertexConsumer glow = buffers.getBuffer(CorruptedWitherRenderTypes.glow());
             CorruptedWitherFx.orb(glow, snapshot, 0.0F, 0.0F, 1.2F, orbRadius,
                     0.95F, 0.85F, 1.0F, 0.35F + charge * 0.5F);
             // 蓄力光圈：一圈「本来就很快、蓄力越满转得越快」的竖直光环。
@@ -105,10 +105,10 @@ public final class CorruptedWitherBeamRenderer extends EntityRenderer<CorruptedW
 
         float length = (float)CorruptedWitherBeam.LENGTH;
         // 主体：纯黑不反光的粗柱（普通混合，不能用加色，否则黑色等于没画）。
-        VertexConsumer core = buffers.getBuffer(CorruptedWitherRenderTypes.BEAM_CORE);
+        VertexConsumer core = buffers.getBuffer(CorruptedWitherRenderTypes.beamCore());
         CorruptedWitherFx.cylinder(core, snapshot, length, 0.62F, SEGMENTS, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F);
 
-        VertexConsumer glow = buffers.getBuffer(SpellRenderTypes.GLOW);
+        VertexConsumer glow = buffers.getBuffer(CorruptedWitherRenderTypes.glow());
         // 内层纯白：略细、几乎不透明。
         CorruptedWitherFx.cylinder(glow, snapshot, length, 0.34F, SEGMENTS, 0.0F, 1.0F, 1.0F, 1.0F, 0.85F);
         // 外层紫光：半径带正弦噪音，并随距离慢慢收细，营造「能量散逸」。

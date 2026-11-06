@@ -1,3 +1,6 @@
 {
-  "values": ["dimensional_mana:etching_true"]
+  "values": [
+    "dimensional_mana:etching_true",
+    "dimensional_mana:wither_beam_true"
+  ]
 }

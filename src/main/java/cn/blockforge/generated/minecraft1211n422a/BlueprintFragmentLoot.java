@@ -38,7 +38,7 @@ public final class BlueprintFragmentLoot {
         if (name.getNamespace().equals("minecraft")) {
             // 所有村庄系宝箱：village_plains_house / village_weaponsmith / …… 统一 40% + 每处最多 2。
             if (name.getPath().startsWith("village/")) {
-                event.getTable().addPool(pool("dimensional_mana_village_blueprint_fragment",
+                StructureChestLoot.addPool(event.getTable(), pool("dimensional_mana_village_blueprint_fragment",
                         ConstantValue.exactly(1), 0.40F, limit("minecraft:village", 2)));
             }
             return;
@@ -46,11 +46,11 @@ public final class BlueprintFragmentLoot {
         if (!name.getNamespace().equals(GeneratedMod.MOD_ID)) return;
         if (name.getPath().equals(ALTAR_TABLE)) {
             // 祭坛：55% 一次，出 1~2 个随机残片（rolls 1~2 就是「1~2 个」，每 roll 各抽一张）。
-            event.getTable().addPool(pool("dimensional_mana_altar_blueprint_fragment",
+            StructureChestLoot.addPool(event.getTable(), pool("dimensional_mana_altar_blueprint_fragment",
                     UniformGenerator.between(1.0F, 2.0F), 0.55F,
                     limit("dimensional_mana:ancient_magic_altar", 2)));
         } else if (GOBLIN_TABLES.contains(name.getPath())) {
-            event.getTable().addPool(pool("dimensional_mana_goblin_blueprint_fragment",
+            StructureChestLoot.addPool(event.getTable(), pool("dimensional_mana_goblin_blueprint_fragment",
                     ConstantValue.exactly(1), 0.25F, limit("dimensional_mana:goblin_camp", 2)));
         }
     }

@@ -394,7 +394,12 @@ public final class MagicCircleAffixes {
         return protocol.id() + ":" + e;
     }
 
-    /** 词缀短中文名（平台内固定词，蓝图明细 / 试运行预览 / 报错共用）。 */
+    /** 词缀名的可翻译组件（报错 / 界面对玩家显示走这个，跟着语言走）。 */
+    public static net.minecraft.network.chat.Component affixComponent(String affixId) {
+        return net.minecraft.network.chat.Component.translatable("affix.dimensional_mana." + affixId);
+    }
+
+    /** 词缀短中文名（内部日志用；界面一律走 {@link #affixComponent}）。 */
     public static String affixName(String affixId) {
         return switch (affixId) {
             case "mine" -> "挖掘";

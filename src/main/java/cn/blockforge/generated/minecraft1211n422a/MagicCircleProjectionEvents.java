@@ -171,7 +171,7 @@ public final class MagicCircleProjectionEvents {
             return;
         }
         player.displayClientMessage(Component.translatable(
-                "message.dimensional_mana.magiccircle.code.exported", blueprint.name(), code.length())
+                "message.dimensional_mana.magiccircle.code.exported", MagicCircleBlueprint.displayName(blueprint.name()), code.length())
                 .withStyle(ChatFormatting.GOLD), false);
         MutableComponent clickable = Component.literal(code)
                 .setStyle(Style.EMPTY.withColor(ChatFormatting.AQUA)
@@ -214,7 +214,7 @@ public final class MagicCircleProjectionEvents {
         if (sealed) {
             player.displayClientMessage(Component.translatable(
                     "message.dimensional_mana.magiccircle.slate.placed",
-                    blueprint.name(), blueprint.baseW(), blueprint.baseH(), evaluation.nodeCount(),
+                    MagicCircleBlueprint.displayName(blueprint.name()), blueprint.baseW(), blueprint.baseH(), evaluation.nodeCount(),
                     evaluation.startMana(), evaluation.upkeepMana(), evaluation.triggerMana(),
                     String.format(Locale.ROOT, "%.2f", evaluation.strength()))
                     .withStyle(ChatFormatting.AQUA), false);
@@ -223,7 +223,7 @@ public final class MagicCircleProjectionEvents {
         } else {
             player.displayClientMessage(Component.translatable(
                     "message.dimensional_mana.magiccircle.blueprint.projected",
-                    blueprint.name(), blueprint.baseW(), blueprint.baseH(), evaluation.nodeCount(),
+                    MagicCircleBlueprint.displayName(blueprint.name()), blueprint.baseW(), blueprint.baseH(), evaluation.nodeCount(),
                     evaluation.startMana()).withStyle(ChatFormatting.AQUA), false);
             player.displayClientMessage(Component.translatable(
                     "message.dimensional_mana.magiccircle.blueprint.test_hint")
@@ -307,7 +307,7 @@ public final class MagicCircleProjectionEvents {
         MagicCircleCost.Evaluation evaluation = entity.evaluate();
         player.displayClientMessage(Component.translatable(
                 "message.dimensional_mana.magiccircle.blueprint.layer_added",
-                blueprint.name(), entity.layerCount(), entity.maxLayers(), evaluation.startMana())
+                MagicCircleBlueprint.displayName(blueprint.name()), entity.layerCount(), entity.maxLayers(), evaluation.startMana())
                 .withStyle(ChatFormatting.AQUA), false);
     }
 
@@ -509,7 +509,7 @@ public final class MagicCircleProjectionEvents {
             MagicCircleBlueprint blueprint = entity.layers().get(i);
             player.displayClientMessage(Component.translatable(
                     "message.dimensional_mana.magiccircle.blueprint.anchor_layer",
-                    i + 1, blueprint.name(), blueprint.nodeCount(), blueprint.filledLayerCount())
+                    i + 1, MagicCircleBlueprint.displayName(blueprint.name()), blueprint.nodeCount(), blueprint.filledLayerCount())
                     .withStyle(ChatFormatting.LIGHT_PURPLE), false);
             // 每个功能块用了哪四种粉，直接跟在层后面列出来（每层最多 6 行，大阵不至于刷屏）。
             player.displayClientMessage(Component.translatable(
@@ -745,10 +745,10 @@ public final class MagicCircleProjectionEvents {
         MagicCircleBlueprint blueprint = MagicCircleBlueprint.of(stack);
         if (blueprint == null) return;
         List<Component> tooltip = event.getToolTip();
-        tooltip.add(Component.translatable("tooltip.dimensional_mana.blueprint.title", blueprint.name())
+        tooltip.add(Component.translatable("tooltip.dimensional_mana.blueprint.title", MagicCircleBlueprint.displayName(blueprint.name()))
                 .withStyle(ChatFormatting.GOLD));
         tooltip.addAll(blueprint.describe());
-        tooltip.add(Component.literal(blueprint.blockSummary()).withStyle(ChatFormatting.LIGHT_PURPLE));
+        tooltip.add(blueprint.blockSummary().copy().withStyle(ChatFormatting.LIGHT_PURPLE));
         tooltip.add(Component.translatable("tooltip.dimensional_mana.magiccircle.node.title")
                 .withStyle(ChatFormatting.GOLD));
         tooltip.addAll(blueprint.nodeDetailLines(8));

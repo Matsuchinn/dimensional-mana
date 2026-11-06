@@ -128,11 +128,11 @@ public final class CorruptedWitherClientFx {
     public static void renderWorld(RenderLevelStageEvent event) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
-        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
-            renderTrails(event);
-        } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_WEATHER) {
-            renderRain(event);
-        }
+        // 拖尾与腐化雨都放在「天气之后」这一层：原版的云和雨在它之前就已经画完，
+        // 凋零的紫色光效才能稳稳压在它们上面，不会出现「飞在云里整层特效被云糊住」。
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_WEATHER) return;
+        renderTrails(event);
+        renderRain(event);
     }
 
     /** 本体身后的条带拖尾：越远越细越淡，代替「一路烟尘粒子」。 */
@@ -146,7 +146,7 @@ public final class CorruptedWitherClientFx {
             PoseStack.Pose snapshot = pose.last();
             try (var memory = new com.mojang.blaze3d.vertex.ByteBufferBuilder(65_536)) {
                 MultiBufferSource.BufferSource source = MultiBufferSource.immediate(memory);
-                VertexConsumer glow = source.getBuffer(SpellRenderTypes.GLOW);
+                VertexConsumer glow = source.getBuffer(CorruptedWitherRenderTypes.glow());
                 for (Deque<Vec3> trail : TRAILS.values()) {
                     drawTrail(snapshot, glow, new ArrayList<>(trail));
                 }
@@ -200,7 +200,7 @@ public final class CorruptedWitherClientFx {
             right = right.normalize();
             try (var memory = new com.mojang.blaze3d.vertex.ByteBufferBuilder(98_304)) {
                 MultiBufferSource.BufferSource source = MultiBufferSource.immediate(memory);
-                VertexConsumer glow = source.getBuffer(SpellRenderTypes.GLOW);
+                VertexConsumer glow = source.getBuffer(CorruptedWitherRenderTypes.glow());
                 for (int i = 0; i < RAIN_STREAKS; i++) {
                     double angle = (i * 0.618033988749D % 1.0D) * Math.PI * 2.0D;
                     double radius = 3.0D + ((i * 37) % 23);

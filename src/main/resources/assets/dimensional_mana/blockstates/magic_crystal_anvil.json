@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": {"model": "dimensional_mana:block/magic_crystal_anvil"},
+    "facing=east": {"model": "dimensional_mana:block/magic_crystal_anvil", "y": 90},
+    "facing=south": {"model": "dimensional_mana:block/magic_crystal_anvil", "y": 180},
+    "facing=west": {"model": "dimensional_mana:block/magic_crystal_anvil", "y": 270}
+  }
+}

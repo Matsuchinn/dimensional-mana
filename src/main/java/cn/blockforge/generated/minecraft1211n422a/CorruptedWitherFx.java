@@ -9,7 +9,7 @@ import net.minecraft.util.Mth;
  *
  * <p>全部是「面片」：圆环、二十面体、圆柱、条带、广告牌。没有一个方块粒子，
  * 顶点只带位置和颜色，配合 {@link SpellRenderTypes#GLOW}（加色自发光）或
- * {@link CorruptedWitherRenderTypes#BEAM_CORE}（普通混合的纯黑）出图。</p>
+ * {@link CorruptedWitherRenderTypes#beamCore()}（普通混合的纯黑）出图。</p>
  */
 public final class CorruptedWitherFx {
     /** 一圈圆环默认切多少段：段数越高越圆，64 段已经看不出棱角。 */

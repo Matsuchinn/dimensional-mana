@@ -542,7 +542,8 @@ public final class MagicCircleDrawingScreen extends Screen {
                 graphics.fill(cx - size / 2, cy - size / 2, cx + size / 2, cy - size / 2 + 1, 0xFFFFE49B);
             }
             if (size >= 12 && type != null) {
-                String label = type.fallbackName().substring(0, 1);
+                // 画布上的单字标记：中文取第一个字，英文取首字母（Core → C）。
+                String label = type.displayName().getString().substring(0, 1);
                 graphics.drawCenteredString(font, label, cx, cy - 4, color);
             }
             // v2.2 角色角标：终端=黄、前置=青、声明=紫、门=灰，标在块的右下角。
@@ -940,14 +941,16 @@ public final class MagicCircleDrawingScreen extends Screen {
                 boolean active = index == selectedNode || selection.contains(index);
                 graphics.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h,
                         active ? 0xAA4A2E6E : hover ? 0x88302A46 : 0x44120F20);
-                String label = (type == null ? node.type() : type.fallbackName())
-                        + " " + MagicCirclePowders.shortName(node.element())
-                        + "/" + MagicCirclePowders.shortName(node.semantic())
-                        + "/" + MagicCirclePowders.shortName(node.power())
-                        + "/" + MagicCirclePowders.shortName(node.dye())
-                        + handMark(node);
-                label = font.plainSubstrByWidth(label, Math.max(10, rect.w - 6));
-                graphics.drawString(font, label, rect.x + 3, rect.y + 2, active ? 0xFFFFE4A8 : COLOR_DIM, false);
+                // 名字全部走语言键：块名 + 四个粉槽短名，英文环境不会再显示「核心 火/糖/…」。
+                Component label = (type == null ? Component.literal(node.type()) : type.displayName())
+                        .copy().append(" ")
+                        .append(MagicCirclePowders.displayShort(node.element())).append("/")
+                        .append(MagicCirclePowders.displayShort(node.semantic())).append("/")
+                        .append(MagicCirclePowders.displayShort(node.power())).append("/")
+                        .append(MagicCirclePowders.displayShort(node.dye()))
+                        .append(handMark(node));
+                String labelText = font.plainSubstrByWidth(label.getString(), Math.max(10, rect.w - 6));
+                graphics.drawString(font, labelText, rect.x + 3, rect.y + 2, active ? 0xFFFFE4A8 : COLOR_DIM, false);
                 if (hover) {
                     detailHover = index;
                 }
@@ -1042,7 +1045,7 @@ public final class MagicCircleDrawingScreen extends Screen {
         MagicCircleBlockType type = MagicCircleBlockType.byId(node.type());
         // 第一行：第几层 · 什么块 (坐标)；右侧带角色角标（终/缀/declare/门），手绘的补一个"·手"。
         String head = Component.translatable("tooltip.dimensional_mana.magiccircle.node.header",
-                state.layer() + 1, type == null ? node.type() : type.fallbackName(), node.x(), node.y()).getString()
+                state.layer() + 1, type == null ? node.type() : type.displayName(), node.x(), node.y()).getString()
                 + handMark(node);
         String role = roleMark(index, type);
         graphics.drawString(font, font.plainSubstrByWidth(head, role == null ? w - 6 : w - 18),
@@ -1091,7 +1094,7 @@ public final class MagicCircleDrawingScreen extends Screen {
         MagicCirclePowders.Powder powder = MagicCirclePowders.get(itemId);
         String value = powder == null
                 ? Component.translatable("tooltip.dimensional_mana.magiccircle.node.empty").getString()
-                : MagicCirclePowders.shortName(itemId);
+                : MagicCirclePowders.displayShort(itemId).getString();
         value = font.plainSubstrByWidth(value, Math.max(0, maxX - x));
         graphics.drawString(font, value, x, y, powder == null ? 0xFF8A8194 : 0xFF8FE3FF, false);
         return x + font.width(value);
@@ -1111,13 +1114,16 @@ public final class MagicCircleDrawingScreen extends Screen {
             graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.footer.ok"),
                     left + GAP + 4, footerY + 24, COLOR_OK, false);
         } else {
-            StringBuilder builder = new StringBuilder();
+            Component builder = Component.empty();
+            boolean firstProblem = true;
             for (String key : state.problems()) {
-                if (builder.length() > 0) builder.append("、");
-                builder.append(MagicCircleIssue.component(key).getString());
+                if (!firstProblem) builder = builder.copy().append(
+                        Component.translatable("gui.dimensional_mana.magiccircle.footer.sep"));
+                builder = builder.copy().append(MagicCircleIssue.component(key));
+                firstProblem = false;
             }
             graphics.drawString(font, Component.translatable("gui.dimensional_mana.magiccircle.footer.problem",
-                    builder.toString()), left + GAP + 4, footerY + 24, COLOR_DANGER, false);
+                    builder), left + GAP + 4, footerY + 24, COLOR_DANGER, false);
         }
         graphics.drawString(font, hint, left + GAP + 4, footerY + 35, COLOR_DIM, false);
     }
@@ -1531,7 +1537,7 @@ public final class MagicCircleDrawingScreen extends Screen {
                     ? Component.translatable("tooltip.dimensional_mana.magiccircle.node.empty")
                     : powder.name();
             Component label = Component.translatable(slots[i].translationKey())
-                    .append(Component.literal("：")).append(value);
+                    .append(Component.translatable("gui.dimensional_mana.magiccircle.editor.sep")).append(value);
             graphics.drawString(font, font.plainSubstrByWidth(label.getString(), rect.w - 6),
                     rect.x + 3, rect.y + 3, active ? 0xFFFFE4A8 : COLOR_TEXT, false);
         }
@@ -1708,8 +1714,9 @@ public final class MagicCircleDrawingScreen extends Screen {
         MagicCircleGates.CompareOperator op = MagicCircleGates.operatorOf(domain, node.gate());
         declTab(graphics, "⇌ " + op.symbol(), x + 72, y, 64, 12, false, "gate_op", mouseX, mouseY);
         int tier = MagicCircleDecl.dyeTier(node.dye());
-        String preview = domain.label() + " " + op.symbol() + " "
-                + MagicCircleGates.thresholdText(domain, MagicCircleGates.threshold(domain, tier));
+        String preview = Component.translatable("message.dimensional_mana.magiccircle.gate.preview",
+                domain.displayName(), op.symbol(),
+                MagicCircleGates.thresholdComponent(domain, MagicCircleGates.threshold(domain, tier))).getString();
         graphics.drawString(font, font.plainSubstrByWidth(preview, 146), x + 142, y + 3,
                 0xFFD9A8FF, false);
         // 黄字提示（v2.6 界面约定）：这块门控直接喂着某个触发节点 = 触发链的第一步判定。
@@ -1720,7 +1727,7 @@ public final class MagicCircleDrawingScreen extends Screen {
                     "gui.dimensional_mana.magiccircle.gate.first_step"),
                     x + 4, y + 13, EDITOR_WIDTH - 8, 0xFFFFD86B, false);
         }
-        drawWrapped(graphics, MagicCircleGates.describe(node), x + 4, y + 23,
+        drawWrapped(graphics, MagicCircleGates.describeComponent(node).getString(), x + 4, y + 23,
                 EDITOR_WIDTH - 8, 2, COLOR_DIM);
     }
 
@@ -1743,7 +1750,7 @@ public final class MagicCircleDrawingScreen extends Screen {
                 x + 4, y + 85, EDITOR_WIDTH - 8, 0xFFFFD86B, false);
         Integer gateIdx = clientAnalysis == null ? null : clientAnalysis.baseGates.get(editorNode);
         if (gateIdx != null && gateIdx >= 0 && gateIdx < state.nodes().size()) {
-            String summary = MagicCircleGates.describe(state.nodes().get(gateIdx));
+            String summary = MagicCircleGates.describeComponent(state.nodes().get(gateIdx)).getString();
             drawWrapped(graphics, Component.translatable(
                             "gui.dimensional_mana.magiccircle.gate.upstream", summary).getString(), x + 4, y + 95,
                     EDITOR_WIDTH - 8, 2, 0xFF9AE08B);
@@ -1846,8 +1853,9 @@ public final class MagicCircleDrawingScreen extends Screen {
     private int declStepper(GuiGraphics graphics, int px, int py, MagicCircleDecl.Entry entry,
                             MagicCircleDecl.Group group, int value, String minus, String plus, int arg) {
         declButton(graphics, "−", px, py, 11, 11, true, minus, group, arg);
-        String text = String.valueOf(value);
-        if (group.primaryUnit() != null && group.primaryUnit().length() <= 3 && value > 0) text += group.primaryUnit();
+        Component text = Component.literal(String.valueOf(value));
+        String unitKey = group.primaryUnitKey();
+        if (!unitKey.isEmpty() && value > 0) text = text.copy().append(Component.translatable(unitKey));
         int width = Math.max(20, font.width(text) + 6);
         graphics.drawString(font, text, px + 13, py, COLOR_TEXT, false);
         int next = px + 14 + font.width(text) + 2;
@@ -3694,8 +3702,10 @@ public final class MagicCircleDrawingScreen extends Screen {
         String name = switch (kind) {
             case "blank" -> font.plainSubstrByWidth(
                     blueprintStack().getHoverName().getString(), sideW - 40);
-            case "done" -> font.plainSubstrByWidth(state.blueprintName(), sideW - 40);
-            case "edit" -> font.plainSubstrByWidth(state.blueprintName(), sideW - 40);
+            case "done" -> font.plainSubstrByWidth(
+                    MagicCircleBlueprint.displayName(state.blueprintName()).getString(), sideW - 40);
+            case "edit" -> font.plainSubstrByWidth(
+                    MagicCircleBlueprint.displayName(state.blueprintName()).getString(), sideW - 40);
             default -> Component.translatable("gui.dimensional_mana.magiccircle.bp.empty_name").getString();
         };
         graphics.drawString(font, Component.literal(name), slot.x + 22, top + 3,
@@ -3752,8 +3762,10 @@ public final class MagicCircleDrawingScreen extends Screen {
                         .withStyle(net.minecraft.ChatFormatting.GRAY));
             }
             for (java.util.Map.Entry<String, Integer> entry : need.entrySet()) {
-                hoverPowder.add(Component.literal("· " + MagicCirclePowders.shortName(entry.getKey())
-                        + " ×" + entry.getValue()).withStyle(net.minecraft.ChatFormatting.GRAY));
+                hoverPowder.add(Component.literal("· ")
+                        .append(MagicCirclePowders.displayShort(entry.getKey()))
+                        .append(Component.literal(" ×" + entry.getValue()))
+                        .withStyle(net.minecraft.ChatFormatting.GRAY));
             }
         }
     }

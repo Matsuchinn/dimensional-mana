@@ -61,7 +61,7 @@ public final class BattleQiParry {
     public static final int STANCE_HOLD_TICKS = 5;
     /** 按下左键后，近战弹反的有效窗口。r204 起收紧 1 刻：普通格挡的判定减少 1 tick。 */
     public static final int GUARD_WINDOW_TICKS = 11;
-    /** 窗口内前 5 刻到达的伤害算完美招架。 */
+    /** 窗口内前 5 刻到达的伤害算完美招架（「招架特化」词条会把这个窗口再拉长）。 */
     public static final int PERFECT_WINDOW_TICKS = 5;
     /** 远程/法术弹反的判定半径。 */
     public static final double PROJECTILE_RANGE = 3.6;
@@ -132,6 +132,18 @@ public final class BattleQiParry {
         if (player == null || !player.isAlive() || player.isSpectator()) return false;
         return player.getMainHandItem().is(ItemTags.SWORDS) && player.getOffhandItem().isEmpty()
                 && !NewSpellSystem.immobilized(player);
+    }
+
+    /**
+     * 完美格挡的判定窗口：基础 {@link #PERFECT_WINDOW_TICKS} 刻，
+     * 「招架特化」词条每点再 +1 刻（最多补到整个格挡窗口 {@link #GUARD_WINDOW_TICKS} 那么长）。
+     *
+     * <p>完美格挡本身就是「看到刀再按」的操作，窗口越长越吃手感，
+     * 所以这条词条直接落在 tick 数上，而不是折算成别的数值。</p>
+     */
+    public static int perfectWindowTicks(Player player) {
+        if (player == null) return PERFECT_WINDOW_TICKS;
+        return Math.min(GUARD_WINDOW_TICKS, PERFECT_WINDOW_TICKS + EquipmentAffixSystem.parryWindowBonus(player));
     }
 
     public static boolean inStance(ServerPlayer player) {
@@ -337,7 +349,7 @@ public final class BattleQiParry {
         if (!NewSpellSystem.enemy(player, attacker)) return Outcome.NONE;
         if (!nearEnough(player, attacker)) return Outcome.NONE;
 
-        boolean perfect = now - state.pressTick <= PERFECT_WINDOW_TICKS;
+        boolean perfect = now - state.pressTick <= perfectWindowTicks(player);
         state.guardUntil = -1;
         state.pressTick = -1;
         state.whiffPending = false;
@@ -364,7 +376,7 @@ public final class BattleQiParry {
         if (!spellNearEnough(player, caster)) return false;
         long now = player.level().getGameTime();
         boolean perfect = state.guardUntil >= 0 && now <= state.guardUntil && state.pressTick >= 0
-                && now - state.pressTick <= PERFECT_WINDOW_TICKS;
+                && now - state.pressTick <= perfectWindowTicks(player);
         state.guardUntil = -1;
         state.pressTick = -1;
         // 法术被弹开了，之前那一次左键按下去就有了交代，不再追空挥的账。

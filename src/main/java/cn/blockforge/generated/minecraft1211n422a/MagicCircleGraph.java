@@ -1,5 +1,7 @@
 package cn.blockforge.generated.minecraft1211n422a;
 
+import net.minecraft.network.chat.Component;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -74,30 +76,41 @@ public final class MagicCircleGraph {
 
         /** 「终端#3（糖+木·友好召唤）」这种描述串（规范 17）。 */
         public String describe(MagicCircleNetwork.Layer layer) {
+            return describeComponent(layer).getString();
+        }
+
+        /** 「终端#3（糖+木·友好召唤）」这种描述串的可翻译版本（报错文案用）。 */
+        public Component describeComponent(MagicCircleNetwork.Layer layer) {
             MagicCircleNetwork.Node node = layer.nodes().get(terminal);
-            String sem = MagicCirclePowders.shortName(node.semantic());
-            String el = MagicCirclePowders.shortName(node.element());
-            String main = "";
+            Component sem = MagicCirclePowders.displayShort(node.semantic());
+            Component el = MagicCirclePowders.displayShort(node.element());
+            String mainKey = null;
             if (protocol != MagicCircleAffixes.Protocol.NONE) {
-                main = switch (protocol) {
-                    case LIFE -> el.equals("木") ? "友好召唤" : "治疗";
-                    case DAMAGE -> "伤害";
-                    case SIGNAL -> "红石信号";
-                    case PURIFY -> "净化";
-                    case LIGHT -> "照明/显形";
-                    case SCAN -> el.equals("金") ? "精准采集挖掘" : "扫描鉴定";
-                    case CHARGE -> el.equals("金") ? "探测金属" : "充能";
-                    case NONE -> "";
+                mainKey = switch (protocol) {
+                    case LIFE -> MagicCirclePowders.isElement(node.element(), ElementType.NATURE)
+                            ? "friendly_summon" : "heal";
+                    case DAMAGE -> "damage";
+                    case SIGNAL -> "signal";
+                    case PURIFY -> "purify";
+                    case LIGHT -> "light";
+                    case SCAN -> MagicCirclePowders.isElement(node.element(), ElementType.METAL)
+                            ? "precision_mine" : "scan";
+                    case CHARGE -> MagicCirclePowders.isElement(node.element(), ElementType.METAL)
+                            ? "detect_metal" : "charge";
+                    case NONE -> null;
                 };
             }
             if (!prefixes.isEmpty()) {
                 for (Prefix prefix : prefixes) {
                     MagicCircleDecl.Group need = prefix.affix() == null ? null
                             : MagicCircleDecl.requiredGroupForTag(prefix.affix().tag());
-                    if (need == MagicCircleDecl.Group.SUMMON) main = "召唤";
+                    if (need == MagicCircleDecl.Group.SUMMON) mainKey = "summon";
                 }
             }
-            return sem + "+" + el + (main.isEmpty() ? "" : "·" + main);
+            Component main = mainKey == null ? Component.empty()
+                    : Component.literal("·").append(Component.translatable(
+                            "message.dimensional_mana.magiccircle.graph.main." + mainKey));
+            return Component.translatable("message.dimensional_mana.magiccircle.graph.plan", sem, el, main);
         }
     }
 
@@ -293,7 +306,7 @@ public final class MagicCircleGraph {
                 int cap = MagicCircleAffixes.prefixComplexityCap(nodes.get(prefix).power());
                 if (affix.complexity() > cap) {
                     issue(analysis, prefix, "message.dimensional_mana.magiccircle.declare.complex",
-                            prefix + 1, MagicCircleAffixes.affixName(affix.id()), cap);
+                            prefix + 1, MagicCircleAffixes.affixComponent(affix.id()), cap);
                     continue;
                 }
                 String dyeTag = MagicCircleAffixes.dyeModifierTag(nodes.get(prefix).dye());
@@ -336,7 +349,7 @@ public final class MagicCircleGraph {
                             if (!sameEnum(kept, entry)) {
                                 issue(analysis, plan.terminal,
                                         "message.dimensional_mana.magiccircle.declare.dupe_conflict",
-                                        plan.terminal + 1, groupName(entry.group()));
+                                        plan.terminal + 1, groupComponent(entry.group()));
                             }
                             plan.declarations.put(entry.group(),
                                     new MagicCircleDecl.Entry(entry.group(), strictest,
@@ -562,8 +575,8 @@ public final class MagicCircleGraph {
             if (!MagicCircleAffixes.compatible(plan.protocol, prefix.affix().tag())) {
                 if (strict) {
                     issue(analysis, plan.terminal, "message.dimensional_mana.magiccircle.declare.incompatible",
-                            plan.terminal + 1, MagicCircleAffixes.affixName(prefix.affix().id()),
-                            plan.protocol.shortName());
+                            plan.terminal + 1, MagicCircleAffixes.affixComponent(prefix.affix().id()),
+                            Component.translatable(plan.protocol.translationKey()));
                 } else if (!plan.declared(MagicCircleDecl.Group.COMPAT)) {
                     required.add(MagicCircleDecl.Group.COMPAT);
                 }
@@ -582,7 +595,7 @@ public final class MagicCircleGraph {
         }
         if (!plan.missing.isEmpty()) {
             issue(analysis, plan.terminal, "message.dimensional_mana.magiccircle.declare.missing",
-                    plan.terminal + 1, plan.describe(layer), missingList(plan), parameterHint(plan));
+                    plan.terminal + 1, plan.describeComponent(layer), missingList(plan), parameterHint(plan));
         }
     }
 
@@ -612,73 +625,46 @@ public final class MagicCircleGraph {
         return false;
     }
 
-    /** 「召唤边界、治疗边界」——缺组列表文案。 */
-    public static String missingList(Plan plan) {
-        StringBuilder builder = new StringBuilder();
+    /** 「召唤边界、治疗边界」——缺组列表文案（可翻译，逗号也跟着语言走）。 */
+    public static Component missingList(Plan plan) {
+        Component joined = Component.empty();
+        boolean first = true;
         for (MagicCircleDecl.Group group : plan.missing) {
-            if (builder.length() > 0) builder.append("、");
-            builder.append(groupName(group));
+            if (!first) joined = joined.copy().append(
+                    Component.translatable("message.dimensional_mana.magiccircle.graph.list_sep"));
+            joined = joined.copy().append(groupComponent(group));
+            first = false;
         }
-        return builder.toString();
+        return joined;
     }
 
     /** 「请声明：最大数量 / 寿命 / AI / 归属 / Boss权限…」，按缺的组拼（规范 17）。 */
-    public static String parameterHint(Plan plan) {
-        StringBuilder builder = new StringBuilder();
+    public static Component parameterHint(Plan plan) {
+        Component joined = Component.empty();
+        boolean first = true;
         for (MagicCircleDecl.Group group : plan.missing) {
-            if (builder.length() > 0) builder.append("；");
-            builder.append(groupName(group)).append("：").append(parameters(group));
+            if (!first) joined = joined.copy().append(
+                    Component.translatable("message.dimensional_mana.magiccircle.graph.hint_sep"));
+            joined = joined.copy().append(Component.translatable(
+                    "message.dimensional_mana.magiccircle.graph.hint_entry",
+                    groupComponent(group), parameters(group)));
+            first = false;
         }
-        return builder.toString();
+        return joined;
     }
 
-    /** 边界组中文名（平台固定词，和染料短名一个路子）。 */
+    /** 边界组名（语言键在 language 文件里：召唤边界 / Summon boundary）。 */
+    public static Component groupComponent(MagicCircleDecl.Group group) {
+        return Component.translatable(group.translationKey());
+    }
+
+    /** 边界组中文名（内部日志用；界面文案一律走 {@link #groupComponent}）。 */
     public static String groupName(MagicCircleDecl.Group group) {
-        return switch (group) {
-            case SUMMON -> "召唤边界";
-            case HEAL -> "治疗边界";
-            case PERMISSION -> "权限边界";
-            case SIGNAL -> "信号边界";
-            case PROTOCOL -> "协议指定";
-            case PRIORITY -> "词缀优先级";
-            case COMPAT -> "强制兼容";
-            case DAMAGE -> "伤害边界";
-            case INTERACT -> "交互边界";
-            case PURIFY -> "净化边界";
-            case DISORDER -> "紊乱策略";
-            case STATUS -> "状态边界";
-            case INFO -> "信息边界";
-            case VISIBILITY -> "可见性边界";
-            case COUNT -> "数量边界";
-            case TELEPORT -> "传送边界";
-            case ENERGY -> "能量边界";
-            case LINK -> "连线边界";
-            case PRIVACY -> "隐私边界";
-        };
+        return groupComponent(group).getString();
     }
 
-    private static String parameters(MagicCircleDecl.Group group) {
-        return switch (group) {
-            case SUMMON -> "最大数量 / 寿命 / AI / 归属 / Boss权限 / 锚点失效行为";
-            case INTERACT -> "方块黑名单 / 每分钟限额 / 区块加载 / 精准采集 / 掉落去向";
-            case DAMAGE -> "PvP / 友伤 / 方块破坏 / 真实伤害上限";
-            case HEAL -> "单次最大治疗 / 可治疗敌对亡灵 / 溢出转护盾";
-            case TELEPORT -> "最大距离 / 跨维度 / PvP传送 / 安全落点";
-            case PURIFY -> "单次清除数 / 冷却 / 可清Boss负面";
-            case INFO -> "扫描半径 / 隔墙标记 / 玩家信息范围";
-            case SIGNAL -> "无线距离 / 最大频率 / 跨维度";
-            case ENERGY -> "充能目标 / 单次充能量 / 冷却";
-            case PROTOCOL -> "主协议词缀（下拉选已连接前置）";
-            case PRIORITY -> "同标签取最高 / 禁止共存 / 允许但只生效一个";
-            case COMPAT -> "强制兼容开关（紊乱+1、哑火+10%）";
-            case DISORDER -> "阈值 / 是否允许反噬 / 反噬效果";
-            case PERMISSION -> "归属：仅owner / 同队 / 公开";
-            case STATUS -> "状态净化强度";
-            case VISIBILITY -> "显形开关";
-            case COUNT -> "最大数量";
-            case LINK -> "中继跳数";
-            case PRIVACY -> "可读字段（魔素 / 斗气 / 背包）";
-        };
+    private static Component parameters(MagicCircleDecl.Group group) {
+        return Component.translatable(group.parametersKey());
     }
 
     private static void issue(Analysis analysis, int node, String key, Object... args) {
@@ -706,9 +692,9 @@ public final class MagicCircleGraph {
     }
 
     /** 底座触发节点的上游门控摘要：「真正触发需满足上游条件：生命值 ≤ 30%」。 */
-    public static String baseGateSummary(MagicCircleNetwork.Layer layer, int index) {
+    public static Component baseGateSummary(MagicCircleNetwork.Layer layer, int index) {
         List<MagicCircleNetwork.Node> nodes = layer.nodes();
-        if (index < 0 || index >= nodes.size()) return "";
+        if (index < 0 || index >= nodes.size()) return Component.empty();
         for (MagicCircleNetwork.Link link : layer.links()) {
             if (link.to() != index) continue;
             int up = link.from();
@@ -716,10 +702,10 @@ public final class MagicCircleGraph {
             MagicCircleNetwork.Node gate = nodes.get(up);
             if (gate.type() == MagicCircleBlockType.CONDITION
                     && MagicCircleGates.isGateMode(gate.semantic(), gate.gate())) {
-                return MagicCircleGates.gateShort(gate);
+                return MagicCircleGates.gateShortComponent(gate);
             }
         }
-        return "";
+        return Component.empty();
     }
 
     private MagicCircleGraph() {}

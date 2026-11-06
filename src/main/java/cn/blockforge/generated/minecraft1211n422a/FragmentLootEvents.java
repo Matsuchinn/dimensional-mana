@@ -12,10 +12,15 @@ import net.minecraft.world.level.storage.loot.providers.number.ConstantValue;
 import net.neoforged.neoforge.event.LootTableLoadEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 
-/** 把碎片加入原版宝箱表，因此 Lootr 复制原战利品表时也能按玩家独立生成。 */
+/**
+ * 把碎片加入结构宝箱表，因此 Lootr 复制原战利品表时也能按玩家独立生成。
+ *
+ * <p>r333：不再只认 {@code minecraft:chests/*}，别的模组新增结构里的通用宝箱
+ * （{@code othermod:chests/xxx}）也照样能开出碎片；判定统一走 {@link StructureChestLoot}。</p>
+ */
 public final class FragmentLootEvents {
     public void addChestLoot(LootTableLoadEvent event) {
-        if (!event.getName().getNamespace().equals("minecraft") || !event.getName().getPath().startsWith("chests/")) return;
+        if (!StructureChestLoot.isForeignStructureChest(event.getName())) return;
         addGradePool(event, "lesser", 0.058F);
         addGradePool(event, "medium", 0.015F);
         addGradePool(event, "advanced", 0.005F);
@@ -24,7 +29,7 @@ public final class FragmentLootEvents {
                 .when(LootItemRandomChanceCondition.randomChance(0.001F))
                 .add(LootItem.lootTableItem(GeneratedMod.MOD_ITEMS.get("cracked_ancient_casket").get()))
                 .build();
-        event.getTable().addPool(brokenCasket);
+        StructureChestLoot.addPool(event.getTable(), brokenCasket);
     }
 
     private static void addGradePool(LootTableLoadEvent event, String grade, float chance) {
@@ -34,7 +39,7 @@ public final class FragmentLootEvents {
         for (String id : MagicFragments.idsForGrade(grade)) {
             pool.add(LootItem.lootTableItem(GeneratedMod.MOD_ITEMS.get(id).get()));
         }
-        event.getTable().addPool(pool.build());
+        StructureChestLoot.addPool(event.getTable(), pool.build());
     }
 
     public void addWitchDrops(LivingDropsEvent event) {

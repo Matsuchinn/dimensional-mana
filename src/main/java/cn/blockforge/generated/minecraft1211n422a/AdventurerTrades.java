@@ -219,6 +219,10 @@ public final class AdventurerTrades {
                 modItem("medium_mana_crystal", 4), enchantedBook(level, random, LOW_BOOKS, 1, 2)));
         add(Tier.T2, WEIGHT_LOW, (level, random) -> draft(
                 modItem("medium_mana_crystal", 1), randomBeneficialPotion(random)));
+        // 武备强化石：中级冒险者（T2）就能换到，价格按一次「副词条成长」的量来定。
+        add(Tier.T2, WEIGHT_LOW, (level, random) -> draft(
+                costs(modItem("advanced_mana_crystal", 2), modItem("medium_mana_crystal", 4)),
+                modItem(ArmamentStoneLoot.ITEM_ID, 1)));
 
         // ── 高级交易（T3）：高级 / 极品魔晶换高级资源、天赋卷轴与中级饰品 ───────
         add(Tier.T3, WEIGHT_HIGH, (level, random) -> draft(

@@ -1,0 +1,8 @@
+{
+  "type": "dimensional_mana:professional_smelting",
+  "category": "misc",
+  "ingredient": {"item": "dimensional_mana:greater_magic_etching"},
+  "result": {"id": "dimensional_mana:special_mana_crystal_block", "count": 1},
+  "experience": 100.0,
+  "cookingtime": 200
+}

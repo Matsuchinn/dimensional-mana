@@ -26,8 +26,12 @@ import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 /**
  * 新饰品的全部获取途径：宝箱、生物掉落，以及无名护符的骷髅计数。
  *
- * <p>宝箱走 {@link LootTableLoadEvent} 往原版表里追加独立池子，互相不影响概率；
+ * <p>宝箱走 {@link LootTableLoadEvent} 往结构宝箱表里追加独立池子，互相不影响概率；
  * 生物掉落走 {@link LivingDropsEvent}。表格里的概率就是需求里写的百分比。</p>
+ *
+ * <p>r333：判定统一交给 {@link StructureChestLoot}，原版宝箱与其它模组新增结构的通用宝箱都算。
+ * 原版那几张有名有姓的表照旧按主题出对应饰品；其它模组的结构没有固定主题，
+ * 只给一份通用的「迷失护符」，另外沼泽群系里的任何宝箱都照旧 10% 出剧毒指环。</p>
  */
 public final class RelicLoot {
     private static final String SKELETON_KILLS = "DimensionalManaSkeletonKills";
@@ -37,15 +41,20 @@ public final class RelicLoot {
     public static void addChestLoot(LootTableLoadEvent event) {
         ResourceLocation name = event.getName();
         String path = name.getPath();
-        if (!path.startsWith("chests/")) return;
         boolean ownMod = name.getNamespace().equals(GeneratedMod.MOD_ID);
-        if (!ownMod && !name.getNamespace().equals("minecraft")) return;
-
-        // 村庄与沉船：走私之戒 10%
-        if (!ownMod && (path.startsWith("chests/village/") || path.equals("chests/shipwreck_treasure"))) {
-            addPool(event, "smuggler_ring", 0.10F, false);
+        // 本模组自己的表：只给远古祭坛挂一枚抉择戒指，其余内容是自己设计的。
+        if (ownMod) {
+            if (path.equals("chests/ancient_magic_altar")) addPool(event, "choice_ring", 0.25F, false);
+            return;
         }
-        if (!ownMod) {
+        if (!StructureChestLoot.isForeignStructureChest(name)) return;
+        boolean vanilla = name.getNamespace().equals("minecraft");
+
+        if (vanilla) {
+            // 村庄与沉船：走私之戒 10%
+            if (path.startsWith("chests/village/") || path.equals("chests/shipwreck_treasure")) {
+                addPool(event, "smuggler_ring", 0.10F, false);
+            }
             if (path.equals("chests/igloo_chest")) addPool(event, "moonlight_blessing", 0.12F, false);
             if (path.equals("chests/desert_pyramid")) addPool(event, "blazing_blessing", 0.04F, false);
             if (path.equals("chests/abandoned_mineshaft") || path.equals("chests/simple_dungeon")) {
@@ -53,11 +62,12 @@ public final class RelicLoot {
             }
             if (path.equals("chests/nether_bridge")) addPool(event, "bloodthirst_brooch", 0.08F, false);
             if (path.equals("chests/ancient_city")) addPool(event, "omniscient_page", 0.33F, false);
-            // 剧毒指环：沼泽群系里任何结构的宝箱 10%
-            addPool(event, "venom_ring", 0.10F, true);
-        } else if (path.equals("chests/ancient_magic_altar")) {
-            addPool(event, "choice_ring", 0.25F, false);
+        } else {
+            // 其它模组新增的结构：没有固定主题，给一份通用的迷失护符（捡到就是赚到的那种）。
+            addPool(event, "lost_charm", 0.06F, false);
         }
+        // 剧毒指环：沼泽群系里任何结构的宝箱 10%
+        addPool(event, "venom_ring", 0.10F, true);
     }
 
     private static void addPool(LootTableLoadEvent event, String itemId, float chance, boolean swamp) {
@@ -66,7 +76,7 @@ public final class RelicLoot {
                 .when(LootItemRandomChanceCondition.randomChance(chance));
         if (swamp) pool = pool.when(SwampBiomeCondition::new);
         pool = pool.add(LootItem.lootTableItem(item(itemId)));
-        event.getTable().addPool(pool.build());
+        StructureChestLoot.addPool(event.getTable(), pool.build());
     }
 
     public static void addEntityDrops(LivingDropsEvent event) {

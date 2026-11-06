@@ -56,17 +56,19 @@ public final class MagicCircleBlueprints {
     private static final Map<String, MagicCircleBlueprint> WORN = new LinkedHashMap<>();
 
     static {
-        WORN.put(SPARK_ITEM, build(SPARK_ITEM, "最小伤害阵", 2, sparkLayer()));
-        WORN.put(FIREBALL_ITEM, build(FIREBALL_ITEM, "爆炸火球阵", 3, fireballLayer()));
-        WORN.put(HEALING_ITEM, build(HEALING_ITEM, "治疗阵", 2, healingLayer()));
-        WORN.put(GUARD_ITEM, build(GUARD_ITEM, "守望召唤阵", 3, guardLayer()));
-        WORN.put(MINE_ITEM, build(MINE_ITEM, "掘矿阵", 3, mineLayer()));
+        WORN.put(SPARK_ITEM, build(SPARK_ITEM, "spark", 2, sparkLayer()));
+        WORN.put(FIREBALL_ITEM, build(FIREBALL_ITEM, "fireball", 3, fireballLayer()));
+        WORN.put(HEALING_ITEM, build(HEALING_ITEM, "healing", 2, healingLayer()));
+        WORN.put(GUARD_ITEM, build(GUARD_ITEM, "guard", 3, guardLayer()));
+        WORN.put(MINE_ITEM, build(MINE_ITEM, "mine", 3, mineLayer()));
     }
 
-    private static MagicCircleBlueprint build(String itemId, String name, int baseSize,
+    private static MagicCircleBlueprint build(String itemId, String nameKey, int baseSize,
                                               MagicCircleNetwork.Layer layer) {
-        return new MagicCircleBlueprint(itemId, name, "次元物语", baseSize, baseSize,
-                MagicCircleBlueprint.Carrier.WORN, List.of(layer));
+        return new MagicCircleBlueprint(itemId,
+                MagicCircleBlueprint.markKey("tooltip.dimensional_mana.worn_blueprint.name." + nameKey),
+                MagicCircleBlueprint.markKey("tooltip.dimensional_mana.blueprint.author.builtin"),
+                baseSize, baseSize, MagicCircleBlueprint.Carrier.WORN, List.of(layer));
     }
 
     /**

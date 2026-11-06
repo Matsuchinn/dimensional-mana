@@ -254,22 +254,57 @@ public final class MagicProgression {
     public static void applyInsight(ServerPlayer player, String tier) {
         CompoundTag t = tag(player);
         String normalized = tier.toLowerCase(Locale.ROOT);
-        String oldKey = "insight_" + normalized;
-        String countKey = "insight_count_" + normalized;
-        // 旧存档只记录“该品级触发过一次”；迁移成次数后，后续新法术继续拿重复顿悟。
-        int count = t.contains(countKey) ? t.getInt(countKey) : (t.getBoolean(oldKey) ? 1 : 0);
-        int amount = switch (normalized) {
+        int count = insightCount(t, normalized);
+        int amount = insightAmount(normalized, count);
+        if (amount <= 0) return;
+        t.putBoolean("insight_" + normalized, true);
+        t.putInt("insight_count_" + normalized, count + 1);
+        ManaData.increaseBaseMaxMana(player, amount);
+        player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
+                "message.dimensional_mana.spell_insight", amount), false);
+    }
+
+    /** 该品级当前已触发过多少次顿悟（旧存档只记布尔，视作一次）。 */
+    private static int insightCount(CompoundTag t, String tier) {
+        String countKey = "insight_count_" + tier;
+        return t.contains(countKey) ? t.getInt(countKey) : (t.getBoolean("insight_" + tier) ? 1 : 0);
+    }
+
+    /** 该品级第 count+1 次顿悟增加的魔素上限：首次从高，之后按档递减。 */
+    private static int insightAmount(String tier, int count) {
+        return switch (tier) {
             case "lesser" -> count == 0 ? 48 : 24;
             case "medium" -> count == 0 ? 96 : 64;
             case "advanced" -> count == 0 ? 192 : 144;
             default -> 0;
         };
-        if (amount <= 0) return;
-        t.putBoolean(oldKey, true);
-        t.putInt(countKey, count + 1);
-        ManaData.increaseBaseMaxMana(player, amount);
+    }
+
+    /**
+     * 作弊指令用：把「还差 N 次才领到的顿悟」按正常逐次规则一次性折算并发放，
+     * 同时同步各品级的顿悟次数，保证之后新增法术的顿悟仍按递增档走。
+     * 返回实际发放的魔素上限总量；数量为 0 时不发消息也不动数据。
+     */
+    public static int grantInsightsBulk(ServerPlayer player, int lesser, int medium, int advanced) {
+        CompoundTag t = tag(player);
+        int total = bulkTierInsight(t, "lesser", lesser)
+                + bulkTierInsight(t, "medium", medium)
+                + bulkTierInsight(t, "advanced", advanced);
+        if (total <= 0) return 0;
+        ManaData.increaseBaseMaxMana(player, total);
         player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
-                "message.dimensional_mana.spell_insight", amount), false);
+                "message.dimensional_mana.spell_insight", total), false);
+        return total;
+    }
+
+    private static int bulkTierInsight(CompoundTag t, String tier, int count) {
+        if (count <= 0) return 0;
+        int current = insightCount(t, tier);
+        int total = 0;
+        for (int i = 0; i < count; i++) total += insightAmount(tier, current + i);
+        t.putBoolean("insight_" + tier, true);
+        t.putInt("insight_count_" + tier, current + count);
+        return total;
     }
 
     public static void applySkillEffects(Player player) {

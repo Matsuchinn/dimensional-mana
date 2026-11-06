@@ -26,8 +26,143 @@ public final class SpellAttributes {
     public static final DeferredHolder<Attribute, Attribute> SPELL_HASTE = register("spell_haste", 1.0, 0.05, 100.0);
     public static final DeferredHolder<Attribute, Attribute> SPELL_CRIT_CHANCE = register("spell_crit_chance", 0.005, 0.0, 1.0);
     public static final DeferredHolder<Attribute, Attribute> SPELL_CRIT_DAMAGE = register("spell_crit_damage", 0.5, 0.0, 100.0);
+    public static final DeferredHolder<Attribute, Attribute> SPELL_PENETRATION = register("spell_penetration", 0.0, 0.0, 0.95);
+    public static final DeferredHolder<Attribute, Attribute> PHYSICAL_CRIT_CHANCE = register("physical_crit_chance", 0.0, 0.0, 1.0);
+    public static final DeferredHolder<Attribute, Attribute> PHYSICAL_CRIT_DAMAGE = register("physical_crit_damage", 0.0, 0.0, 100.0);
     public static final DeferredHolder<Attribute, Attribute> MANA_COST_REDUCTION = register("mana_cost_reduction", 0.0, 0.0, 0.95);
     public static final DeferredHolder<Attribute, Attribute> SPELL_RESISTANCE = register("spell_resistance", 0.0, 0.0, 0.95);
+
+    // ------------------------------------------------------------------
+    // 词条属性：以前这些数值只存在物品 NBT 里、由 EquipmentAffixSystem 现场求和，
+    // 外部（Apothic Attributes 这类属性面板/检测模组）完全看不到。现在每条词条都对应
+    // 一个真实注册的 Attribute，词条刷新时写成属性修正，于是面板能显示、其它模组也能读到。
+    // 单位统一用“百分数点数”（3.5 就是 +3.5%），只有 ratio 类属性仍用 0~1。
+    // ------------------------------------------------------------------
+    /** 魔素上限百分比。 */
+    public static final DeferredHolder<Attribute, Attribute> MANA_MAX_PERCENT = register("mana_max_percent", 0.0, 0.0, 1000.0);
+    /** 魔素上限固定值。 */
+    public static final DeferredHolder<Attribute, Attribute> MANA_MAX_FLAT = register("mana_max_flat", 0.0, 0.0, 100000.0);
+    /** 魔素亲和。 */
+    public static final DeferredHolder<Attribute, Attribute> MANA_AFFINITY = register("mana_affinity", 0.0, 0.0, 10000.0);
+    /** 元素精通。 */
+    public static final DeferredHolder<Attribute, Attribute> ELEMENTAL_MASTERY = register("elemental_mastery", 0.0, 0.0, 10000.0);
+    /** 通用元素伤害加成（百分数）。 */
+    public static final DeferredHolder<Attribute, Attribute> ELEMENTAL_DAMAGE = register("elemental_damage", 0.0, 0.0, 1000.0);
+    /** 斗气上限百分比。 */
+    public static final DeferredHolder<Attribute, Attribute> BATTLE_QI_PERCENT = register("battle_qi_percent", 0.0, 0.0, 1000.0);
+    /** 斗气上限固定值。 */
+    public static final DeferredHolder<Attribute, Attribute> BATTLE_QI_FLAT = register("battle_qi_flat", 0.0, 0.0, 100000.0);
+
+    /** 11 种初级元素的单元素伤害加成（百分数），键就是 {@link ElementType#id()}。 */
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_FIRE = register("element_fire", 0.0, 0.0, 1000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_WATER = register("element_water", 0.0, 0.0, 1000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ICE = register("element_ice", 0.0, 0.0, 1000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_LIGHTNING = register("element_lightning", 0.0, 0.0, 1000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_WIND = register("element_wind", 0.0, 0.0, 1000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_EARTH = register("element_earth", 0.0, 0.0, 1000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_NATURE = register("element_nature", 0.0, 0.0, 1000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_METAL = register("element_metal", 0.0, 0.0, 1000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_LIGHT = register("element_light", 0.0, 0.0, 1000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_POISON = register("element_poison", 0.0, 0.0, 1000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_SOUND = register("element_sound", 0.0, 0.0, 1000.0);
+    /** 奥术不属于 11 种初级元素，但词条池里有，也单独挂一条。 */
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ARCANE = register("element_arcane", 0.0, 0.0, 1000.0);
+
+    // ------------------------------------------------------------------
+    // r332 物理词条扩充：破甲、吸血、斗气恢复 / 技强、连击、处决、见切、招架窗口、箭矢伤害。
+    // 和上面一样，每条都是真实注册的属性，词条刷新时写成属性修正，外部属性面板读得到。
+    // 单位统一：百分数点数（12 表示 +12%）、点数、每秒点数，注释逐条写清。
+    // ------------------------------------------------------------------
+    /** 破甲：攻击时无视目标这个点数的护甲值。 */
+    public static final DeferredHolder<Attribute, Attribute> ARMOR_PENETRATION = register("armor_penetration", 0.0, 0.0, 10000.0);
+    /** 物理吸血：造成的物理伤害按这个百分数转化为自身生命。 */
+    public static final DeferredHolder<Attribute, Attribute> LIFESTEAL = register("lifesteal_percent", 0.0, 0.0, 100.0);
+    /** 斗气额外恢复：每秒多恢复多少点斗气。 */
+    public static final DeferredHolder<Attribute, Attribute> BATTLE_QI_REGEN = register("battle_qi_regen", 0.0, 0.0, 1000.0);
+    /** 斗气技能强度：每点让拔刀斩、剑气的伤害 +2.5%。 */
+    public static final DeferredHolder<Attribute, Attribute> BATTLE_QI_SKILL_POWER = register("battle_qi_skill_power", 0.0, 0.0, 10000.0);
+    /** 连击伤害：连续命中同一目标时逐层增伤，最多 4 层，单位是百分数。 */
+    public static final DeferredHolder<Attribute, Attribute> COMBO_DAMAGE = register("combo_damage_percent", 0.0, 0.0, 1000.0);
+    /** 处决伤害：目标进入处决线时的额外伤害，单位是百分数。 */
+    public static final DeferredHolder<Attribute, Attribute> EXECUTE_DAMAGE = register("execute_damage_percent", 0.0, 0.0, 1000.0);
+    /** 见切伤害：对处在招架破绽中的目标额外的伤害，单位是百分数。 */
+    public static final DeferredHolder<Attribute, Attribute> MIKIRI_DAMAGE = register("mikiri_damage_percent", 0.0, 0.0, 1000.0);
+    /** 招架特化：完美格挡判定窗口额外延长多少刻。 */
+    public static final DeferredHolder<Attribute, Attribute> PARRY_WINDOW = register("parry_window_bonus", 0.0, 0.0, 100.0);
+    /** 箭矢伤害固定值：弓 / 弩命中的额外伤害。 */
+    public static final DeferredHolder<Attribute, Attribute> ARROW_DAMAGE_FLAT = register("arrow_damage_flat", 0.0, 0.0, 10000.0);
+    /** 箭矢伤害百分比：弓 / 弩命中的额外伤害，单位是百分数。 */
+    public static final DeferredHolder<Attribute, Attribute> ARROW_DAMAGE_PERCENT = register("arrow_damage_percent", 0.0, 0.0, 1000.0);
+
+    /**
+     * 元素附加（12 系）：物理命中时额外附带这个点数的对应元素伤害。
+     *
+     * <p>「元素附加」在词条池里只占一个坑位，抽到之后再随机决定是哪一系，
+     * 所以这里按元素各挂一条属性，属性和面板上都能看到实际附加的是哪一系、多少点。</p>
+     */
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ADDITION_FIRE = register("element_addition_fire", 0.0, 0.0, 10000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ADDITION_WATER = register("element_addition_water", 0.0, 0.0, 10000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ADDITION_ICE = register("element_addition_ice", 0.0, 0.0, 10000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ADDITION_LIGHTNING = register("element_addition_lightning", 0.0, 0.0, 10000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ADDITION_WIND = register("element_addition_wind", 0.0, 0.0, 10000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ADDITION_EARTH = register("element_addition_earth", 0.0, 0.0, 10000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ADDITION_NATURE = register("element_addition_nature", 0.0, 0.0, 10000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ADDITION_METAL = register("element_addition_metal", 0.0, 0.0, 10000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ADDITION_LIGHT = register("element_addition_light", 0.0, 0.0, 10000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ADDITION_POISON = register("element_addition_poison", 0.0, 0.0, 10000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ADDITION_SOUND = register("element_addition_sound", 0.0, 0.0, 10000.0);
+    public static final DeferredHolder<Attribute, Attribute> ELEMENT_ADDITION_ARCANE = register("element_addition_arcane", 0.0, 0.0, 10000.0);
+
+    private static final java.util.List<DeferredHolder<Attribute, Attribute>> AFFIX_ATTRIBUTES = java.util.List.of(
+            MANA_MAX_PERCENT, MANA_MAX_FLAT, MANA_AFFINITY, ELEMENTAL_MASTERY, ELEMENTAL_DAMAGE,
+            BATTLE_QI_PERCENT, BATTLE_QI_FLAT,
+            ARMOR_PENETRATION, LIFESTEAL, BATTLE_QI_REGEN, BATTLE_QI_SKILL_POWER, COMBO_DAMAGE,
+            EXECUTE_DAMAGE, MIKIRI_DAMAGE, PARRY_WINDOW, ARROW_DAMAGE_FLAT, ARROW_DAMAGE_PERCENT,
+            ELEMENT_ADDITION_FIRE, ELEMENT_ADDITION_WATER, ELEMENT_ADDITION_ICE, ELEMENT_ADDITION_LIGHTNING,
+            ELEMENT_ADDITION_WIND, ELEMENT_ADDITION_EARTH, ELEMENT_ADDITION_NATURE, ELEMENT_ADDITION_METAL,
+            ELEMENT_ADDITION_LIGHT, ELEMENT_ADDITION_POISON, ELEMENT_ADDITION_SOUND, ELEMENT_ADDITION_ARCANE,
+            ELEMENT_FIRE, ELEMENT_WATER, ELEMENT_ICE, ELEMENT_LIGHTNING, ELEMENT_WIND, ELEMENT_EARTH,
+            ELEMENT_NATURE, ELEMENT_METAL, ELEMENT_LIGHT, ELEMENT_POISON, ELEMENT_SOUND, ELEMENT_ARCANE);
+
+    /** 按 {@link ElementType#id()}（以及 {@code arcane}）取单元素伤害附加属性。 */
+    public static Holder<Attribute> elementAddition(String elementId) {
+        if (elementId == null) return ELEMENT_ADDITION_FIRE;
+        return switch (elementId) {
+            case "fire" -> ELEMENT_ADDITION_FIRE;
+            case "water" -> ELEMENT_ADDITION_WATER;
+            case "ice" -> ELEMENT_ADDITION_ICE;
+            case "lightning" -> ELEMENT_ADDITION_LIGHTNING;
+            case "wind" -> ELEMENT_ADDITION_WIND;
+            case "earth" -> ELEMENT_ADDITION_EARTH;
+            case "nature" -> ELEMENT_ADDITION_NATURE;
+            case "metal" -> ELEMENT_ADDITION_METAL;
+            case "light" -> ELEMENT_ADDITION_LIGHT;
+            case "poison" -> ELEMENT_ADDITION_POISON;
+            case "sound" -> ELEMENT_ADDITION_SOUND;
+            case "arcane" -> ELEMENT_ADDITION_ARCANE;
+            default -> ELEMENT_ADDITION_FIRE;
+        };
+    }
+
+    /** 按 {@link ElementType#id()}（以及 {@code arcane}）取单元素伤害属性。 */
+    public static Holder<Attribute> elementDamage(String elementId) {
+        if (elementId == null) return ELEMENTAL_DAMAGE;
+        return switch (elementId) {
+            case "fire" -> ELEMENT_FIRE;
+            case "water" -> ELEMENT_WATER;
+            case "ice" -> ELEMENT_ICE;
+            case "lightning" -> ELEMENT_LIGHTNING;
+            case "wind" -> ELEMENT_WIND;
+            case "earth" -> ELEMENT_EARTH;
+            case "nature" -> ELEMENT_NATURE;
+            case "metal" -> ELEMENT_METAL;
+            case "light" -> ELEMENT_LIGHT;
+            case "poison" -> ELEMENT_POISON;
+            case "sound" -> ELEMENT_SOUND;
+            case "arcane" -> ELEMENT_ARCANE;
+            default -> ELEMENTAL_DAMAGE;
+        };
+    }
 
     /** 作弊指令写入的暴击率修正标识；clear 时按它精确移除。 */
     private static final ResourceLocation CHEAT_CRIT_CHANCE =
@@ -44,8 +179,12 @@ public final class SpellAttributes {
             add(event, type, SPELL_HASTE);
             add(event, type, SPELL_CRIT_CHANCE);
             add(event, type, SPELL_CRIT_DAMAGE);
+            add(event, type, SPELL_PENETRATION);
+            add(event, type, PHYSICAL_CRIT_CHANCE);
+            add(event, type, PHYSICAL_CRIT_DAMAGE);
             add(event, type, MANA_COST_REDUCTION);
             add(event, type, SPELL_RESISTANCE);
+            for (DeferredHolder<Attribute, Attribute> attribute : AFFIX_ATTRIBUTES) add(event, type, attribute);
         }
     }
 
@@ -95,14 +234,21 @@ public final class SpellAttributes {
         return Math.max(0.0, damage * (1.0 - resistance));
     }
 
+    /** 施法者的魔力通透会穿透目标法术抗性；穿透值按百分比词条换算为 0~0.95。 */
+    public static double applySpellResistance(LivingEntity caster, LivingEntity target, double damage) {
+        double resistance = value(target, SPELL_RESISTANCE, 0.0);
+        double penetration = Math.max(0.0, Math.min(0.95, value(caster, SPELL_PENETRATION, 0.0)));
+        return Math.max(0.0, damage * (1.0 - Math.max(0.0, resistance - penetration)));
+    }
+
     /** 供本模组法术统一调用：直接伤害吃完整法杖固定增伤，持续/机制伤害仅第一次吃 50%。 */
     public static float calculateSpellDamage(LivingEntity caster, LivingEntity target, float baseDamage) {
-        return (float)applySpellResistance(target, calculateRawSpellDamage(caster, target, baseDamage, 1.0));
+        return (float)applySpellResistance(caster, target, calculateRawSpellDamage(caster, target, baseDamage, 1.0));
     }
 
     public static float calculateSecondarySpellDamage(LivingEntity caster, LivingEntity target, float baseDamage,
                                                        boolean firstInstance) {
-        return (float)applySpellResistance(target,
+        return (float)applySpellResistance(caster, target,
                 calculateRawSpellDamage(caster, target, baseDamage, firstInstance ? 0.5 : 0.0));
     }
 

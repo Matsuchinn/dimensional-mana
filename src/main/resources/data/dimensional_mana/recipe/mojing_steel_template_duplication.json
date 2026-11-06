@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "#": {
+      "item": "minecraft:diamond"
+    },
+    "C": {
+      "item": "dimensional_mana:special_mana_crystal"
+    },
+    "S": {
+      "item": "dimensional_mana:mojing_steel_smithing_template"
+    }
+  },
+  "pattern": [
+    "#S#",
+    "#C#",
+    "###"
+  ],
+  "result": {
+    "count": 2,
+    "id": "dimensional_mana:mojing_steel_smithing_template"
+  }
+}

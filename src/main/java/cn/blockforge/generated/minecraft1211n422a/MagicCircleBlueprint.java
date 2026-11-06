@@ -111,7 +111,8 @@ public final class MagicCircleBlueprint {
     public MagicCircleBlueprint(String id, String name, String author, int baseW, int baseH, Carrier carrier,
                                 List<MagicCircleNetwork.Layer> layers) {
         this.id = id == null || id.isEmpty() ? "custom" : id;
-        this.name = name == null || name.isBlank() ? "无名法阵" : name;
+        this.name = name == null || name.isBlank()
+                ? markKey("tooltip.dimensional_mana.blueprint.auto_name.none") : name;
         this.author = author == null ? "" : author;
         this.baseW = clamp(baseW);
         this.baseH = clamp(baseH);
@@ -237,6 +238,48 @@ public final class MagicCircleBlueprint {
 
     // ------------------------------------------------------------------ 物品承载
 
+    /**
+     * 存进蓝图数据里的「语言键标记」。
+     *
+     * <p>名字是一串数据（要写进物品、抄进法阵代码），没法跟着语言变；所以自动起的名字与内置
+     * 教学阵的名字存成 {@code \u0002 + 语言键}，显示时再由 {@link #displayName(String)} 查表。
+     * 玩家自己起的名字不带标记，原样显示。</p>
+     */
+    private static final String KEY_MARK = "\u0002";
+    private static final String AUTO_MARK = KEY_MARK + "auto:";
+
+    /** 把一个语言键打包成「可存档的名字」。 */
+    public static String markKey(String translationKey) {
+        return KEY_MARK + translationKey;
+    }
+
+    /** 自动命名：存元素 id，显示时按语言拼「炎之法阵 / Fire Circle」。 */
+    public static String markAuto(ElementType element) {
+        return AUTO_MARK + (element == null ? "arcane" : element.id());
+    }
+
+    /** 这个名字是不是「语言键标记」而不是玩家自定义的文字。 */
+    public static boolean isMarkedName(String raw) {
+        return raw != null && raw.startsWith(KEY_MARK);
+    }
+
+    /** 名字 → 可翻译组件；自动名与内置名按语言渲染，玩家自定义的原样显示。 */
+    public static Component displayName(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return Component.translatable("tooltip.dimensional_mana.blueprint.auto_name.none");
+        }
+        if (raw.startsWith(AUTO_MARK)) {
+            ElementType element = ElementType.byId(raw.substring(AUTO_MARK.length()));
+            if (element == null) return Component.translatable("tooltip.dimensional_mana.blueprint.auto_name.none");
+            return Component.translatable("tooltip.dimensional_mana.blueprint.auto_name",
+                    Component.translatable(element.translationKey()));
+        }
+        if (raw.startsWith(KEY_MARK)) {
+            return Component.translatable(raw.substring(KEY_MARK.length()));
+        }
+        return Component.literal(raw);
+    }
+
     /** 抄录时的自动名字：主要元素 + 法阵，没有元素就叫「无名法阵」。 */
     public static String suggestName(MagicCircleNetwork network) {
         ElementType element = null;
@@ -255,8 +298,7 @@ public final class MagicCircleBlueprint {
             }
         }
         element = MagicCirclePowders.elementOf(bestId);
-        if (element == null) return "无名法阵";
-        return elementName(element) + "法阵";
+        return markAuto(element);
     }
 
     /** 元素的中文短名（服务端也能用，不依赖语言文件）。 */
@@ -388,14 +430,14 @@ public final class MagicCircleBlueprint {
                         String.format(java.util.Locale.ROOT, "%.2f", evaluation.strength()))
                 .withStyle(ChatFormatting.GOLD));
         if (!author.isEmpty()) {
-            lines.add(Component.translatable("tooltip.dimensional_mana.blueprint.author", author)
+            lines.add(Component.translatable("tooltip.dimensional_mana.blueprint.author", displayName(author))
                     .withStyle(ChatFormatting.DARK_GRAY));
         }
         return lines;
     }
 
-    /** 主要功能块清单，比如「核心 ×1、触发 ×1、输出 ×2」。 */
-    public String blockSummary() {
+    /** 主要功能块清单，比如「核心 ×1、触发 ×1、输出 ×2」（名字跟着语言走）。 */
+    public Component blockSummary() {
         Map<MagicCircleBlockType, Integer> counts = new LinkedHashMap<>();
         for (MagicCircleNetwork.Layer layer : layers) {
             for (MagicCircleNetwork.Node node : layer.nodes()) {
@@ -403,12 +445,17 @@ public final class MagicCircleBlueprint {
                 counts.merge(node.type(), 1, Integer::sum);
             }
         }
-        StringBuilder builder = new StringBuilder();
+        Component builder = Component.empty();
+        boolean first = true;
         for (Map.Entry<MagicCircleBlockType, Integer> entry : counts.entrySet()) {
-            if (builder.length() > 0) builder.append("、");
-            builder.append(entry.getKey().fallbackName()).append(" ×").append(entry.getValue());
+            if (!first) builder = builder.copy().append(
+                    Component.translatable("message.dimensional_mana.magiccircle.graph.list_sep"));
+            builder = builder.copy().append(Component.translatable(
+                    "tooltip.dimensional_mana.blueprint.block_count",
+                    entry.getKey().displayName(), entry.getValue()));
+            first = false;
         }
-        return builder.length() == 0 ? "空" : builder.toString();
+        return first ? Component.translatable("tooltip.dimensional_mana.blueprint.block_none") : builder;
     }
 
     /**
@@ -428,11 +475,11 @@ public final class MagicCircleBlueprint {
                 total++;
                 if (shown >= limit) continue;
                 lines.add(Component.translatable("tooltip.dimensional_mana.magiccircle.node.line",
-                                layerIndex + 1, node.type().fallbackName(), node.x(), node.y(),
-                                MagicCirclePowders.shortName(node.element()),
-                                MagicCirclePowders.shortName(node.semantic()),
-                                MagicCirclePowders.shortName(node.power()),
-                                MagicCirclePowders.shortName(node.dye()))
+                                layerIndex + 1, node.type().displayName(), node.x(), node.y(),
+                                MagicCirclePowders.displayShort(node.element()),
+                                MagicCirclePowders.displayShort(node.semantic()),
+                                MagicCirclePowders.displayShort(node.power()),
+                                MagicCirclePowders.displayShort(node.dye()))
                         .withStyle(ChatFormatting.GRAY));
                 shown++;
             }

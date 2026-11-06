@@ -149,11 +149,12 @@ public final class MagicCircleCode {
         }
         int canvasW = baseW * MagicCircleNetwork.TILE;
         int canvasH = baseH * MagicCircleNetwork.TILE;
-        String name = optString(root, "n", "导入的法阵");
+        String name = optString(root, "n", MagicCircleBlueprint.markKey("tooltip.dimensional_mana.blueprint.auto_name.imported"));
         String author = optString(root, "a", "");
-        if (name.isBlank()) name = "导入的法阵";
-        if (name.length() > 48) name = name.substring(0, 48);
-        if (author.length() > 32) author = author.substring(0, 32);
+        if (name.isBlank()) name = MagicCircleBlueprint.markKey("tooltip.dimensional_mana.blueprint.auto_name.imported");
+        // 语言键标记的名字比纯文本长，别按 48/32 截断，否则键会被截坏、显示成一串乱码。
+        if (!MagicCircleBlueprint.isMarkedName(name) && name.length() > 48) name = name.substring(0, 48);
+        if (!MagicCircleBlueprint.isMarkedName(author) && author.length() > 32) author = author.substring(0, 32);
 
         List<MagicCircleNetwork.Layer> layers = new ArrayList<>();
         JsonArray layerArray = root.has("layers") && root.get("layers").isJsonArray()

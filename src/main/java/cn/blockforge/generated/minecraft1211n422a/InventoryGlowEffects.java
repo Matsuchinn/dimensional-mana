@@ -29,7 +29,9 @@ final class InventoryGlowEffects {
             ResonanceCore.ITEM_ID, 0x8FE6FF,
             "superconducting_crystal", 0x74F0FF,
             "superconducting_crystal_dust", 0x8FD8FF,
-            "special_magic_steel", 0xFFE7A8);
+            "special_magic_steel", 0xFFE7A8,
+            GeneratedMod.DISTORTED_NETHER_STAR_ID, 0x67127F,
+            ArmamentStoneLoot.ITEM_ID, 0xFFC46B);
     private static final int DEFAULT_COLOR = 0xBFE9FF;
     private static final Deque<double[]> TRAIL = new ArrayDeque<>();
     private static Screen lastScreen;

@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": {"model": "dimensional_mana:block/weapon_workbench"},
+    "facing=east": {"model": "dimensional_mana:block/weapon_workbench", "y": 90},
+    "facing=south": {"model": "dimensional_mana:block/weapon_workbench", "y": 180},
+    "facing=west": {"model": "dimensional_mana:block/weapon_workbench", "y": 270}
+  }
+}

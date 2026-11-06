@@ -45,6 +45,9 @@ import java.util.UUID;
  * <p>数值（见各常量）：1000 血、30 万魔素 / 5000 斗气、移速是原版凋零的 1.25 倍，
  * 血量低于 30% 进入二阶段（1.45 倍移速、接触即粉碎方块、双资源每秒 50 回复）。</p>
  *
+ * <p>5120 血超过了原版 1024 的属性上限，由 {@link AttributeLimits} 在初始化时抬高上限，
+ * 玩家不需要另装属性修复模组。</p>
+ *
  * <p>受击链路（限伤、双抗、聚合体吸收、幻影分裂、击杀回魔）统一写在
  * {@link CorruptedWitherEvents}，因为 1.21.1 的受击入口是事件而不是实体的 {@code hurt}。</p>
  *
@@ -55,7 +58,7 @@ import java.util.UUID;
 public final class CorruptedWither extends WitherBoss {
     // ---------------------------------------------------------------- 设计稿数值
     /** 生命上限。 */
-    public static final float MAX_HEALTH = 2000.0F;
+    public static final float MAX_HEALTH = 5120.0F;
     /** 魔素池上限。 */
     public static final double MAX_MANA = 300_000.0D;
     /** 斗气池上限。 */
@@ -350,7 +353,20 @@ public final class CorruptedWither extends WitherBoss {
         if (isOwnSummon(entity)) return false;
         if (entity instanceof Player player && (player.isCreative() || player.isSpectator())) return false;
         if (CrystalClusterData.isManaMutant(entity)) return false;
+        // 音元素史莱姆只吃闪电与必杀伤害，别的弹幕打上去等于白打，索敌时直接跳过。
+        if (isUntouchable(entity)) return false;
         return true;
+    }
+
+    /**
+     * 该不该被这只 Boss「当成敌人」。
+     *
+     * <p>音元素史莱姆的 {@code hurt} 只放行闪电和带「无视无敌」标签的伤害，其余一律返回 false，
+     * 相当于自带几乎无敌的防御。以前本体、幻影和射线都会把它当成最近的生物死追，弹幕全砸在它身上
+     * 却一点血都不掉，看起来像「Boss 在打空气」。现在索敌、分身、射线三处统一走这条判断。</p>
+     */
+    public static boolean isUntouchable(Entity entity) {
+        return entity instanceof ElementalSlime slime && slime.variant() == ElementalSlimeVariant.SOUND;
     }
 
     /** 保持 7～14 格的浮空距离，太近就往后撤。 */

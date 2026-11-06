@@ -118,6 +118,16 @@ public final class DimensionalManaJeiPlugin implements IModPlugin {
                 List.of(harmonizer), veil));
         recipes.add(factory.createBrewingRecipe(
                 List.of(new ItemStack(net.minecraft.world.item.Items.REDSTONE)), List.of(veil), veilLong));
+        // 元素精通药水：顶部超导魔晶粉 + 下方魔素调和剂 → 一次三瓶元素精通Ⅰ；红石延长到 30 秒。
+        ItemStack masteryI = potion(GeneratedMod.ELEMENTAL_MASTERY_POTIONS.get(0));
+        recipes.add(factory.createBrewingRecipe(List.of(item("superconducting_crystal_dust")),
+                List.of(harmonizer), masteryI));
+        for (int level = 1; level <= ElementalMasteryPotions.MAX_LEVEL; level++) {
+            recipes.add(factory.createBrewingRecipe(
+                    List.of(new ItemStack(net.minecraft.world.item.Items.REDSTONE)),
+                    List.of(potion(GeneratedMod.ELEMENTAL_MASTERY_POTIONS.get(level - 1))),
+                    potion(GeneratedMod.LONG_ELEMENTAL_MASTERY_POTIONS.get(level - 1))));
+        }
         // 升华药水：顶部附魔金苹果 + 完全回复药剂 → 升华药水（不可延长、不可喷溅）。
         recipes.add(factory.createBrewingRecipe(
                 List.of(new ItemStack(net.minecraft.world.item.Items.ENCHANTED_GOLDEN_APPLE)),

@@ -1,15 +1,22 @@
 package cn.blockforge.generated.minecraft1211n422a;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
@@ -19,6 +26,8 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -27,6 +36,14 @@ import java.util.UUID;
  * <p>自己不做寻路，只跟着主人的眼睛走。蓄力期间每秒甩出一圈「扭曲光环」，把扫过区域的
  * 环境魔素浓度砍半（{@link CorruptedZoneData}，10 分钟后自然恢复）；开火后每刻沿光轴
  * 打一条破坏方块、对第一个命中的生物造成其当前生命 90% 的真实伤害。</p>
+ *
+ * <p><b>追猎</b>：光斑每刻都会检查当前目标。目标被打死 / 消失后，立刻在 64 格内重新挑
+ * 一个最近的生物并把光轴转过去；周围一只生物都没有时，光轴以每秒 40° 缓慢自转，
+ * 边转边粉碎方块，把「尽情破坏」演出来。</p>
+ *
+ * <p><b>持续笼罩</b>：同一个生物被光斑连续罩住超过 4 秒后，每秒额外吃 1000 点真实伤害
+ * （走 {@code dimensional_mana:wither_beam_true}，绕过护甲、抗性、药效、附魔、盾牌与受击冷却）。
+ * 这是给「限伤 / 高减伤 Boss」准备的手段：光斑一直粘着它，伤害就会越来越狠。</p>
  *
  * <p>方向的追踪速度锁在 45°/s（= 2.25°/刻）：玩家得跑得快才甩得掉光斑，但直线冲刺仍然能躲开。</p>
  */
@@ -44,6 +61,20 @@ public final class CorruptedWitherBeam extends Entity {
     /** 扭曲光环的半径与掉浓度时长（10 分钟 = 12000 刻）。 */
     public static final double HALO_RADIUS = 12.0D;
     public static final int ZONE_DURATION = 12_000;
+    /** 被光斑连续笼罩多少刻之后开始吃额外真伤：4 秒。 */
+    public static final int DWELL_TICKS = 80;
+    /** 持续笼罩额外真伤的结算间隔：每秒一次。 */
+    public static final int DWELL_DAMAGE_INTERVAL = 20;
+    /** 持续笼罩每秒的额外真实伤害。 */
+    public static final float DWELL_DAMAGE = 1_000.0F;
+    /** 没有目标时的自转速度：每秒 40°，十秒的射击期刚好转一圈多一点。 */
+    public static final double IDLE_SPIN_PER_TICK = 2.0D;
+    /** 击杀目标后重新索敌的半径。 */
+    public static final double RETARGET_RANGE = 64.0D;
+
+    /** 持续笼罩真伤用的专用伤害类型：数据包里挂满了穿透标签。 */
+    private static final ResourceKey<DamageType> TRUE_DAMAGE = ResourceKey.create(Registries.DAMAGE_TYPE,
+            ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "wither_beam_true"));
 
     private static final EntityDataAccessor<Boolean> DATA_FIRING =
             SynchedEntityData.defineId(CorruptedWitherBeam.class, EntityDataSerializers.BOOLEAN);
@@ -61,6 +92,8 @@ public final class CorruptedWitherBeam extends Entity {
     private int haloCooldown;
     private float yaw;
     private float pitch;
+    /** 每个目标被光斑连续罩住的刻数（同一时刻只保留当前目标）。 */
+    private final Map<UUID, Integer> dwellTicks = new HashMap<>();
 
     public CorruptedWitherBeam(EntityType<? extends CorruptedWitherBeam> type, Level level) {
         super(type, level);
@@ -178,7 +211,8 @@ public final class CorruptedWitherBeam extends Entity {
         if (!(level() instanceof ServerLevel serverLevel)) return;
         // 光束始终从主人眼睛发出。
         setPos(eyeOf(owner).x, eyeOf(owner).y, eyeOf(owner).z);
-        updateAim(serverLevel);
+        // 蓄力时只跟当前目标；开火后目标没了就重新索敌，连人也找不到就缓慢自转。
+        updateAim(serverLevel, owner, chargeTicks <= 0);
         if (chargeTicks > 0) {
             chargeTicks--;
             this.entityData.set(DATA_CHARGE, chargeTicks);
@@ -215,16 +249,62 @@ public final class CorruptedWitherBeam extends Entity {
         return entity instanceof LivingEntity living && living.isAlive() ? living : null;
     }
 
-    /** 朝目标转头，每刻最多 0.25°。 */
-    private void updateAim(ServerLevel serverLevel) {
-        LivingEntity target = target(serverLevel);
-        if (target == null) return;
+    /** 朝目标转头，每刻最多 {@link #MAX_TURN_PER_TICK} 度；没有目标时按需自转。 */
+    private void updateAim(ServerLevel serverLevel, CorruptedWither owner, boolean firing) {
+        LivingEntity target = resolveTarget(serverLevel, owner);
+        if (target == null) {
+            if (firing) spinIdle();
+            return;
+        }
         Vec3 delta = target.getEyePosition().subtract(origin());
         if (delta.lengthSqr() < 1.0E-4D) return;
         float wantedYaw = (float)(Math.toDegrees(Math.atan2(-delta.x, delta.z)));
         float wantedPitch = (float)(Math.toDegrees(-Math.atan2(delta.y, Math.sqrt(delta.x * delta.x + delta.z * delta.z))));
         yaw = turnTowards(yaw, wantedYaw, (float)MAX_TURN_PER_TICK);
         pitch = turnTowards(pitch, wantedPitch, (float)MAX_TURN_PER_TICK);
+        this.entityData.set(DATA_YAW, yaw);
+        this.entityData.set(DATA_PITCH, pitch);
+    }
+
+    /**
+     * 重新挑一个目标：当前目标还活着就继续锁着，死了 / 消失了就立刻找附近最近的生物。
+     *
+     * <p>这是「击杀目标后继续追下一个」的关键：旧目标一失效，下一刻光轴就会以
+     * {@link #MAX_TURN_PER_TICK} 的速度转过去，而不是停在原地。</p>
+     */
+    private LivingEntity resolveTarget(ServerLevel level, CorruptedWither owner) {
+        LivingEntity current = target(level);
+        if (current != null && isTargetable(current, owner)) return current;
+        if (current != null) this.targetId = null;
+        AABB box = getBoundingBox().inflate(RETARGET_RANGE);
+        LivingEntity best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (LivingEntity candidate : level.getEntitiesOfClass(LivingEntity.class, box,
+                entity -> isTargetable(entity, owner))) {
+            double distance = distanceToSqr(candidate);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+        this.targetId = best == null ? null : best.getUUID();
+        return best;
+    }
+
+    /** 能被光斑盯上的对象：排除本体、自己人、音元素史莱姆和观战 / 创造玩家。 */
+    private boolean isTargetable(LivingEntity entity, CorruptedWither owner) {
+        if (!entity.isAlive() || entity.isRemoved()) return false;
+        if (entity == owner || owner.isOwnSummon(entity)) return false;
+        if (entity instanceof CorruptedWither || entity instanceof CorruptedWitherPhantom) return false;
+        if (entity instanceof Player player) return !player.isCreative() && !player.isSpectator();
+        return !CorruptedWither.isUntouchable(entity);
+    }
+
+    /** 周围一只生物都没有：光轴慢慢自转，边转边把挡路的方块磨掉。 */
+    private void spinIdle() {
+        yaw = (float)Mth.wrapDegrees(yaw + IDLE_SPIN_PER_TICK);
+        // 俯仰角缓慢上下摆，光斑不会一直贴着同一条水平面，破坏范围更立体。
+        pitch = (float)(Math.sin(tickCount * 0.02D) * 12.0D);
         this.entityData.set(DATA_YAW, yaw);
         this.entityData.set(DATA_PITCH, pitch);
     }
@@ -241,12 +321,11 @@ public final class CorruptedWitherBeam extends Entity {
         Vec3 end = from.add(dir.scale(LENGTH));
         AABB search = new AABB(from, end).inflate(1.5D);
         EntityHitResult hit = ProjectileUtil.getEntityHitResult(serverLevel, this, from, end, search,
-                entity -> entity instanceof LivingEntity living && living.isAlive()
-                        && living != owner
-                        && !owner.isOwnSummon(living)
-                        && !(living instanceof net.minecraft.world.entity.player.Player player && player.isSpectator()));
+                entity -> entity instanceof LivingEntity living && isTargetable(living, owner));
         double damageDistance = LENGTH;
-        if (hit != null && hit.getEntity() instanceof LivingEntity victim) {
+        LivingEntity victim = null;
+        if (hit != null && hit.getEntity() instanceof LivingEntity living) {
+            victim = living;
             damageDistance = from.distanceTo(hit.getLocation());
             float amount = Math.max(1.0F, victim.getHealth() * (float)DAMAGE_RATIO);
             victim.invulnerableTime = 0;
@@ -254,6 +333,8 @@ public final class CorruptedWitherBeam extends Entity {
             victim.invulnerableTime = 0;
             CorruptedWitherEvents.sealHealing(victim, 100);
         }
+        // 持续笼罩：同一个生物被光斑连着罩住超过 4 秒，之后每秒再额外吃 1000 点真伤。
+        tickDwell(serverLevel, owner, victim);
         // 每 2 刻碎一次、每次最多碎 60 格：既能开路，又不会一口气刷掉半座山。
         if (tickCount % 2 == 0) crushBlocks(serverLevel, from, dir, Math.min(LENGTH, damageDistance + 1.5D));
         if (tickCount % 4 == 0) {
@@ -261,6 +342,42 @@ public final class CorruptedWitherBeam extends Entity {
             serverLevel.playSound(null, from.x, from.y, from.z, CorruptedWitherSounds.get("beam_loop"),
                     SoundSource.HOSTILE, 1.0F, 0.9F);
         }
+    }
+
+    /**
+     * 持续笼罩计数：只保留「这一刻正被光斑照着」的那个生物。
+     *
+     * <p>目标离开光斑（或被换掉）计数立刻清零，所以「连续」是字面意义上的连续；
+     * 计数超过 {@link #DWELL_TICKS}（4 秒）之后，每 {@link #DWELL_DAMAGE_INTERVAL} 刻
+     * （1 秒）再补一发 {@link #DWELL_DAMAGE} 点的真实伤害。</p>
+     */
+    private void tickDwell(ServerLevel level, CorruptedWither owner, LivingEntity victim) {
+        if (victim == null || !victim.isAlive()) {
+            dwellTicks.clear();
+            return;
+        }
+        UUID id = victim.getUUID();
+        dwellTicks.keySet().removeIf(other -> !other.equals(id));
+        int ticks = dwellTicks.merge(id, 1, Integer::sum);
+        if (ticks < DWELL_TICKS || ticks % DWELL_DAMAGE_INTERVAL != 0) return;
+        // 真实伤害：专用伤害类型绕开护甲 / 抗性 / 药效 / 附魔 / 盾牌 / 受击冷却。
+        victim.invulnerableTime = 0;
+        victim.hurt(trueDamage(level, owner), DWELL_DAMAGE);
+        victim.invulnerableTime = 0;
+        CorruptedWitherEvents.sealHealing(victim, DWELL_DAMAGE_INTERVAL);
+    }
+
+    /** 持续笼罩真伤的伤害源；数据包缺失时退回原版魔法伤害，宁可少一层穿透也不能哑火。 */
+    public static DamageSource trueDamage(ServerLevel level, LivingEntity owner) {
+        if (level.registryAccess().registryOrThrow(Registries.DAMAGE_TYPE).containsKey(TRUE_DAMAGE)) {
+            return level.damageSources().source(TRUE_DAMAGE, owner);
+        }
+        return level.damageSources().magic();
+    }
+
+    /** 是不是射线持续笼罩的额外真伤（伤害链里要整段放行，不吃斗气 / 抗性等乘区）。 */
+    public static boolean isTrueDamage(DamageSource source) {
+        return source != null && source.is(TRUE_DAMAGE);
     }
 
     /** 沿光轴粉碎方块（基岩硬度 -1，天然挡得住）。 */

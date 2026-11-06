@@ -10,6 +10,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 
 import java.util.HashMap;
@@ -28,6 +29,11 @@ import java.util.UUID;
  * <p>玩家的跳劈（原版暴击）照旧生效，本系统只负责补上它没有的那部分：
  * 玩家的平地近战也有难度概率暴击、生物打玩家会暴击。</p>
  *
+ * <p>r333：玩家射出的<b>箭矢与投掷三叉戟</b>也吃这套判定，物理暴击率、物理暴击伤害、
+ * 处决必暴都照算——以前弹射物被「只处理贴脸命中」这一条挡在外面，弓弩手堆了暴击却毫无效果。
+ * 生物放的箭仍然不暴击，避免骷髅随难度白嫖一份爆发。法术伤害也不在这里结算，
+ * 法术暴击走 {@link SpellAttributes} 自己那条线。</p>
+ *
  * <p>本类同时记录「这一下是不是暴击、打了多少」，供饰品读取：
  * 危险手镯的重掷、无名护符的暴击伤害抗性、力量护符的力量都靠这份记录。</p>
  */
@@ -37,7 +43,7 @@ public final class CriticalSystem {
     private static final Map<UUID, Hit> HITS = new HashMap<>();
 
     /** 一次命中的结果；victim 为键，attacker 用于击杀回血之类的反向查找。 */
-    public record Hit(long tick, boolean critical, float amount, UUID attacker, boolean melee) { }
+    public record Hit(long tick, boolean critical, float amount, UUID attacker, boolean melee, double multiplier) { }
 
     public static void onIncomingDamage(LivingIncomingDamageEvent event) {
         LivingEntity victim = event.getEntity();
@@ -47,9 +53,27 @@ public final class CriticalSystem {
         if (LethalDamage.isLethal(source, event.getAmount())) return;
         // 刻蚀真伤是「绕过一切」的定值伤害，不参与暴击。
         if (MagicEtchingSystem.isTrueDamage(source)) return;
+        // 法术有自己的暴击（法术暴击率 / 法术暴击伤害，见 SpellAttributes），物理暴击不掺和。
+        // 这条以前漏了：法术的伤害源同样是「施法者本人命中」，于是法术会顺带吃一份物理暴击。
+        if (SpellDamage.isSpell(source)) return;
         Entity direct = source.getDirectEntity();
-        // 只处理贴脸命中：箭、法术弹道各自有独立的暴击系统。
-        if (!(direct instanceof LivingEntity attacker) || direct != source.getEntity() || attacker == victim) return;
+        Entity owner = source.getEntity();
+        LivingEntity attacker;
+        boolean melee;
+        if (direct instanceof LivingEntity living && direct == owner) {
+            // 贴脸命中：攻击者就是命中实体。
+            attacker = living;
+            melee = true;
+        } else if (direct instanceof AbstractArrow && owner instanceof Player shooter) {
+            // 弓弩箭矢 / 投掷三叉戟：命中的是弹射物本身，攻击者要从射手回推，
+            // 这样物理暴击率、物理暴击伤害（以及处决必暴）才会算在箭矢上。
+            // 只认玩家射出的弹射物：生物放箭维持原样，不给骷髅随难度白嫖一份暴击。
+            attacker = shooter;
+            melee = false;
+        } else {
+            return;
+        }
+        if (attacker == victim) return;
         float amount = event.getAmount();
         if (amount <= 0.0F) return;
         boolean playerAttacker = attacker instanceof Player;
@@ -57,11 +81,11 @@ public final class CriticalSystem {
 
         long now = victim.level().getGameTime();
         Difficulty difficulty = victim.level().getDifficulty();
-        double chance = chance(difficulty);
-        double multiplier = multiplier(difficulty);
+        double chance = chance(difficulty, attacker);
+        double multiplier = multiplier(difficulty, attacker);
 
-        // 玩家跳劈由原版自己乘过 1.5 倍，这里只补记「这是暴击」，不重复乘。
-        boolean vanillaCrit = playerAttacker && vanillaPlayerCritical((Player)attacker);
+        // 玩家跳劈由原版自己乘过 1.5 倍，这里只补记「这是暴击」，不重复乘（箭矢没有这一说）。
+        boolean vanillaCrit = melee && playerAttacker && vanillaPlayerCritical((Player)attacker);
         boolean critical = vanillaCrit;
         boolean fromSystem = false;
         // 「处决」：目标血量低于阈值时这一下必定暴击，不看难度概率。
@@ -90,12 +114,16 @@ public final class CriticalSystem {
         }
 
         float finalAmount = amount;
-        if (fromSystem) {
-            double applied = multiplier;
+        double appliedMultiplier = 1.0;
+        if (fromSystem || vanillaCrit) {
+            double applied = fromSystem ? multiplier
+                    : 1.0 + Math.max(0.0, SpellAttributes.value(attacker,
+                    SpellAttributes.PHYSICAL_CRIT_DAMAGE, 0.0));
             // 无名护符：受暴击时减免 25% 的暴击加成部分。
             if (victim instanceof Player player && RelicEffects.worn(player, RelicEffects.NAMELESS_CHARM)) {
                 applied = 1.0 + (applied - 1.0) * 0.75;
             }
+            appliedMultiplier = applied;
             finalAmount = (float)(amount * applied);
             event.setAmount(finalAmount);
             if (CriticalConfig.SHOW_EFFECTS.get() && victim.level() instanceof ServerLevel level) {
@@ -109,9 +137,10 @@ public final class CriticalSystem {
         Hit previous = HITS.get(victim.getUUID());
         // 同一刻内多次命中时保留伤害更高的那份，避免饰品读到被无敌帧吞掉的那一下。
         if (previous == null || previous.tick() != now || finalAmount >= previous.amount()) {
-            HITS.put(victim.getUUID(), new Hit(now, critical, finalAmount, attacker.getUUID(), true));
+            HITS.put(victim.getUUID(), new Hit(now, critical, finalAmount, attacker.getUUID(), melee, appliedMultiplier));
         }
-        if (critical) RelicEffects.onMeleeCritical(attacker, victim, finalAmount);
+        // 力量护符只认近战暴击，箭矢暴击不触发它。
+        if (critical && melee) RelicEffects.onMeleeCritical(attacker, victim, finalAmount);
         prune(now);
     }
 
@@ -129,22 +158,40 @@ public final class CriticalSystem {
         return hit != null && hit.critical();
     }
 
+    /** 碎冰等需要独立暴击的额外伤害使用最近一次物理命中的暴击倍率。 */
+    public static float recentCriticalMultiplier(LivingEntity victim) {
+        Hit hit = hit(victim);
+        return hit == null || !hit.critical() ? 1.0F : (float) hit.multiplier();
+    }
+
     public static double chance(Difficulty difficulty) {
-        return switch (difficulty) {
+        return chance(difficulty, null);
+    }
+
+    public static double chance(Difficulty difficulty, LivingEntity attacker) {
+        double base = switch (difficulty) {
             case PEACEFUL -> CriticalConfig.PEACE_CHANCE.get();
             case EASY -> CriticalConfig.EASY_CHANCE.get();
             case NORMAL -> CriticalConfig.NORMAL_CHANCE.get();
             case HARD -> CriticalConfig.HARD_CHANCE.get();
         };
+        double affix = attacker == null ? 0.0 : SpellAttributes.value(attacker, SpellAttributes.PHYSICAL_CRIT_CHANCE, 0.0);
+        return Math.max(0.0, Math.min(1.0, base + affix));
     }
 
     public static double multiplier(Difficulty difficulty) {
-        return switch (difficulty) {
+        return multiplier(difficulty, null);
+    }
+
+    public static double multiplier(Difficulty difficulty, LivingEntity attacker) {
+        double base = switch (difficulty) {
             case PEACEFUL -> CriticalConfig.PEACE_DAMAGE.get();
             case EASY -> CriticalConfig.EASY_DAMAGE.get();
             case NORMAL -> CriticalConfig.NORMAL_DAMAGE.get();
             case HARD -> CriticalConfig.HARD_DAMAGE.get();
         };
+        double affix = attacker == null ? 0.0 : SpellAttributes.value(attacker, SpellAttributes.PHYSICAL_CRIT_DAMAGE, 0.0);
+        return Math.max(1.0, base + affix);
     }
 
     /**

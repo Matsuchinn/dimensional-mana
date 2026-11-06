@@ -63,6 +63,11 @@ public enum ElementType {
         return this == WIND || this == SOUND || this == LIGHT || this == LIGHTNING;
     }
 
+    /** 元素附着的硬上限：短附着 15 秒，长附着 25 秒。 */
+    public int maxAttachmentTicks() {
+        return shortAttachment() ? 15 * 20 : 25 * 20;
+    }
+
     public static ElementType byId(String id) {
         if (id == null) return null;
         String normalized = id.toLowerCase(Locale.ROOT);

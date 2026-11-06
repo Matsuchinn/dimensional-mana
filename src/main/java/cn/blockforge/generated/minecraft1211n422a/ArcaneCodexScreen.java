@@ -19,11 +19,18 @@ import java.util.List;
 public final class ArcaneCodexScreen extends Screen {
     private enum Page { SKILLS, SPELLS, STATUS }
 
-    private static final int PANEL_WIDTH = 390;
-    private static final int PANEL_HEIGHT = 238;
+    private static final int PANEL_WIDTH = 440;
+    private static final int PANEL_HEIGHT = 248;
+    /** 状态页每一列的宽度：左列从 22 起，右列从 228 起，两列之间留 16 像素的呼吸缝。 */
+    private static final int COLUMN_WIDTH = 190;
+    /** 列里属性名最多占的宽度，剩下的都留给数值，数值右对齐。英文长名会先缩字再截断。 */
+    private static final int LABEL_WIDTH = 100;
+    private static final int VALUE_GAP = 6;
+    private static final int LEFT_COLUMN_X = 22;
+    private static final int RIGHT_COLUMN_X = 228;
     private static final int SPELL_VIEW_OFFSET_X = 151;
     private static final int SPELL_VIEW_OFFSET_Y = 64;
-    private static final int SPELL_VIEW_WIDTH = 221;
+    private static final int SPELL_VIEW_WIDTH = 264;
     private static final int SPELL_VIEW_HEIGHT = 92;
     private static final int SPELL_CARD_STEP_X = 101;
     private static final int SPELL_CARD_STEP_Y = 50;
@@ -53,9 +60,9 @@ public final class ArcaneCodexScreen extends Screen {
         left = (width - PANEL_WIDTH) / 2;
         top = (height - PANEL_HEIGHT) / 2;
         clearWidgets();
-        addTab(Page.SKILLS, "gui.dimensional_mana.codex.skills", left + 18);
-        addTab(Page.SPELLS, "gui.dimensional_mana.codex.spells", left + 137);
-        addTab(Page.STATUS, "gui.dimensional_mana.codex.status", left + 256);
+        addTab(Page.SKILLS, "gui.dimensional_mana.codex.skills", left + 22);
+        addTab(Page.SPELLS, "gui.dimensional_mana.codex.spells", left + 162);
+        addTab(Page.STATUS, "gui.dimensional_mana.codex.status", left + 302);
         if (page == Page.SKILLS) addSkillButtons();
         if (page == Page.SPELLS && selectedSpell != null) addSpellActionButton();
         lastFingerprint = fingerprint();
@@ -121,6 +128,7 @@ public final class ArcaneCodexScreen extends Screen {
         value = value * 31 + ClientSpellState.selectedSlot();
         value = value * 31 + (ClientSpellState.learning() == null ? 0 : ClientSpellState.learning().ordinal() + 1);
         value = value * 31 + ClientElementTalentState.fingerprint();
+        value = value * 31 + Float.floatToIntBits(ClientProgressState.elementalMastery());
         return value;
     }
 
@@ -165,11 +173,11 @@ public final class ArcaneCodexScreen extends Screen {
                 levelRight + 10, top + 49, Math.max(60, left + 250 - levelRight - 10), 0xFF9AD7FF, false);
         TextFit.right(graphics, font, Component.translatable("gui.dimensional_mana.skill_points",
                 ClientProgressState.skillPoints()), left + PANEL_WIDTH - 22, top + 49, 130, 0xFF84FFB2, false);
-        int progressWidth = level >= MagicProgression.MAX_MAGIC_LEVEL || required <= 0 ? 242
-                : (int)Math.min(242, ClientProgressState.magicExperience() * 242L / required);
-        graphics.fill(left + 22, top + 66, left + 264, top + 72, 0xFF241B39);
+        int progressWidth = level >= MagicProgression.MAX_MAGIC_LEVEL || required <= 0 ? 396
+                : (int)Math.min(396, ClientProgressState.magicExperience() * 396L / required);
+        graphics.fill(left + 22, top + 66, left + 418, top + 72, 0xFF241B39);
         graphics.fill(left + 22, top + 66, left + 22 + progressWidth, top + 72, 0xFF7B56E7);
-        graphics.renderOutline(left + 22, top + 66, 242, 6, 0xFFB9A2FF);
+        graphics.renderOutline(left + 22, top + 66, 396, 6, 0xFFB9A2FF);
 
         MagicProgression.Skill[] skills = MagicProgression.Skill.values();
         for (int i = 0; i < skills.length; i++) {
@@ -298,7 +306,7 @@ public final class ArcaneCodexScreen extends Screen {
 
     private void drawSpellSummary(GuiGraphics graphics, Component text, int x, int y, int color) {
         // 长法术介绍最多占三行，避免覆盖学习进度和材料；悬停卡片可看完整说明。
-        var lines = font.split(text, 244);
+        var lines = font.split(text, 258);
         graphics.pose().pushPose(); graphics.pose().translate(x, y, 0); graphics.pose().scale(0.85F, 0.85F, 1);
         for (int i = 0; i < Math.min(3, lines.size()); i++) graphics.drawString(font, lines.get(i), 0, i * 9, color, false);
         graphics.pose().popPose();
@@ -467,18 +475,18 @@ public final class ArcaneCodexScreen extends Screen {
     private void renderStatus(GuiGraphics graphics) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
-        int leftX = left + 18;
-        int rightX = left + 205;
-        int y = top + 48;
+        int leftX = left + LEFT_COLUMN_X;
+        int rightX = left + RIGHT_COLUMN_X;
+        int y = top + 46;
         drawStatusRow(graphics, leftX, y, "gui.dimensional_mana.status.health",
-                format(mc.player.getHealth()) + " / " + format(mc.player.getMaxHealth()),
+                formatCompact(mc.player.getHealth()) + " / " + formatCompact(mc.player.getMaxHealth()),
                 "gui.dimensional_mana.source.health");
         drawAttributeRow(graphics, leftX, y += 18, "gui.dimensional_mana.status.attack", Attributes.ATTACK_DAMAGE);
         drawAttributeRow(graphics, leftX, y += 18, "gui.dimensional_mana.status.armor", Attributes.ARMOR);
         drawStatusRow(graphics, leftX, y += 18, "gui.dimensional_mana.status.food",
                 mc.player.getFoodData().getFoodLevel() + " / 20", "gui.dimensional_mana.source.food");
         drawStatusRow(graphics, leftX, y += 18, "gui.dimensional_mana.status.mana",
-                format(ClientManaState.mana()) + " / " + format(ClientManaState.maxMana()),
+                formatCompact(ClientManaState.mana()) + " / " + formatCompact(ClientManaState.maxMana()),
                 "gui.dimensional_mana.source.mana");
         drawStatusRow(graphics, leftX, y += 18, "gui.dimensional_mana.status.battle_qi",
                 ClientManaState.battleQi() + " / " + ClientManaState.maxBattleQi(), "gui.dimensional_mana.source.battle_qi");
@@ -492,21 +500,56 @@ public final class ArcaneCodexScreen extends Screen {
         drawStatusRow(graphics, leftX, y += 18, "gui.dimensional_mana.status.daily_growth",
                 ClientProgressState.dailyGrowths() + " / 4", "gui.dimensional_mana.source.daily_growth");
 
-        y = top + 48;
+        y = top + 46;
         drawAttributeRow(graphics, rightX, y, "attribute.name.dimensional_mana.spell_power", SpellAttributes.SPELL_POWER);
         drawAttributeRow(graphics, rightX, y += 18, "attribute.name.dimensional_mana.spell_haste", SpellAttributes.SPELL_HASTE);
         drawPercentAttributeRow(graphics, rightX, y += 18, "attribute.name.dimensional_mana.spell_crit_chance", SpellAttributes.SPELL_CRIT_CHANCE);
         drawPercentAttributeRow(graphics, rightX, y += 18, "attribute.name.dimensional_mana.spell_crit_damage", SpellAttributes.SPELL_CRIT_DAMAGE);
+        drawPercentAttributeRow(graphics, rightX, y += 18, "attribute.name.dimensional_mana.spell_penetration", SpellAttributes.SPELL_PENETRATION);
         drawPercentAttributeRow(graphics, rightX, y += 18, "attribute.name.dimensional_mana.mana_cost_reduction", SpellAttributes.MANA_COST_REDUCTION);
         drawPercentAttributeRow(graphics, rightX, y += 18, "attribute.name.dimensional_mana.spell_resistance", SpellAttributes.SPELL_RESISTANCE);
+        drawMasteryRow(graphics, rightX, y += 18);
         drawStatusRow(graphics, rightX, y += 18, "gui.dimensional_mana.status.magic_level",
                 ClientProgressState.magicLevel() + " / " + MagicProgression.MAX_MAGIC_LEVEL, "gui.dimensional_mana.source.magic_level");
         drawStatusRow(graphics, rightX, y += 18, "gui.dimensional_mana.status.magic_xp",
-                String.valueOf(ClientProgressState.magicExperience()), "gui.dimensional_mana.source.magic_xp");
-        drawStatusRow(graphics, rightX, y += 18, "gui.dimensional_mana.status.skill_points",
-                String.valueOf(ClientProgressState.skillPoints()), "gui.dimensional_mana.source.skill_points");
-        drawStatusRow(graphics, rightX, y += 18, "gui.dimensional_mana.status.spent_points",
-                String.valueOf(ClientProgressState.spentSkillPoints()), "gui.dimensional_mana.source.spent_points");
+                formatCompact(ClientProgressState.magicExperience()), "gui.dimensional_mana.source.magic_xp");
+        // 技能点这一行中英文都长（“已投入 496 / 剩余 0” / “Spent 496 / Remaining 0”），
+        // 窄列里只画紧凑的 “用掉 / 剩下”，完整说法放进悬停提示。
+        int spent = ClientProgressState.spentSkillPoints();
+        int remaining = ClientProgressState.skillPoints();
+        drawStatusRow(graphics, rightX, y += 18, "gui.dimensional_mana.status.skill_points_combined",
+                spent + " / " + remaining, "gui.dimensional_mana.source.skill_points_combined",
+                Component.translatable("gui.dimensional_mana.status.skill_points_combined.value", spent, remaining)
+                        .withStyle(ChatFormatting.GRAY));
+    }
+
+    private void drawMasteryRow(GuiGraphics graphics, int x, int y) {
+        String value = String.format(java.util.Locale.ROOT, "%.1f · Lv.%d", ClientProgressState.elementalMastery(),
+                ElementMastery.level(ClientProgressState.elementalMastery()));
+        TextFit.leftShrunk(graphics, font, Component.translatable("gui.dimensional_mana.status.elemental_mastery"), x, y,
+                LABEL_WIDTH, 0xFFCBC0E0);
+        TextFit.rightShrunk(graphics, font, Component.literal(value), x + COLUMN_WIDTH, y,
+                COLUMN_WIDTH - LABEL_WIDTH - VALUE_GAP, 0xFFFFFFFF);
+        float mastery = ClientProgressState.elementalMastery();
+        float amplify = (ElementMastery.amplifyMultiplier(mastery) - 1.0F) * 100.0F;
+        float dramatic = (ElementMastery.dramaticMultiplier(mastery) - 1.0F) * 100.0F;
+        float dot = (ElementMastery.dotMultiplier(mastery) - 1.0F) * 100.0F;
+        float freezeDamage = ElementMastery.freezeDamage(mastery);
+        float duration = Math.min(200.0F, Math.max(0.0F, mastery));
+        float swirl = Math.max(0.0F, mastery);
+        float echo = ElementMastery.chargeEchoMultiplier(mastery) * 100.0F;
+        int level = ElementMastery.level(mastery);
+        hoverRows.add(new HoverRow(x, y - 2, COLUMN_WIDTH, 14, List.of(
+                Component.translatable("gui.dimensional_mana.status.elemental_mastery").withStyle(ChatFormatting.LIGHT_PURPLE),
+                Component.translatable("gui.dimensional_mana.status.elemental_mastery.detail.1").withStyle(ChatFormatting.GRAY),
+                Component.translatable("gui.dimensional_mana.status.elemental_mastery.detail.2", formatPercent(amplify)).withStyle(ChatFormatting.AQUA),
+                Component.translatable("gui.dimensional_mana.status.elemental_mastery.detail.3", formatPercent(dramatic)).withStyle(ChatFormatting.AQUA),
+                Component.translatable("gui.dimensional_mana.status.elemental_mastery.detail.4", formatPercent(dot)).withStyle(ChatFormatting.AQUA),
+                Component.translatable("gui.dimensional_mana.status.elemental_mastery.detail.5", format(freezeDamage)).withStyle(ChatFormatting.AQUA),
+                Component.translatable("gui.dimensional_mana.status.elemental_mastery.detail.6", formatPercent(duration)).withStyle(ChatFormatting.GRAY),
+                Component.translatable("gui.dimensional_mana.status.elemental_mastery.detail.7", formatPercent(swirl)).withStyle(ChatFormatting.GRAY),
+                Component.translatable("gui.dimensional_mana.status.elemental_mastery.detail.8", formatPercent(echo), level * 5).withStyle(ChatFormatting.GRAY),
+                Component.translatable("gui.dimensional_mana.status.elemental_mastery.detail.9", level).withStyle(ChatFormatting.DARK_GRAY))));
     }
 
     private void drawAttributeRow(GuiGraphics graphics, int x, int y, String label, net.minecraft.core.Holder<Attribute> attribute) {
@@ -524,19 +567,31 @@ public final class ArcaneCodexScreen extends Screen {
     }
 
     private void drawStatusRow(GuiGraphics graphics, int x, int y, String label, String value, String source) {
-        // 数值固定在 x+112，英文属性名比中文长，先截到 105 再把数值画上去。
-        TextFit.left(graphics, font, Component.translatable(label), x, y, 105, 0xFFCBC0E0, false);
-        graphics.drawString(font, value, x + 112, y, 0xFFFFFFFF, false);
-        hoverRows.add(new HoverRow(x, y - 2, 170, 14, List.of(
-                Component.translatable(label).withStyle(ChatFormatting.LIGHT_PURPLE),
-                Component.translatable(source).withStyle(ChatFormatting.GRAY))));
+        drawStatusRow(graphics, x, y, label, value, source, null);
+    }
+
+    /**
+     * 属性名左对齐截断、数值右对齐缩字：中英文标签长短不一（“魔力消耗减免比例” / “Mana Cost Reduction”），
+     * 数值位数也会随属性上限变化，固定列宽下只有这种画法能保证两边都不出界、也不互相压住。
+     */
+    private void drawStatusRow(GuiGraphics graphics, int x, int y, String label, String value, String source,
+                               Component extraLine) {
+        TextFit.leftShrunk(graphics, font, Component.translatable(label), x, y, LABEL_WIDTH, 0xFFCBC0E0);
+        TextFit.rightShrunk(graphics, font, Component.literal(value), x + COLUMN_WIDTH, y,
+                COLUMN_WIDTH - LABEL_WIDTH - VALUE_GAP, 0xFFFFFFFF);
+        List<Component> tooltip = new ArrayList<>();
+        tooltip.add(Component.translatable(label).withStyle(ChatFormatting.LIGHT_PURPLE));
+        if (extraLine != null) tooltip.add(extraLine);
+        tooltip.add(Component.translatable(source).withStyle(ChatFormatting.GRAY));
+        hoverRows.add(new HoverRow(x, y - 2, COLUMN_WIDTH, 14, tooltip));
     }
 
     private void drawStatusRow(GuiGraphics graphics, int x, int y, String label, String value,
                                String source, double base, double finalValue) {
-        TextFit.left(graphics, font, Component.translatable(label), x, y, 105, 0xFFCBC0E0, false);
-        graphics.drawString(font, value, x + 112, y, 0xFFFFFFFF, false);
-        hoverRows.add(new HoverRow(x, y - 2, 170, 14, List.of(
+        TextFit.leftShrunk(graphics, font, Component.translatable(label), x, y, LABEL_WIDTH, 0xFFCBC0E0);
+        TextFit.rightShrunk(graphics, font, Component.literal(value), x + COLUMN_WIDTH, y,
+                COLUMN_WIDTH - LABEL_WIDTH - VALUE_GAP, 0xFFFFFFFF);
+        hoverRows.add(new HoverRow(x, y - 2, COLUMN_WIDTH, 14, List.of(
                 Component.translatable(label).withStyle(ChatFormatting.LIGHT_PURPLE),
                 Component.translatable("gui.dimensional_mana.source.attribute_base", format(base)).withStyle(ChatFormatting.GRAY),
                 Component.translatable("gui.dimensional_mana.source.attribute_modifier", format(finalValue - base)).withStyle(ChatFormatting.AQUA),
@@ -545,6 +600,25 @@ public final class ArcaneCodexScreen extends Screen {
 
     private static String format(double value) {
         return value == Math.rint(value) ? String.format("%.0f", value) : String.format("%.3f", value);
+    }
+
+    /**
+     * 状态页专用的大数缩写：5 位以内照常显示，再大就换成 12.3K / 154M。
+     * 属性上限修复之后魔素上限能到九位数，原样打印会把整行顶出面板。
+     */
+    private static String formatCompact(double value) {
+        double abs = Math.abs(value);
+        if (abs >= 1_000_000) return trimZeros(value / 1_000_000.0) + "M";
+        if (abs >= 100_000) return trimZeros(value / 1_000.0) + "K";
+        return format(value);
+    }
+
+    private static String trimZeros(double value) {
+        return String.format(java.util.Locale.ROOT, "%.1f", value).replaceAll("\\.0$", "");
+    }
+
+    private static String formatPercent(float value) {
+        return String.format(java.util.Locale.ROOT, "%.1f%%", value);
     }
 
     @Override

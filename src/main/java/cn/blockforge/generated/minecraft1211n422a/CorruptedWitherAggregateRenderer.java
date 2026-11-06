@@ -52,7 +52,7 @@ public final class CorruptedWitherAggregateRenderer extends EntityRenderer<Corru
                        MultiBufferSource buffers, int packedLight) {
         var player = Minecraft.getInstance().player;
         if (player == null || aggregate.distanceToSqr(player) > FX_RADIUS * FX_RADIUS) return;
-        VertexConsumer glow = buffers.getBuffer(SpellRenderTypes.GLOW);
+        VertexConsumer glow = buffers.getBuffer(CorruptedWitherRenderTypes.glow());
         float time = aggregate.tickCount + partialTick;
         // 转速别贴着「每刻上百度的瞎转」：二十面体面数少，转速一快就会频闪，
         // 看上去一格一格地跳（就是「一顿一顿」的原因）。这里换成慢慢滚，视觉才连续。

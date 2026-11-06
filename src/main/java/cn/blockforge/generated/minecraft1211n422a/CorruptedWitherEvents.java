@@ -92,21 +92,27 @@ public final class CorruptedWitherEvents {
     }
 
     /**
-     * 保护本体自己的召唤物（幻影 / 聚合体）。
+     * 保护本体自己的召唤物（幻影 / 聚合体）以及本体自己。
      *
-     * <p>普通攻击现在会额外甩出 1～3 颗原版凋零头，它们的爆炸是原版 {@code Level.explode}，
-     * 会无差别扫到旁边的幻影。这里只在「伤害来源是同一只本体拥有的 {@link WitherSkull}」
-     * 时取消，别的生物（包括真正的敌人）射来的骷髅头照常生效。</p>
+     * <p>普通攻击现在会额外甩出 1～3 颗原版凋零头，分身也会每 1.25 秒甩一颗，
+     * 它们的爆炸是原版 {@code Level.explode}，会无差别扫到旁边的幻影和本体。
+     * 这里只在「伤害来源是同一只本体（或它的分身）拥有的 {@link WitherSkull}」时取消，
+     * 别的生物（包括真正的敌人）射来的骷髅头照常生效。</p>
      *
      * @return true 表示这一下已经取消，调用方不要再往下走。
      */
     private static boolean protectOwnSummons(LivingIncomingDamageEvent event) {
         LivingEntity victim = event.getEntity();
         if (victim.level().isClientSide) return false;
-        if (victim instanceof CorruptedWither) return false;   // 本体自己的减伤走下面的逻辑
-        // 聚合体不是 LivingEntity，本来就收不到受击事件；这里只需要管幻影。
-        if (!(victim instanceof CorruptedWitherPhantom phantom)) return false;
-        CorruptedWither owner = phantom.owner();
+        CorruptedWither owner;
+        if (victim instanceof CorruptedWither wither) {
+            owner = wither;
+        } else if (victim instanceof CorruptedWitherPhantom phantom) {
+            owner = phantom.owner();
+        } else {
+            // 聚合体不是 LivingEntity，本来就收不到受击事件。
+            return false;
+        }
         if (owner == null) return false;
         DamageSource source = event.getSource();
         if (ownedBy(source.getDirectEntity(), owner) || ownedBy(source.getEntity(), owner)) {
@@ -116,8 +122,12 @@ public final class CorruptedWitherEvents {
         return false;
     }
 
+    /** 这颗骷髅头是不是这只本体 / 它的分身打出来的。 */
     private static boolean ownedBy(Entity entity, CorruptedWither owner) {
-        return entity instanceof WitherSkull skull && skull.getOwner() == owner;
+        if (!(entity instanceof WitherSkull skull)) return false;
+        Entity shooter = skull.getOwner();
+        if (shooter == owner) return true;
+        return shooter instanceof CorruptedWitherPhantom phantom && phantom.isOwnedBy(owner);
     }
 
     /** 这次伤害算不算「魔法伤害」：本模组的元素法术、原版 magic / 凋零都算。 */

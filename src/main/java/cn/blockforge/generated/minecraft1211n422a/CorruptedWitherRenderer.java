@@ -59,7 +59,7 @@ public final class CorruptedWitherRenderer extends WitherBossRenderer {
         pose.pushPose();
         pose.translate(0.0D, 2.0D, 0.0D);
         PoseStack.Pose snapshot = pose.last();
-        VertexConsumer glow = buffers.getBuffer(SpellRenderTypes.GLOW);
+        VertexConsumer glow = buffers.getBuffer(CorruptedWitherRenderTypes.glow());
         // 射线蓄力 / 射击时身体上的光环也跟着加速：一眼就能看出「它在攒大招」。
         float spinRate = phaseTwo ? 3.2F : 1.4F;
         if (wither.isCharging()) spinRate *= 2.6F;

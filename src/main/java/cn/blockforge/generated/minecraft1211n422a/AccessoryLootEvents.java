@@ -1,5 +1,6 @@
 package cn.blockforge.generated.minecraft1211n422a;
 
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.entity.npc.VillagerTrades;
 import net.minecraft.world.item.Item;
@@ -29,13 +30,15 @@ public final class AccessoryLootEvents {
     private static final float BARTER_COMPONENT_CHANCE = 0.015F;
 
     public void onLootTableLoad(LootTableLoadEvent event) {
-        if (!event.getName().getNamespace().equals("minecraft")) return;
-        String path = event.getName().getPath();
-        if (path.equals("gameplay/piglin_bartering")) {
+        ResourceLocation name = event.getName();
+        String path = name.getPath();
+        // 猪灵以物易物：任何命名空间下叫 piglin_bartering 的表都算（原版只有 minecraft 一张）。
+        if (path.endsWith("piglin_bartering")) {
             addBarterPools(event);
             return;
         }
-        if (!path.startsWith("chests/")) return;
+        // 结构宝箱：原版与其它模组新增结构的通用宝箱都补布匹/绸缎。
+        if (!StructureChestLoot.isForeignStructureChest(name)) return;
         boolean special = isSpecialChest(path);
         addPool(event, "dimensional_mana_magic_cloth",
                 special ? CLOTH_SPECIAL_CHANCE : CLOTH_OTHER_CHANCE,
@@ -58,13 +61,13 @@ public final class AccessoryLootEvents {
                 .add(LootItem.lootTableItem(item(MagicEquipment.MAGIC_CLOTH))
                         .apply(SetItemCountFunction.setCount(UniformGenerator.between(2.0F, 4.0F))))
                 .build();
-        event.getTable().addPool(cloth);
+        StructureChestLoot.addPool(event.getTable(), cloth);
         LootPool component = LootPool.lootPool().name("dimensional_mana_barter_component")
                 .setRolls(ConstantValue.exactly(1))
                 .when(LootItemRandomChanceCondition.randomChance(BARTER_COMPONENT_CHANCE))
                 .add(LootItem.lootTableItem(item(MagicEquipment.UNIVERSAL_COMPONENT)))
                 .build();
-        event.getTable().addPool(component);
+        StructureChestLoot.addPool(event.getTable(), component);
     }
 
     private static void addPool(LootTableLoadEvent event, String name, float chance,
@@ -75,7 +78,7 @@ public final class AccessoryLootEvents {
                 .add(min == max ? LootItem.lootTableItem(item(itemId))
                         : LootItem.lootTableItem(item(itemId))
                                 .apply(SetItemCountFunction.setCount(UniformGenerator.between(min, max))));
-        event.getTable().addPool(pool.build());
+        StructureChestLoot.addPool(event.getTable(), pool.build());
     }
 
     private static Item item(String id) {

@@ -227,6 +227,8 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
 
     private static boolean matchesIngredient(ItemStack stack, String ingredientId) {
         if (ingredientId == null || stack.isEmpty()) return false;
+        // 药水标记：#potion:elemental_mastery_2 —— 只认那一瓶，别的药水（含喷溅、滞留）都不算。
+        if (ElementalMasteryPotions.isToken(ingredientId)) return ElementalMasteryPotions.matches(stack, ingredientId);
         if ("#magic_fragment".equals(ingredientId)) {
             ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
             String path = id.getPath();
@@ -392,6 +394,10 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
      * 这样加工台产出的就是货真价实的「哥布林杀手 I」书，而不是空白附魔书。
      */
     public static ItemStack stackOf(OutputStack output, HolderLookup.Provider registries) {
+        // 药水产物：#potion:elemental_mastery_2 之类直接拼成原版药水瓶（带药水组件）。
+        if (ElementalMasteryPotions.isToken(output.itemId())) {
+            return ElementalMasteryPotions.stack(output.itemId(), output.count());
+        }
         Item item = outputItem(output.itemId());
         if (item == null) return ItemStack.EMPTY;
         if (output.enchantmentId() == null || registries == null) return new ItemStack(item, output.count());
@@ -594,6 +600,18 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
                 "minecraft:iron_block", "mana_forge", "minecraft:iron_block",
                 "minecraft:lapis_block", "minecraft:netherite_ingot", "minecraft:lapis_block"),
                 "professional_crystal_furnace", 800, 200));
+        // v1.1 魔晶铁砧：原版铁砧的三个铁块替换为特级魔晶块，200 魔素 / 5 秒。
+        recipes.add(patternRecipe("magic_crystal_anvil", List.of(
+                "special_mana_crystal_block", "special_mana_crystal_block", "special_mana_crystal_block",
+                "", "minecraft:iron_ingot", "",
+                "minecraft:iron_ingot", "minecraft:iron_ingot", "minecraft:iron_ingot"), "magic_crystal_anvil", 200, 100));
+        // 武备加工台：正中一个铁砧，四边通用魔构件，四角魂火残渣 / 钻石 / 蚀纹木原木 / 烈焰粉。
+        // 1000 魔素、15 秒（300 刻），强化装备、敲击升级和词条洗练都在这台机器上做。
+        recipes.add(patternRecipe(WeaponWorkbenchBlock.BLOCK_ID, List.of(
+                GeneratedMod.SOUL_FIRE_RESIDUE_ID, "universal_magic_component", "minecraft:diamond",
+                "universal_magic_component", "minecraft:anvil", "universal_magic_component",
+                "erosion_log", "universal_magic_component", "minecraft:blaze_powder"),
+                WeaponWorkbenchBlock.BLOCK_ID, 1_000, 300));
         recipes.add(patternRecipe("ancient_casket", List.of(
                 "", "advanced_mana_crystal", "",
                 "", "minecraft:diamond", "",
@@ -629,7 +647,35 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
         addQiRecipes(recipes);
         addEnchantBookRecipes(recipes);
         addTalentScrollRecipes(recipes);
+        addElementalMasteryRecipes(recipes);
+        addMojiangSteelRecipes(recipes);
         return List.copyOf(recipes);
+    }
+
+    /**
+     * 魔精钢装备：对应下界合金装备 ×1 + 魔精钢锻造模板 ×1 + 特级魔精钢 ×1，
+     * 5000 魔素 / 100 秒（2000 刻）。模板和特级魔精钢都会在完成后消耗。
+     */
+    private static void addMojiangSteelRecipes(List<ProcessRecipe> recipes) {
+        steelRecipe(recipes, "helmet", "minecraft:netherite_helmet", MojiangSteelEquipment.HELMET);
+        steelRecipe(recipes, "chestplate", "minecraft:netherite_chestplate", MojiangSteelEquipment.CHESTPLATE);
+        steelRecipe(recipes, "leggings", "minecraft:netherite_leggings", MojiangSteelEquipment.LEGGINGS);
+        steelRecipe(recipes, "boots", "minecraft:netherite_boots", MojiangSteelEquipment.BOOTS);
+        steelRecipe(recipes, "sword", "minecraft:netherite_sword", MojiangSteelEquipment.SWORD);
+        steelRecipe(recipes, "axe", "minecraft:netherite_axe", MojiangSteelEquipment.AXE);
+        steelRecipe(recipes, "pickaxe", "minecraft:netherite_pickaxe", MojiangSteelEquipment.PICKAXE);
+        steelRecipe(recipes, "shovel", "minecraft:netherite_shovel", MojiangSteelEquipment.SHOVEL);
+        steelRecipe(recipes, "hoe", "minecraft:netherite_hoe", MojiangSteelEquipment.HOE);
+    }
+
+    private static void steelRecipe(List<ProcessRecipe> recipes, String name, String netheriteId, String productId) {
+        recipes.add(new ProcessRecipe("mojing_steel_" + name,
+                List.of(new IngredientStack(netheriteId, 1),
+                        new IngredientStack(MojiangSteelEquipment.TEMPLATE, 1),
+                        new IngredientStack("special_magic_steel", 1)),
+                List.of(),
+                List.of(new OutputStack(productId, 1)),
+                5_000, 2_000, productId));
     }
 
     /**
@@ -693,6 +739,34 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
                         new IngredientStack("minecraft:book", 1)), List.of(),
                 List.of(new OutputStack("minecraft:enchanted_book", 1, "slime_slayer", 1)),
                 100, 80, "enchanted_book"));
+    }
+
+    /**
+     * 元素精通护符与元素精通药水的加工台配方。
+     *
+     * <p>护符：中间元素吸收护符，四个角各 1 颗特级魔晶，四条边各 1 颗钻石，
+     * 3000 魔素 / 30 秒（600 刻）。</p>
+     *
+     * <p>药水升级：中间一瓶元素精通药水，周围一圈对应档位的魔晶粉（Ⅰ→Ⅱ 用下级、
+     * Ⅱ→Ⅲ 用中级、Ⅲ→Ⅳ 用高级、Ⅳ→Ⅴ 用极品、Ⅴ→Ⅵ 用特级），
+     * 魔素 100 / 200 / 300 / 400 / 500，统一耗时 10 秒（200 刻）。</p>
+     */
+    private static void addElementalMasteryRecipes(List<ProcessRecipe> recipes) {
+        recipes.add(patternRecipe("element_mastery_charm", List.of(
+                "special_mana_crystal", "minecraft:diamond", "special_mana_crystal",
+                "minecraft:diamond", "element_absorption_charm", "minecraft:diamond",
+                "special_mana_crystal", "minecraft:diamond", "special_mana_crystal"),
+                ElementalMasteryCharmItem.ITEM_ID, 3_000, 600));
+
+        String[] grades = {"lesser", "medium", "advanced", "supreme", "special"};
+        for (int level = 1; level < ElementalMasteryPotions.MAX_LEVEL; level++) {
+            String dust = grades[level - 1] + "_mana_crystal_dust";
+            recipes.add(patternRecipe("elemental_mastery_potion_" + (level + 1), List.of(
+                    dust, dust, dust,
+                    dust, ElementalMasteryPotions.token(level, false), dust,
+                    dust, dust, dust),
+                    ElementalMasteryPotions.token(level + 1, false), 100 * level, 200));
+        }
     }
 
     /**

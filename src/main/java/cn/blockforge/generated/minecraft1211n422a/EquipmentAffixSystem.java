@@ -1,0 +1,1691 @@
+package cn.blockforge.generated.minecraft1211n422a;
+
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.PlainTextContents;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import net.minecraft.world.entity.boss.wither.WitherBoss;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ArmorItem;
+import net.minecraft.world.item.AxeItem;
+import net.minecraft.world.item.BowItem;
+import net.minecraft.world.item.CrossbowItem;
+import net.minecraft.world.item.HoeItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.PickaxeItem;
+import net.minecraft.world.item.ShovelItem;
+import net.minecraft.world.item.SwordItem;
+import net.minecraft.world.item.TieredItem;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.item.TridentItem;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.core.Holder;
+import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.event.AnvilUpdateEvent;
+import net.neoforged.neoforge.event.entity.player.AnvilRepairEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
+import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
+import net.neoforged.neoforge.event.LootTableLoadEvent;
+import net.minecraft.world.level.storage.loot.LootPool;
+import net.minecraft.world.level.storage.loot.entries.LootItem;
+import net.minecraft.world.level.storage.loot.predicates.LootItemRandomChanceCondition;
+import net.minecraft.world.level.storage.loot.providers.number.ConstantValue;
+import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.event.entity.living.LivingEquipmentChangeEvent;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+
+/**
+ * 《次元物语：武备》词条系统的运行时实现。
+ *
+ * <p>词条存放在 1.21.1 的 {@link DataComponents#CUSTOM_DATA} 中，因而不会污染原版装备
+ * 的其它组件。掉落、Tooltip、铁砧合成和装备属性都集中在这里，后续增加定向洗练时只需扩展
+ * {@link #AFFIXES} 和 {@link #merge}。</p>
+ */
+public final class EquipmentAffixSystem {
+    private static final String ROOT = "DimensionalManaAffix";
+    private static final String GRADE = "grade";
+    private static final String SCHOOL = "school";
+    private static final String MAIN = "main";
+    private static final String SUBS = "subs";
+    private static final String ID = "id";
+    private static final String LEVEL = "level";
+    private static final String VALUE = "value";
+    private static final String START = "start";
+    private static final String PLAYER_DROP_MARKER = "DimensionalManaPlayerDrop";
+    /** 「元素附加」具体是哪一系元素（fire / water / … / arcane）。 */
+    private static final String ELEMENT = "element";
+    /** 弓弩专用物品标签：原版弓、弩都在里面，模组弓只要加进这个标签也认。 */
+    private static final net.minecraft.tags.TagKey<Item> BOW_LIKE_TAG = net.minecraft.tags.TagKey.create(
+            net.minecraft.core.registries.Registries.ITEM,
+            ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "bow_like"));
+
+    private static final ResourceLocation SPELL_POWER_MOD = id("affix_spell_power");
+    private static final ResourceLocation SPELL_HASTE_MOD = id("affix_spell_haste");
+    private static final ResourceLocation SPELL_CRIT_MOD = id("affix_spell_crit");
+    private static final ResourceLocation SPELL_CRIT_DAMAGE_MOD = id("affix_spell_crit_damage");
+    private static final ResourceLocation SPELL_PENETRATION_MOD = id("affix_spell_penetration");
+    private static final ResourceLocation PHYSICAL_CRIT_MOD = id("affix_physical_crit");
+    private static final ResourceLocation PHYSICAL_CRIT_DAMAGE_MOD = id("affix_physical_crit_damage");
+    private static final ResourceLocation MANA_REDUCTION_MOD = id("affix_mana_reduction");
+    private static final ResourceLocation ATTACK_DAMAGE_MOD = id("affix_attack_damage");
+    private static final ResourceLocation ATTACK_DAMAGE_PERCENT_MOD = id("affix_attack_damage_percent");
+    private static final ResourceLocation ATTACK_SPEED_MOD = id("affix_attack_speed");
+    private static final ResourceLocation MAX_HEALTH_MOD = id("affix_max_health");
+    private static final ResourceLocation MAX_HEALTH_PERCENT_MOD = id("affix_max_health_percent");
+    // 词条属性（可被 Apothic Attributes 等外部面板检测）用的修正标识。
+    private static final ResourceLocation AFFIX_MANA_PERCENT_MOD = id("affix_mana_max_percent");
+    private static final ResourceLocation AFFIX_MANA_FLAT_MOD = id("affix_mana_max_flat");
+    private static final ResourceLocation AFFIX_MANA_AFFINITY_MOD = id("affix_mana_affinity");
+    private static final ResourceLocation AFFIX_MASTERY_MOD = id("affix_elemental_mastery");
+    private static final ResourceLocation AFFIX_ELEMENT_DAMAGE_MOD = id("affix_elemental_damage");
+    private static final ResourceLocation AFFIX_QI_PERCENT_MOD = id("affix_battle_qi_percent");
+    private static final ResourceLocation AFFIX_QI_FLAT_MOD = id("affix_battle_qi_flat");
+    // r332 物理词条扩充的属性修正标识。
+    private static final ResourceLocation AFFIX_ARMOR_PEN_MOD = id("affix_armor_penetration");
+    private static final ResourceLocation AFFIX_LIFESTEAL_MOD = id("affix_lifesteal");
+    private static final ResourceLocation AFFIX_QI_REGEN_MOD = id("affix_battle_qi_regen");
+    private static final ResourceLocation AFFIX_QI_SKILL_POWER_MOD = id("affix_battle_qi_skill_power");
+    private static final ResourceLocation AFFIX_COMBO_MOD = id("affix_combo_damage");
+    private static final ResourceLocation AFFIX_EXECUTE_MOD = id("affix_execute_damage");
+    private static final ResourceLocation AFFIX_MIKIRI_MOD = id("affix_mikiri_damage");
+    private static final ResourceLocation AFFIX_PARRY_WINDOW_MOD = id("affix_parry_window");
+    private static final ResourceLocation AFFIX_ARROW_FLAT_MOD = id("affix_arrow_damage_flat");
+    private static final ResourceLocation AFFIX_ARROW_PERCENT_MOD = id("affix_arrow_damage_percent");
+    private static final ResourceLocation ARMOR_VALUE_MOD = id("affix_armor_value");
+    private static final ResourceLocation ARMOR_TOUGHNESS_MOD = id("affix_armor_toughness");
+
+    private static ResourceLocation affixElementModifier(String element) {
+        return id("affix_element_" + element);
+    }
+
+    /** 元素附加（点数额外元素伤害）的属性修正标识。 */
+    private static ResourceLocation affixElementAdditionModifier(String element) {
+        return id("affix_element_addition_" + element);
+    }
+
+    private enum Grade {
+        C(ChatFormatting.GRAY, 1, 2, 0, 2),
+        B(ChatFormatting.WHITE, 1, 3, 0, 2),
+        A(ChatFormatting.GREEN, 1, 4, 1, 3),
+        S(ChatFormatting.BLUE, 1, 6, 1, 4),
+        SS(ChatFormatting.LIGHT_PURPLE, 1, 8, 2, 4),
+        SSS(ChatFormatting.GOLD, 1, 10, 2, 4);
+
+        final ChatFormatting color;
+        final int mainMin;
+        final int mainMax;
+        final int subMin;
+        final int subMax;
+
+        Grade(ChatFormatting color, int mainMin, int mainMax, int subMin, int subMax) {
+            this.color = color;
+            this.mainMin = mainMin;
+            this.mainMax = mainMax;
+            this.subMin = subMin;
+            this.subMax = subMax;
+        }
+
+        static Grade parse(String value) {
+            try { return valueOf(value); } catch (IllegalArgumentException ignored) { return C; }
+        }
+    }
+
+    private enum School { MAGIC, PHYSICAL }
+
+    /** 词条允许出现在哪类装备上：剑专属、弓弩专属、任意。 */
+    private enum SlotKind { ANY, SWORD, BOW }
+
+    /**
+     * 一条词条定义。
+     *
+     * <p>{@code group} 是「去重族」：同一件装备的主副词条不能落在同一族里，所以
+     * 「物理伤害 +数值」和「物理伤害 +百分比」这种同属性两种写法会互相排斥
+     * （以前只按 id 去重，于是出现过主词条是物理伤害百分比、副词条又给物理伤害固定值）。</p>
+     *
+     * <p>{@code slot} 是武器类型硬隔离：剑专属的见切 / 招架、弓弩专属的箭矢伤害，
+     * 只会在对应 ItemTags 的装备上生成，斧、镐、胸甲等直接不参与这两组池子。</p>
+     *
+     * <p>{@code elemental} 标记「元素附加」：词条池里只占一个坑位，
+     * 抽中之后才随机决定是哪一系元素，元素写在物品数据的 {@link #ELEMENT} 里。</p>
+     */
+    private record Affix(String id, String name, boolean percent, double mainStart, double mainStep,
+                         double subMin, double subMax, double subStep, School school,
+                         String group, SlotKind slot, boolean elemental) {
+        /** 绝大多数词条：去重族就是自己的 id，任意装备可出，非元素附加。 */
+        Affix(String id, String name, boolean percent, double mainStart, double mainStep,
+              double subMin, double subMax, double subStep, School school) {
+            this(id, name, percent, mainStart, mainStep, subMin, subMax, subStep, school, id, SlotKind.ANY, false);
+        }
+
+        double mainValue(int level) { return mainStart + mainStep * Math.max(0, level - 1); }
+        double subValue(double start, int level) { return start + subStep * Math.max(0, level - 1); }
+        /** 能不能当主词条（主词条一定有等级曲线）。 */
+        boolean hasMain() { return mainStep > 0; }
+        /** 能不能当副词条。 */
+        boolean hasSub() { return subStep > 0; }
+    }
+
+    /** 只做副词条的词条：没有主词条曲线，只能从副词条池里出。 */
+    private static Affix subOnly(String id, String name, boolean percent,
+                                 double subMin, double subMax, double subStep, School school, String group) {
+        return new Affix(id, name, percent, 0, 0, subMin, subMax, subStep, school, group, SlotKind.ANY, false);
+    }
+
+    /** 只做主语条的词条：副词条池里不会出现。 */
+    private static Affix mainOnly(String id, String name, boolean percent, double start, double step,
+                                  School school, SlotKind slot) {
+        return new Affix(id, name, percent, start, step, 0, 0, 0, school, id, slot, false);
+    }
+
+    private static final List<Affix> AFFIXES = List.of(
+            new Affix("mana_percent", "affix.dimensional_mana.mana_percent", true, 3.5, 3.5, .25, 1.25, 1.75, School.MAGIC, "mana", SlotKind.ANY, false),
+            new Affix("mana_flat", "affix.dimensional_mana.mana_flat", false, 16, 16, 2, 8, 8, School.MAGIC, "mana", SlotKind.ANY, false),
+            new Affix("spell_power_percent", "affix.dimensional_mana.spell_power_percent", true, 3.5, 3.5, .25, 1.25, 1.75, School.MAGIC, "spell_power", SlotKind.ANY, false),
+            new Affix("spell_power_flat", "affix.dimensional_mana.spell_power_flat", false, 16, 16, 2, 8, 8, School.MAGIC, "spell_power", SlotKind.ANY, false),
+            new Affix("spell_crit_chance", "affix.dimensional_mana.spell_crit_chance", true, 1.25, 1.25, .5, 3.25, 1, School.MAGIC),
+            new Affix("spell_crit_damage", "affix.dimensional_mana.spell_crit_damage", true, 3.5, 3.5, 2, 8, 2, School.MAGIC),
+            new Affix("elemental_mastery", "affix.dimensional_mana.elemental_mastery", false, 8, 8, 4, 8, 6, School.MAGIC),
+            new Affix("element_damage", "affix.dimensional_mana.element_damage", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+            new Affix("mana_affinity", "affix.dimensional_mana.mana_affinity", false, 0, 0, .01, .15, .1, School.MAGIC),
+            new Affix("mana_efficiency", "affix.dimensional_mana.mana_efficiency", false, 0, 0, 2, 8, 8, School.MAGIC),
+            new Affix("mana_penetration", "affix.dimensional_mana.mana_penetration", false, 0, 0, 2, 8, 8, School.MAGIC),
+            new Affix("battle_qi_percent", "affix.dimensional_mana.battle_qi_percent", true, 3.5, 3.5, .25, 1.25, 1.75, School.PHYSICAL, "battle_qi", SlotKind.ANY, false),
+            new Affix("battle_qi_flat", "affix.dimensional_mana.battle_qi_flat", false, 16, 16, 2, 8, 8, School.PHYSICAL, "battle_qi", SlotKind.ANY, false),
+            new Affix("physical_damage_flat", "affix.dimensional_mana.physical_damage_flat", false, 1, 1, .5, 1.5, .5, School.PHYSICAL, "physical_damage", SlotKind.ANY, false),
+            new Affix("physical_damage_percent", "affix.dimensional_mana.physical_damage_percent", true, 3.5, 3.5, .25, 1.25, 1.75, School.PHYSICAL, "physical_damage", SlotKind.ANY, false),
+            new Affix("physical_crit_chance", "affix.dimensional_mana.physical_crit_chance", true, 1.25, 1.25, .5, 3.25, 1, School.PHYSICAL),
+            new Affix("physical_crit_damage", "affix.dimensional_mana.physical_crit_damage", true, 3.5, 3.5, 2, 8, 2, School.PHYSICAL),
+            new Affix("attack_speed", "affix.dimensional_mana.attack_speed", true, 0, 0, 4, 8, 2, School.PHYSICAL),
+            new Affix("max_health_flat", "affix.dimensional_mana.max_health_flat", false, 1.5, 1.5, 1, 1, 1, School.PHYSICAL, "max_health", SlotKind.ANY, false),
+            new Affix("max_health_percent", "affix.dimensional_mana.max_health_percent", true, 3.5, 3.5, .25, 1.25, 1.75, School.PHYSICAL, "max_health", SlotKind.ANY, false),
+            new Affix("element_fire", "affix.dimensional_mana.element_fire", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+            new Affix("element_water", "affix.dimensional_mana.element_water", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+            new Affix("element_ice", "affix.dimensional_mana.element_ice", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+            new Affix("element_lightning", "affix.dimensional_mana.element_lightning", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+            new Affix("element_wind", "affix.dimensional_mana.element_wind", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+            new Affix("element_earth", "affix.dimensional_mana.element_earth", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+            new Affix("element_nature", "affix.dimensional_mana.element_nature", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+            new Affix("element_poison", "affix.dimensional_mana.element_poison", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+            new Affix("element_metal", "affix.dimensional_mana.element_metal", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+            new Affix("element_light", "affix.dimensional_mana.element_light", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+            new Affix("element_sound", "affix.dimensional_mana.element_sound", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+            new Affix("element_arcane", "affix.dimensional_mana.element_arcane", true, 3.5, 3.5, 0, 0, 0, School.MAGIC),
+
+            // ---- r332 物理词条扩充：通用机制与增伤（主词条 1～12 级） ----
+            // 破甲：初始 4，每级 +4，12 级 48。
+            new Affix("armor_penetration", "affix.dimensional_mana.armor_penetration", false, 4, 4, 1, 4, 1, School.PHYSICAL),
+            // 物理吸血：初始 1%，每级 +1%，12 级 12%（主词条专属）。
+            mainOnly("lifesteal", "affix.dimensional_mana.lifesteal", true, 1, 1, School.PHYSICAL, SlotKind.ANY),
+            // 斗气额外恢复：初始 0.15/s，每级 +0.15，12 级 1.8/s（主词条专属）。
+            mainOnly("battle_qi_regen", "affix.dimensional_mana.battle_qi_regen", false, .15, .15, School.PHYSICAL, SlotKind.ANY),
+            // 斗气技能强度：初始 1，每级 +1，12 级 12（每点 +2.5% 斗气技能伤害，主词条专属）。
+            mainOnly("battle_qi_skill_power", "affix.dimensional_mana.battle_qi_skill_power", false, 1, 1, School.PHYSICAL, SlotKind.ANY),
+            // 连击伤害：初始 2%，每级 +2%，12 级 24%。
+            new Affix("combo_damage", "affix.dimensional_mana.combo_damage", true, 2, 2, 1, 4, 1, School.PHYSICAL),
+            // 处决伤害：初始 3%，每级 +3%，12 级 36%。
+            new Affix("execute_damage", "affix.dimensional_mana.execute_damage", true, 3, 3, 1, 4, 1, School.PHYSICAL),
+            // 12 系元素附加：主 1～12，副 0.5～2 +0.5（最高 4），池子里只占一个坑位。
+            new Affix("elemental_addition", "affix.dimensional_mana.elemental_addition", false, 1, 1, .5, 2, .5, School.PHYSICAL, "elemental_addition", SlotKind.ANY, true),
+
+            // ---- 专属武器特化（武器类型硬隔离） ----
+            // 见切伤害：仅剑类，初始 3%，每级 +3%，12 级 36%。
+            mainOnly("mikiri_damage", "affix.dimensional_mana.mikiri_damage", true, 3, 3, School.PHYSICAL, SlotKind.SWORD),
+            // 招架特化：仅剑类，初始 1，每级 +1，12 级 12（每点完美格挡窗口 +1 刻）。
+            mainOnly("parry_window", "affix.dimensional_mana.parry_window", false, 1, 1, School.PHYSICAL, SlotKind.SWORD),
+            // 箭矢伤害 +数值：仅弓弩，初始 1，每级 +1，12 级 12。
+            mainOnly("arrow_damage_flat", "affix.dimensional_mana.arrow_damage_flat", false, 1, 1, School.PHYSICAL, SlotKind.BOW),
+            // 箭矢伤害 +百分比：仅弓弩，初始 4%，每级 +4%，12 级 48%。
+            mainOnly("arrow_damage_percent", "affix.dimensional_mana.arrow_damage_percent", true, 4, 4, School.PHYSICAL, SlotKind.BOW),
+
+            // ---- r332 物理词条扩充：新增副词条（初始无等级，最多 +4） ----
+            // 护甲值：初始 0.5～2，每级 +1，最高 6。
+            subOnly("armor_value", "affix.dimensional_mana.armor_value", false, .5, 2, 1, School.PHYSICAL, "armor_value"),
+            // 盔甲韧性：初始 0.5～1，每级 +0.5，最高 3。
+            subOnly("armor_toughness", "affix.dimensional_mana.armor_toughness", false, .5, 1, .5, School.PHYSICAL, "armor_toughness")
+    );
+
+    /** 宝箱等非生物掉落通过 ItemEntity 进入世界时补上词条；已读档物品不重复处理。 */
+    public static void onItemEntityJoin(EntityJoinLevelEvent event) {
+        if (event.getLevel().isClientSide || event.loadedFromDisk() || !(event.getEntity() instanceof ItemEntity itemEntity)) return;
+        ItemStack stack = itemEntity.getItem();
+        if (!isEquipment(stack) || hasAffix(stack) || itemEntity.getOwner() != null
+                || stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).contains(PLAYER_DROP_MARKER)) return;
+        Grade grade = chestGrade(event.getLevel().dimension(), event.getLevel().random);
+        apply(stack, grade, schoolFor(stack, event.getLevel().random), event.getLevel().random, null);
+        itemEntity.setItem(stack);
+    }
+
+    /**
+     * 原版与模组宝箱的装备池：权重只决定是否出现哪类胚子，评级在开箱时按环境权重抽取。
+     *
+     * <p>判定走 {@link StructureChestLoot}，所以别的模组新增结构里的通用宝箱（{@code othermod:chests/xxx}）
+     * 也会出带词条的装备胚子；开箱补词条那一步在 {@link #onContainerOpen}，与表是谁加的无关。</p>
+     */
+    public static void onLootTableLoad(LootTableLoadEvent event) {
+        if (!StructureChestLoot.isStructureChest(event.getName())) return;
+        String path = event.getName().getPath();
+        boolean end = path.contains("end_city") || path.contains("ancient_city");
+        boolean nether = path.contains("nether") || path.contains("bastion") || path.contains("fortress");
+        LootPool.Builder pool = LootPool.lootPool().name("dimensional_mana_weighted_equipment")
+                .setRolls(ConstantValue.exactly(1))
+                .when(LootItemRandomChanceCondition.randomChance(end ? 0.18F : nether ? 0.12F : 0.08F));
+        if (end) {
+            pool.add(LootItem.lootTableItem(Items.DIAMOND_SWORD).setWeight(18));
+            pool.add(LootItem.lootTableItem(Items.DIAMOND_CHESTPLATE).setWeight(16));
+            pool.add(LootItem.lootTableItem(Items.NETHERITE_SWORD).setWeight(8));
+            pool.add(LootItem.lootTableItem(Items.NETHERITE_CHESTPLATE).setWeight(8));
+        } else if (nether) {
+            pool.add(LootItem.lootTableItem(Items.IRON_SWORD).setWeight(16));
+            pool.add(LootItem.lootTableItem(Items.GOLDEN_SWORD).setWeight(16));
+            pool.add(LootItem.lootTableItem(Items.DIAMOND_SWORD).setWeight(8));
+            pool.add(LootItem.lootTableItem(Items.GOLDEN_CHESTPLATE).setWeight(18));
+            pool.add(LootItem.lootTableItem(Items.DIAMOND_CHESTPLATE).setWeight(8));
+        } else {
+            pool.add(LootItem.lootTableItem(Items.IRON_SWORD).setWeight(20));
+            pool.add(LootItem.lootTableItem(Items.BOW).setWeight(12));
+            pool.add(LootItem.lootTableItem(Items.LEATHER_CHESTPLATE).setWeight(18));
+            pool.add(LootItem.lootTableItem(Items.IRON_CHESTPLATE).setWeight(15));
+            pool.add(LootItem.lootTableItem(Items.GOLDEN_CHESTPLATE).setWeight(5));
+        }
+        StructureChestLoot.addPool(event.getTable(), pool.build());
+    }
+
+    /** 宝箱开出来的物品还在容器里，不会经过 ItemEntity；打开箱子时按环境权重补词条。 */
+    public static void onContainerOpen(PlayerContainerEvent.Open event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (!(event.getContainer() instanceof net.minecraft.world.inventory.ChestMenu chest)) return;
+        net.minecraft.world.Container container = chest.getContainer();
+        net.minecraft.util.RandomSource random = player.serverLevel().random;
+        Grade grade = chestGrade(player.level().dimension(), random);
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            ItemStack stack = container.getItem(slot);
+            if (!isEquipment(stack) || hasAffix(stack)) continue;
+            apply(stack, grade, schoolFor(stack, random), random, null);
+            container.setItem(slot, stack);
+        }
+    }
+
+    private static Grade chestGrade(net.minecraft.resources.ResourceKey<Level> dimension,
+                                    net.minecraft.util.RandomSource random) {
+        if (dimension == Level.END) return weighted(random, Grade.A, Grade.SSS, 0.60);
+        if (dimension == Level.NETHER) return weighted(random, Grade.C, Grade.A, 0.40);
+        return weighted(random, Grade.C, Grade.B, 0.50);
+    }
+
+    public static void onLivingDrops(LivingDropsEvent event) {
+        LivingEntity entity = event.getEntity();
+        if (entity.level().isClientSide) return;
+        if (entity instanceof Player) {
+            for (ItemEntity itemEntity : event.getDrops()) markPlayerDrop(itemEntity.getItem());
+            return;
+        }
+        Grade grade = gradeFor(entity);
+        School forced = forcedSchool(entity);
+        for (ItemEntity itemEntity : event.getDrops()) {
+            ItemStack stack = itemEntity.getItem();
+            if (!isEquipment(stack) || hasAffix(stack)) continue;
+            apply(stack, grade, forced == null ? schoolFor(stack, entity.getRandom()) : forced, entity.getRandom(), entity);
+            itemEntity.setItem(stack);
+        }
+        if (killedByPlayer(event)) addBossEquipmentDrop(event);
+    }
+
+    /**
+     * 这一下算不算「玩家击杀」。
+     *
+     * <p>原版的 {@code recentlyHit} 只在伤害源直接挂着玩家时才会置位（{@code lastHurtByPlayerTime}），
+     * 而本模组的 Boss 基本都是被法术、法阵和射线打死的 —— 这些伤害源没有实体、或者只有一层
+     * 投射物实体，于是 {@code recentlyHit} 一路都是 false，Boss 的保底装备就一直掉不出来
+     * （材料走战利品表照掉，所以看起来像「只不掉装备」）。这里补三条兜底：</p>
+     * <ul>
+     *   <li>原版的 {@code recentlyHit}；</li>
+     *   <li>伤害源属于玩家（直接实体或归属实体是玩家）；</li>
+     *   <li>死亡位置 32 格内有生存模式玩家（法术打死时伤害源往往是空的）。</li>
+     * </ul>
+     */
+    private static boolean killedByPlayer(LivingDropsEvent event) {
+        if (event.isRecentlyHit()) return true;
+        net.minecraft.world.damagesource.DamageSource source = event.getSource();
+        if (source.getEntity() instanceof Player || source.getDirectEntity() instanceof Player) return true;
+        LivingEntity entity = event.getEntity();
+        if (!(entity.level() instanceof ServerLevel level)) return false;
+        return !level.getEntitiesOfClass(ServerPlayer.class, entity.getBoundingBox().inflate(32.0D),
+                player -> !player.isCreative() && !player.isSpectator()).isEmpty();
+    }
+
+    /** Boss 战利品表只负责材料；这里保证规范中的一件高品质装备真正进入掉落集合。 */
+    private static void addBossEquipmentDrop(LivingDropsEvent event) {
+        LivingEntity boss = event.getEntity();
+        boolean corrupted = boss.getClass().getSimpleName().toLowerCase(Locale.ROOT).contains("corruptedwither");
+        boolean swordmaster = boss.getClass().getSimpleName().toLowerCase(Locale.ROOT).contains("swordmaster");
+        boolean dragon = boss instanceof EnderDragon;
+        boolean wither = boss instanceof WitherBoss && !corrupted;
+        if (!corrupted && !dragon && !wither && !swordmaster) return;
+        net.minecraft.util.RandomSource random = boss.getRandom();
+        Item item;
+        Grade grade;
+        if (swordmaster) {
+            // 剑圣是物理系的单挑 BOSS：保底一把带词条的高级剑，品质 A～SS。
+            grade = weighted(random, Grade.A, Grade.SS, 0.60);
+            item = random.nextBoolean() ? Items.NETHERITE_SWORD : Items.DIAMOND_SWORD;
+        } else if (corrupted) {
+            grade = Grade.values()[3 + random.nextInt(3)];
+            double roll = random.nextDouble();
+            if (roll < 0.40) {
+                item = random.nextBoolean() ? Items.NETHERITE_SWORD : GeneratedMod.MOD_ITEMS.get(MojiangSteelEquipment.SWORD).get();
+            } else if (roll < 0.70) {
+                String[] staffs = {"advanced_general_staff", "supreme_general_staff", "special_general_staff"};
+                item = GeneratedMod.MOD_ITEMS.get(staffs[random.nextInt(staffs.length)]).get();
+            } else {
+                item = random.nextBoolean() ? Items.NETHERITE_CHESTPLATE : GeneratedMod.MOD_ITEMS.get(MojiangSteelEquipment.CHESTPLATE).get();
+            }
+        } else if (dragon) {
+            grade = Grade.values()[3 + random.nextInt(3)];
+            if (random.nextDouble() < 0.30) {
+                item = random.nextBoolean() ? Items.NETHERITE_SWORD : Items.BOW;
+            } else {
+                item = random.nextBoolean() ? Items.NETHERITE_CHESTPLATE : Items.NETHERITE_LEGGINGS;
+            }
+        } else {
+            grade = weighted(random, Grade.B, Grade.S, 0.55);
+            double roll = random.nextDouble();
+            if (roll < 0.30) {
+                item = Items.BOW;
+            } else if (roll < 0.50) {
+                item = Items.DIAMOND_SWORD;
+            } else {
+                item = Items.DIAMOND_CHESTPLATE;
+            }
+        }
+        ItemStack stack = new ItemStack(item);
+        // 流派按装备类别的概率表现掷（剑 80/20、甲 60/40、工具全物理、法杖全魔法、
+        // 魔精钢 50/50），所以 Boss 剑也有小概率出「魔剑士」极品；只有剑圣保留
+        // 物理系人设，保底武器固定物理流派。
+        apply(stack, grade, swordmaster ? School.PHYSICAL : schoolFor(stack, random), random, boss);
+        event.getDrops().add(new ItemEntity(boss.level(), boss.getX(), boss.getY() + 0.8D, boss.getZ(), stack));
+    }
+
+    private static void markPlayerDrop(ItemStack stack) {
+        CustomData old = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag data = old == null ? new CompoundTag() : old.copyTag();
+        data.putBoolean(PLAYER_DROP_MARKER, true);
+        CustomData.set(DataComponents.CUSTOM_DATA, stack, data);
+    }
+
+    /** 自然掉落以外由其它系统塞入掉落集合时也能调用。 */
+    public static void applyDrop(ItemStack stack, LivingEntity source) {
+        if (stack.isEmpty() || hasAffix(stack) || !isEquipment(stack)) return;
+        apply(stack, gradeFor(source), forcedSchool(source) == null ? schoolFor(stack, source.getRandom()) : forcedSchool(source),
+                source.getRandom(), source);
+    }
+
+    private static void apply(ItemStack stack, Grade grade, School school, net.minecraft.util.RandomSource random,
+                              LivingEntity source) {
+        CompoundTag root = buildRoot(stack, grade, school, random, source != null && isBoss(source));
+        writeRoot(stack, root, grade);
+    }
+
+    /**
+     * 按评级与流派随机出一整套词条。
+     *
+     * <p>掉落生成（{@link #apply}）和超导魔晶洗练（{@link #rerollAffixes}）共用这一份规则，
+     * 保证「洗出来的装备」和「打出来的装备」是同一套数值分布。</p>
+     *
+     * <p>三条硬规则都在这一个方法里落实：</p>
+     * <ol>
+     *   <li><b>武器类型硬隔离</b>：先读物品的 ItemTags，剑类才把见切 / 招架放进池子，
+     *       弓弩才放箭矢伤害，斧、镐、胸甲之类根本不参与这两组池子；</li>
+     *   <li><b>元素附加只占一个坑位</b>：12 系共用一个 {@code elemental_addition} 词条，
+     *       抽中之后才在 12 系里随机决定是哪一系（{@link #pickElementalType}），不稀释其它词条的出货率；</li>
+     *   <li><b>主副去重</b>：按去重族（{@link Affix#group()}）排除，同属性的数值型和百分比型
+     *       不会再同时出现（例如主词条物理伤害%、副词条物理伤害固定值）。</li>
+     * </ol>
+     */
+    private static CompoundTag buildRoot(ItemStack stack, Grade grade, School school,
+                                        net.minecraft.util.RandomSource random, boolean bossDrop) {
+        CompoundTag root = new CompoundTag();
+        root.putString(GRADE, grade.name());
+        root.putString(SCHOOL, school.name().toLowerCase(Locale.ROOT));
+        if (bossDrop) root.putBoolean("boss_drop", true);
+
+        Set<String> usedGroups = new java.util.HashSet<>();
+        List<Affix> pool = mainPool(stack, school);
+        Affix main = pool.get(random.nextInt(pool.size()));
+        int mainLevel = random.nextInt(Math.max(1, grade.mainMax - grade.mainMin + 1)) + grade.mainMin;
+        CompoundTag mainTag = affixTag(main, mainLevel, main.mainValue(mainLevel));
+        String element = main.elemental() ? pickElementalType(random, usedGroups) : null;
+        if (element != null) mainTag.putString(ELEMENT, element);
+        collectGroups(mainTag, usedGroups);
+        root.put(MAIN, mainTag);
+
+        ListTag subs = new ListTag();
+        int count = grade.subMin + (grade.subMax > grade.subMin ? random.nextInt(grade.subMax - grade.subMin + 1) : 0);
+        for (int i = 0; i < count; i++) {
+            CompoundTag sub = rollSubTag(stack, school, usedGroups, random);
+            if (sub == null) break;
+            collectGroups(sub, usedGroups);
+            subs.add(sub);
+        }
+        root.put(SUBS, subs);
+        return root;
+    }
+
+    /** 主语条池：流派一致、有主词条曲线、并且这件装备允许出（剑 / 弓弩专属词条在这里被挡掉）。 */
+    private static List<Affix> mainPool(ItemStack stack, School school) {
+        List<Affix> pool = AFFIXES.stream()
+                .filter(a -> a.school() == school && a.hasMain() && allowedOn(a, stack))
+                .toList();
+        // 极端情况下（比如某个只有弓弩专属词条的流派 + 一把斧）池子不能为空：退回该流派的全部主语条。
+        return pool.isEmpty()
+                ? AFFIXES.stream().filter(a -> a.school() == school && a.hasMain()).toList()
+                : pool;
+    }
+
+    /**
+     * 抽一条副词条；池子空了返回 {@code null}。
+     *
+     * <p>元素附加在这里同样只算一个坑位：{@link #pickElementalType} 从 12 系里挑一个
+     * 还没被同元素词条占用的系，挑不出来就整条跳过。</p>
+     */
+    private static CompoundTag rollSubTag(ItemStack stack, School school, Set<String> usedGroups,
+                                          net.minecraft.util.RandomSource random) {
+        List<Affix> available = new ArrayList<>();
+        for (Affix affix : AFFIXES) {
+            if (affix.school() != school || !affix.hasSub() || !allowedOn(affix, stack)) continue;
+            if (usedGroups.contains(affix.group())) continue;
+            available.add(affix);
+        }
+        // 打乱后逐个尝试：元素附加可能因为 12 系都被占满而抽不出来，这时候继续试下一条。
+        while (!available.isEmpty()) {
+            Affix sub = available.remove(random.nextInt(available.size()));
+            double initial = sub.subMin() + random.nextDouble() * (sub.subMax() - sub.subMin());
+            CompoundTag tag = affixTag(sub, 1, initial);
+            if (sub.elemental()) {
+                String element = pickElementalType(random, usedGroups);
+                if (element == null) continue;
+                tag.putString(ELEMENT, element);
+            }
+            return tag;
+        }
+        return null;
+    }
+
+    /**
+     * 「元素附加」抽元素：从 12 系里随机挑一系，跳过已经被同元素词条（如火元素伤害%）占用的系。
+     * 12 系全被占用时返回 {@code null}，这条词条本次不出现。
+     */
+    private static String pickElementalType(net.minecraft.util.RandomSource random, Set<String> usedGroups) {
+        List<String> candidates = new ArrayList<>();
+        for (String element : ELEMENT_IDS) {
+            if (!usedGroups.contains("element_" + element)) candidates.add(element);
+        }
+        if (candidates.isEmpty()) return null;
+        return candidates.get(random.nextInt(candidates.size()));
+    }
+
+    /**
+     * 把一条词条占用的去重族记进集合。
+     *
+     * <p>普通词条记它自己的族（同属性的数值型与百分比型共用一个族）；
+     * 「元素附加」同时记两个：{@code elemental_addition} 保证整套武备只出这一条附加，
+     * {@code element_<系>} 保证不会和同系的百分比元素词条撞车。</p>
+     */
+    private static void collectGroups(CompoundTag tag, Set<String> used) {
+        Affix affix = findAffix(tag.getString(ID));
+        if (affix == null) return;
+        if (affix.elemental()) {
+            used.add("elemental_addition");
+            used.add("element_" + tag.getString(ELEMENT));
+        } else {
+            used.add(affix.group());
+        }
+    }
+
+    /** 武器类型硬隔离：剑类才出剑专属词条，弓弩才出箭矢专属词条。 */
+    private static boolean allowedOn(Affix affix, ItemStack stack) {
+        return switch (affix.slot()) {
+            case ANY -> true;
+            case SWORD -> isSwordLike(stack);
+            case BOW -> isBowLike(stack);
+        };
+    }
+
+    /** 剑类判定先读 {@code minecraft:swords} 标签，再兜一层类型判断（模组剑不会再手动加标签）。 */
+    public static boolean isSwordLike(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        return stack.is(ItemTags.SWORDS) || stack.getItem() instanceof SwordItem;
+    }
+
+    /**
+     * 弓弩判定：先读本模组的 {@code dimensional_mana:bow_like} 标签（数据包随 jar 一起发），
+     * 再兜一层类型判断（原版弓、弩，以及模组里继承它们的东西）。
+     */
+    public static boolean isBowLike(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        return stack.is(BOW_LIKE_TAG) || stack.getItem() instanceof BowItem || stack.getItem() instanceof CrossbowItem;
+    }
+
+    /** 把词条根节点写进物品：只替换自己这一份自定义数据，别把其它模组的 NBT 一起冲掉。 */
+    private static ItemStack writeRoot(ItemStack stack, CompoundTag root, Grade grade) {
+        CustomData old = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag data = old == null ? new CompoundTag() : old.copyTag();
+        data.put(ROOT, root);
+        CustomData.set(DataComponents.CUSTOM_DATA, stack, data);
+        stack.set(DataComponents.CUSTOM_NAME, prefixedName(stack, grade));
+        if (grade == Grade.SSS) stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
+        else stack.remove(DataComponents.ENCHANTMENT_GLINT_OVERRIDE);
+        return stack;
+    }
+
+    private static CompoundTag affixTag(Affix affix, int level, double value) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString(ID, affix.id());
+        tag.putInt(LEVEL, level);
+        tag.putDouble(VALUE, value);
+        tag.putDouble(START, value);
+        return tag;
+    }
+
+    /**
+     * 装备名 = 评级前缀 + 物品名。两者都用可翻译组件，客户端按自己的语言显示，
+     * 所以存档里的装备换语言后名字也会跟着变，不再被烙成中文。
+     */
+    private static Component prefixedName(ItemStack stack, Grade grade) {
+        String prefixKey = "item.dimensional_mana.affix.prefix." + grade.name().toLowerCase(Locale.ROOT);
+        return Component.translatable(prefixKey).withStyle(grade.color)
+                .append(Component.literal(" ").withStyle(grade.color))
+                .append(Component.translatable(stack.getItem().getDescriptionId()).withStyle(grade.color));
+    }
+
+    /**
+     * 旧版本把评级前缀直接写死成中文字面量存进了物品名，这类老装备改语言也不会变。
+     * 只在显示 Tooltip 时识别并换成可翻译版本，不动存档里的数据，避免背包扫描的开销。
+     */
+    private static final List<String> LEGACY_CN_PREFIXES =
+            List.of("[破损的]", "[普通的]", "[精良的]", "[稀有的]", "[史诗的]", "[传说的]");
+
+    private static boolean hasLegacyChinesePrefix(Component name) {
+        if (!(name.getContents() instanceof PlainTextContents plain)) return false;
+        String text = plain.text();
+        for (String prefix : LEGACY_CN_PREFIXES) {
+            if (text.startsWith(prefix)) return true;
+        }
+        return false;
+    }
+
+    public static void onTooltip(ItemTooltipEvent event) {
+        ItemStack stack = event.getItemStack();
+        CompoundTag root = affixRoot(stack);
+        if (root == null) return;
+        Grade grade = Grade.parse(root.getString(GRADE));
+        Component storedName = stack.get(DataComponents.CUSTOM_NAME);
+        if (storedName != null && !event.getToolTip().isEmpty() && hasLegacyChinesePrefix(storedName)) {
+            event.getToolTip().set(0, prefixedName(stack, grade));
+        }
+        event.getToolTip().add(Component.translatable("tooltip.dimensional_mana.affix_grade", grade.name())
+                .withStyle(grade.color));
+        String schoolKey = "tooltip.dimensional_mana.affix_school."
+                + ("magic".equals(root.getString(SCHOOL)) ? "magic" : "physical");
+        event.getToolTip().add(Component.translatable("tooltip.dimensional_mana.affix_school",
+                Component.translatable(schoolKey)).withStyle(ChatFormatting.DARK_AQUA));
+        if (root.getBoolean(TEMPLATE_FORGED)) {
+            event.getToolTip().add(Component.translatable("tooltip.dimensional_mana.template_forged")
+                    .withStyle(ChatFormatting.GOLD));
+        }
+        CompoundTag main = root.getCompound(MAIN);
+        appendAffixLine(event.getToolTip(), main, ChatFormatting.GOLD, true);
+        ListTag subs = root.getList(SUBS, 10);
+        for (int i = 0; i < subs.size(); i++) appendAffixLine(event.getToolTip(), subs.getCompound(i), ChatFormatting.GRAY, false);
+    }
+
+    /**
+     * 一行词条。主词条按「（N级）」显示；副词条内部 1 级是初始「无等级」，
+     * 提升后按内部等级 -1 写成 +1～+4，中英一致。
+     */
+    private static void appendAffixLine(List<Component> tooltip, CompoundTag tag, ChatFormatting color, boolean main) {
+        if (!tag.contains(ID)) return;
+        Affix affix = findAffix(tag.getString(ID));
+        if (affix == null) return;
+        double value = tag.getDouble(VALUE);
+        String text = format(value) + (affix.percent() ? "%" : "");
+        int level = tag.getInt(LEVEL);
+        Component name = affixName(affix, tag);
+        Component line;
+        if (main) {
+            line = Component.translatable("tooltip.dimensional_mana.affix_line", name, text, level);
+        } else if (level <= 1) {
+            line = Component.translatable("tooltip.dimensional_mana.affix_line_sub_plain", name, text);
+        } else {
+            line = Component.translatable("tooltip.dimensional_mana.affix_line_sub", name, text, level - 1);
+        }
+        tooltip.add(Component.literal("  ").append(line).withStyle(color));
+    }
+
+    /**
+     * 词条名。元素附加要带上是哪一系（如「火焰元素附加」），
+     * 这样同名的两条附加也能在主副词条里区分开。
+     */
+    private static Component affixName(Affix affix, CompoundTag tag) {
+        if (!affix.elemental()) return Component.translatable(affix.name());
+        String element = tag.getString(ELEMENT);
+        if (element.isEmpty()) element = ELEMENT_IDS[0];
+        return Component.translatable(affix.name(),
+                Component.translatable("gui.dimensional_mana.element." + element));
+    }
+
+    private static String format(double value) {
+        if (Math.abs(value - Math.rint(value)) < 0.0001) return Integer.toString((int) Math.rint(value));
+        return String.format(Locale.ROOT, "%.2f", value).replaceAll("0+$", "").replaceAll("\\.$", "");
+    }
+
+    /** 同类装备合成：主词条相同升一级，副词条同类升一级，超过 4 条随机截断。 */
+    public static void onAnvilUpdate(AnvilUpdateEvent event) {
+        ItemStack left = event.getLeft();
+        ItemStack right = event.getRight();
+        if (left.isEmpty() || right.isEmpty() || !ItemStack.isSameItem(left, right)
+                || !hasAffix(left) || !hasAffix(right)) return;
+        ItemStack output = merge(left, right, event.getPlayer().getRandom());
+        event.setOutput(output);
+        event.setCost(Math.max(1L, Math.min(39L, event.getCost() <= 0 ? 1L : event.getCost())));
+        event.setMaterialCost(1);
+    }
+
+    /**
+     * 供魔晶铁砧直接调用的词条合成。
+     *
+     * <p>正常情况下走 NeoForge 的 {@code AnvilUpdateEvent}（见 {@link #onAnvilUpdate}）；
+     * 这里再留一个直接入口，万一事件没被触发，菜单也能自己把两件装备的词条合出来。</p>
+     *
+     * @return 合成结果；两件里只要有一件没有词条就返回空，交回原版逻辑处理
+     */
+    public static ItemStack mergeForAnvil(ItemStack left, ItemStack right, net.minecraft.util.RandomSource random) {
+        if (left == null || right == null || left.isEmpty() || right.isEmpty()) return ItemStack.EMPTY;
+        if (!ItemStack.isSameItem(left, right) || !hasAffix(left) || !hasAffix(right)) return ItemStack.EMPTY;
+        return merge(left, right, random);
+    }
+
+    /**
+     * 同类装备合成（4.3）：
+     * <ul>
+     *   <li>主词条：两件相同 → 等级 +1；不同 → 取左槽（第一件）的主词条；已满 12 级 → 额外触发一次副词条成长。</li>
+     *   <li>副词条：左槽原样保留，右槽同名词条在左槽基础上 +1 级，新词条直接加入；
+     *       合并后超过 4 条时随机保留 4 条。</li>
+     *   <li>主词条等级跨过 3 / 6 / 9 / 12 时，每次跨档各追加一次随机副词条成长。</li>
+     * </ul>
+     */
+    private static ItemStack merge(ItemStack left, ItemStack right, net.minecraft.util.RandomSource random) {
+        ItemStack output = left.copyWithCount(1);
+        CompoundTag a = affixRoot(left).copy();
+        CompoundTag b = affixRoot(right);
+        Grade grade = Grade.parse(a.getString(GRADE));
+        CompoundTag main = a.getCompound(MAIN);
+        CompoundTag otherMain = b.getCompound(MAIN);
+        boolean sameMain = main.getString(ID).equals(otherMain.getString(ID));
+        boolean mainMaxed = main.getInt(LEVEL) >= MAIN_MAX_LEVEL;
+
+        ListTag combined = new ListTag();
+        ListTag leftSubs = a.getList(SUBS, 10);
+        ListTag rightSubs = b.getList(SUBS, 10);
+        for (int i = 0; i < leftSubs.size(); i++) combined.add(leftSubs.getCompound(i).copy());
+        for (int i = 0; i < rightSubs.size(); i++) {
+            CompoundTag incoming = rightSubs.getCompound(i);
+            CompoundTag existing = findTag(combined, incoming.getString(ID));
+            if (existing == null) combined.add(incoming.copy());
+            else levelUpSub(existing);
+        }
+
+        // 主词条结算：相同升一级（满级则补一次副词条成长），不同保持左槽主词条。
+        int bonusSubGrowth = 0;
+        if (sameMain) {
+            if (mainMaxed) {
+                bonusSubGrowth += 1;
+            } else {
+                int before = main.getInt(LEVEL);
+                levelUpMain(main);
+                bonusSubGrowth += subGrowthCrossings(before, main.getInt(LEVEL));
+            }
+        }
+        for (int i = 0; i < bonusSubGrowth; i++) {
+            a.put(MAIN, main);
+            growSubStage(combined, a, output, schoolOf(a, output), random);
+        }
+
+        // 两件的耐久也拼起来：词条合成都吃掉了右槽，耐久不该白丢。
+        if (output.isDamageableItem()) {
+            int damage = left.getDamageValue() + right.getDamageValue();
+            output.setDamageValue(Math.max(0, Math.min(output.getMaxDamage() - 1, damage)));
+        }
+        while (combined.size() > SUB_MAX_COUNT) combined.remove(random.nextInt(combined.size()));
+        a.put(MAIN, main);
+        a.put(SUBS, combined);
+        CompoundTag data = new CompoundTag();
+        data.put(ROOT, a);
+        CustomData.set(DataComponents.CUSTOM_DATA, output, data);
+        output.set(DataComponents.CUSTOM_NAME, prefixedName(output, grade));
+        if (grade == Grade.SSS) output.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
+        return output;
+    }
+
+    /** 主词条等级上限。 */
+    public static final int MAIN_MAX_LEVEL = 12;
+    /** 副词条等级上限。内部 1 级是「无等级」的初始档，2～5 级对外显示 +1～+4。 */
+    public static final int SUB_MAX_LEVEL = 5;
+    /** 副词条数量上限。 */
+    public static final int SUB_MAX_COUNT = 4;
+    /** 主词条每到这些等级，额外让一条副词条成长。 */
+    private static final int[] SUB_GROWTH_LEVELS = {3, 6, 9, 12};
+
+    /** 主词条升级：按主词条曲线 mainStart + mainStep × (等级-1) 计算数值。 */
+    private static void levelUpMain(CompoundTag tag) {
+        Affix affix = findAffix(tag.getString(ID));
+        if (affix == null) return;
+        int level = Math.min(MAIN_MAX_LEVEL, tag.getInt(LEVEL) + 1);
+        tag.putInt(LEVEL, level);
+        tag.putDouble(VALUE, affix.mainValue(level));
+    }
+
+    /** 副词条升级：按副词条曲线 start + subStep × (等级-1) 计算数值，内部最多 5 级（对外最多 +4）。 */
+    private static void levelUpSub(CompoundTag tag) {
+        Affix affix = findAffix(tag.getString(ID));
+        if (affix == null) return;
+        int level = Math.min(SUB_MAX_LEVEL, tag.getInt(LEVEL) + 1);
+        tag.putInt(LEVEL, level);
+        tag.putDouble(VALUE, affix.subValue(tag.getDouble(START), level));
+    }
+
+    /** 主词条从 {@code before} 升到 {@code after}，跨过了几个 3/6/9/12 档位。 */
+    private static int subGrowthCrossings(int before, int after) {
+        int count = 0;
+        for (int threshold : SUB_GROWTH_LEVELS) if (before < threshold && after >= threshold) count++;
+        return count;
+    }
+
+    /** 随机挑一条还没满级的副词条 +1 级。 */
+    private static void growRandomSub(ListTag subs, net.minecraft.util.RandomSource random) {
+        List<CompoundTag> candidates = new ArrayList<>();
+        for (int i = 0; i < subs.size(); i++) {
+            CompoundTag tag = subs.getCompound(i);
+            Affix affix = findAffix(tag.getString(ID));
+            if (affix == null || affix.subStep() <= 0) continue;
+            if (tag.getInt(LEVEL) >= SUB_MAX_LEVEL) continue;
+            candidates.add(tag);
+        }
+        if (candidates.isEmpty()) return;
+        levelUpSub(candidates.get(random.nextInt(candidates.size())));
+    }
+
+    /**
+     * 一次「副词条成长环节」，升级跨档、满级额外成长、武备强化石走的都是这里。
+     *
+     * <ol>
+     *   <li>副词条为空：必定补 1～3 条（以前空词条装备一路升级都长不出副词条）；</li>
+     *   <li>否则 50% 概率新增一条副词条（不足 4 条时），另 50% 把一条已有的升一级；</li>
+     *   <li>抽中的那一支做不了（没有可选词条 / 已经全满）就自动走另一支。</li>
+     * </ol>
+     */
+    private static void growSubStage(ListTag subs, CompoundTag root, ItemStack stack, School school,
+                                     net.minecraft.util.RandomSource random) {
+        CompoundTag mainTag = root.getCompound(MAIN);
+        if (subs.isEmpty()) {
+            int count = 1 + random.nextInt(3);
+            for (int i = 0; i < count; i++) {
+                if (!addRandomSub(subs, mainTag, stack, school, random)) break;
+            }
+            return;
+        }
+        boolean canAdd = subs.size() < SUB_MAX_COUNT && hasAffixAvailable(subs, mainTag, stack, school);
+        boolean canGrow = hasNotMaxedSub(subs);
+        if (canAdd && (!canGrow || random.nextDouble() < 0.5D)) {
+            addRandomSub(subs, mainTag, stack, school, random);
+        } else {
+            growRandomSub(subs, random);
+        }
+    }
+
+    /** 副词条池里还有没有能加的新词条（排除主词条、已有词条、以及这件装备不允许出的专属词条）。 */
+    private static boolean hasAffixAvailable(ListTag subs, CompoundTag mainTag, ItemStack stack, School school) {
+        return !availableSubs(subs, mainTag, stack, school).isEmpty();
+    }
+
+    /** 当前装备还能新加哪些副词条：流派一致、有副词条曲线、装备允许、主副去重族不撞车。 */
+    private static List<Affix> availableSubs(ListTag subs, CompoundTag mainTag, ItemStack stack, School school) {
+        Set<String> usedGroups = usedGroups(subs, mainTag);
+        List<Affix> available = new ArrayList<>();
+        for (Affix affix : AFFIXES) {
+            if (affix.school() != school || !affix.hasSub()) continue;
+            if (!allowedOn(affix, stack)) continue;
+            if (usedGroups.contains(affix.group())) continue;
+            available.add(affix);
+        }
+        return available;
+    }
+
+    /** 主词条与现有副词条一共占了哪些去重族；元素附加按「具体哪一系」记账。 */
+    private static Set<String> usedGroups(ListTag subs, CompoundTag mainTag) {
+        Set<String> used = new java.util.HashSet<>();
+        if (mainTag != null && mainTag.contains(ID)) collectGroups(mainTag, used);
+        for (int i = 0; i < subs.size(); i++) collectGroups(subs.getCompound(i), used);
+        return used;
+    }
+
+    /** 新加一条副词条（1 级，初始值在该词条的起始区间里随机）。 */
+    private static boolean addRandomSub(ListTag subs, CompoundTag mainTag, ItemStack stack, School school,
+                                        net.minecraft.util.RandomSource random) {
+        if (subs.size() >= SUB_MAX_COUNT) return false;
+        CompoundTag tag = rollSubTag(stack, school, usedGroups(subs, mainTag), random);
+        if (tag == null) return false;
+        subs.add(tag);
+        return true;
+    }
+
+    /** 这组副词条里还有没有能升的（没满 4 级）。 */
+    private static boolean hasNotMaxedSub(ListTag subs) {
+        for (int i = 0; i < subs.size(); i++) {
+            CompoundTag tag = subs.getCompound(i);
+            Affix affix = findAffix(tag.getString(ID));
+            if (affix == null || affix.subStep() <= 0) continue;
+            if (tag.getInt(LEVEL) < SUB_MAX_LEVEL) return true;
+        }
+        return false;
+    }
+
+    /** 读词条根节点里记录的流派；没记或者记坏了就按装备类别取概率更高的一档兜底。 */
+    private static School schoolOf(CompoundTag root, ItemStack stack) {
+        String stored = root.getString(SCHOOL);
+        if ("magic".equals(stored)) return School.MAGIC;
+        if ("physical".equals(stored)) return School.PHYSICAL;
+        Item item = stack.getItem();
+        if (item instanceof MagicStaffItem) return School.MAGIC;
+        ResourceLocation registryId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item);
+        String path = registryId == null ? "" : registryId.getPath();
+        boolean modded = registryId != null && registryId.getNamespace().equals(GeneratedMod.MOD_ID);
+        if (modded && (path.startsWith("rough_cloth_") || path.startsWith("magic_cloth_") || path.endsWith("_robe"))) {
+            return School.MAGIC;
+        }
+        return School.PHYSICAL;
+    }
+
+    private static CompoundTag findTag(ListTag list, String id) {
+        for (int i = 0; i < list.size(); i++) if (id.equals(list.getCompound(i).getString(ID))) return list.getCompound(i);
+        return null;
+    }
+
+    // ------------------------------------------------------------------
+    // 武备加工台：读等级、敲击升级、超导魔晶洗练
+    // ------------------------------------------------------------------
+
+    /** 洗练次数存在词条根节点里，跟着装备走（换台机器、换存档都不会丢）。 */
+    private static final String REROLL = "rerolls";
+
+    /**
+     * 超导魔晶洗练的品质概率表，行 = 第几次重置（第 7 次及以后沿用最后一行），列 = C / B / A / S / SS / SSS。
+     * 单位是百分数，每行合计 100。
+     */
+    private static final double[][] REROLL_TABLE = {
+            {50.00, 40.00, 5.00, 2.50, 1.50, 1.00},
+            {40.00, 50.00, 5.00, 2.50, 1.50, 1.00},
+            {30.00, 50.00, 15.00, 2.50, 1.50, 1.00},
+            {23.39, 52.63, 17.54, 3.51, 1.76, 1.17},
+            {12.99, 38.96, 25.97, 16.23, 3.25, 2.60},
+            {5.26, 21.05, 31.58, 21.05, 10.53, 10.53}
+    };
+
+    /** 界面上的一条词条：只带渲染需要的东西，不暴露内部的 {@link Grade}/{@link School}。 */
+    public record AffixLine(String nameKey, boolean percent, double value, int level, boolean main,
+                            String element) {
+        /** 普通词条可用的构造器：没有「哪一系元素」这个说法。 */
+        public AffixLine(String nameKey, boolean percent, double value, int level, boolean main) {
+            this(nameKey, percent, value, level, main, null);
+        }
+
+        public Component name() {
+            if (element == null || element.isEmpty()) return Component.translatable(nameKey);
+            return Component.translatable(nameKey, Component.translatable("gui.dimensional_mana.element." + element));
+        }
+
+        public String displayValue() {
+            return format(value) + (percent ? "%" : "");
+        }
+
+        /**
+         * 和装备 Tooltip 同一种写法：主词条「攻击速度 8%（2级）」按 LV 显示；
+         * 副词条初始 1 级算「无等级」只写名字和数值，提升后按 +1～+4 标。
+         */
+        public Component asLine() {
+            if (main) return Component.translatable("tooltip.dimensional_mana.affix_line", name(), displayValue(), level);
+            if (level <= 1) return Component.translatable("tooltip.dimensional_mana.affix_line_sub_plain", name(), displayValue());
+            return Component.translatable("tooltip.dimensional_mana.affix_line_sub", name(), displayValue(), level - 1);
+        }
+    }
+
+    /** 一件武备的词条面板数据；{@link #empty()} 为真表示这件装备还没有词条。 */
+    public record View(String gradeName, String schoolId, int mainLevel, AffixLine main, List<AffixLine> subs,
+                       int rerolls) {
+        public static View none() {
+            return new View("", "", 0, null, List.of(), 0);
+        }
+
+        public boolean empty() {
+            return main == null;
+        }
+    }
+
+    /** 读出装备的词条面板数据；没有词条时返回 {@link View#none()}。 */
+    public static View view(ItemStack stack) {
+        CompoundTag root = affixRoot(stack);
+        if (root == null) return View.none();
+        CompoundTag mainTag = root.getCompound(MAIN);
+        Affix mainAffix = findAffix(mainTag.getString(ID));
+        AffixLine mainLine = mainAffix == null ? null
+                : new AffixLine(mainAffix.name(), mainAffix.percent(), mainTag.getDouble(VALUE),
+                mainTag.getInt(LEVEL), true, mainTag.getString(ELEMENT));
+        List<AffixLine> lines = new ArrayList<>();
+        ListTag subs = root.getList(SUBS, 10);
+        for (int i = 0; i < subs.size() && lines.size() < SUB_MAX_COUNT; i++) {
+            CompoundTag tag = subs.getCompound(i);
+            Affix affix = findAffix(tag.getString(ID));
+            if (affix == null) continue;
+            lines.add(new AffixLine(affix.name(), affix.percent(), tag.getDouble(VALUE), tag.getInt(LEVEL),
+                    false, tag.getString(ELEMENT)));
+        }
+        return new View(root.getString(GRADE), root.getString(SCHOOL), mainTag.getInt(LEVEL), mainLine, lines,
+                Math.max(0, root.getInt(REROLL)));
+    }
+
+    /** 武备等级 = 主词条等级。 */
+    public static int mainLevel(ItemStack stack) {
+        CompoundTag root = affixRoot(stack);
+        return root == null ? 0 : root.getCompound(MAIN).getInt(LEVEL);
+    }
+
+    /** 这件装备被超导魔晶洗练过几次。 */
+    public static int rerollCount(ItemStack stack) {
+        CompoundTag root = affixRoot(stack);
+        return root == null ? 0 : Math.max(0, root.getInt(REROLL));
+    }
+
+    /**
+     * 敲击升级：主词条 +1 级，跨过 3 / 6 / 9 / 12 级时追加一次随机副词条成长。
+     *
+     * <p>和魔晶铁砧「同类装备合成」用的是同一套等级曲线与成长规则，
+     * 所以打铁升上来的武器和合出来的武器数值完全一致。</p>
+     */
+    public static ItemStack upgradeMainLevel(ItemStack stack, net.minecraft.util.RandomSource random) {
+        CompoundTag root = affixRoot(stack);
+        if (root == null || root.getCompound(MAIN).getInt(LEVEL) >= MAIN_MAX_LEVEL) return stack;
+        root = root.copy();
+        CompoundTag main = root.getCompound(MAIN);
+        int before = main.getInt(LEVEL);
+        levelUpMain(main);
+        ListTag subs = root.getList(SUBS, 10);
+        School school = schoolOf(root, stack);
+        for (int i = 0; i < subGrowthCrossings(before, main.getInt(LEVEL)); i++) {
+            root.put(MAIN, main);
+            growSubStage(subs, root, stack, school, random);
+        }
+        root.put(MAIN, main);
+        root.put(SUBS, subs);
+        return writeRoot(stack, root, Grade.parse(root.getString(GRADE)));
+    }
+
+    /**
+     * 超导魔晶洗练：品质、流派、主词条与副词条全部重抽，重置次数 +1。
+     *
+     * <p>概率随重置次数变化（见 {@link #REROLL_TABLE}），越洗越容易出高品质。
+     * 流派按 {@link #schoolFor} 的类别概率表重掷（武器 80/20、防具 60/40、工具全物理、
+     * 法杖布甲全魔法、魔精钢 50/50），不会出现物理武器配魔法词条。</p>
+     */
+    public static ItemStack rerollAffixes(ItemStack stack, net.minecraft.util.RandomSource random) {
+        if (affixRoot(stack) == null) return stack;
+        int count = rerollCount(stack) + 1;
+        int row = Math.min(REROLL_TABLE.length - 1, count - 1);
+        double roll = random.nextDouble() * 100.0D;
+        Grade[] grades = Grade.values();
+        Grade grade = grades[grades.length - 1];
+        double accumulated = 0.0D;
+        for (int i = 0; i < grades.length; i++) {
+            accumulated += REROLL_TABLE[row][i];
+            if (roll < accumulated) {
+                grade = grades[i];
+                break;
+            }
+        }
+        CompoundTag root = buildRoot(stack, grade, schoolFor(stack, random), random, false);
+        root.putInt(REROLL, count);
+        return writeRoot(stack, root, grade);
+    }
+
+    // ------------------------------------------------------------------
+    // 武备加工台：武备强化石（副词条强制成长）与锻造模板（白板赋词条）
+    // ------------------------------------------------------------------
+
+    /** 用锻造模板打造出来的武备，升级魔素消耗要额外 +50%，标记跟着装备走。 */
+    private static final String TEMPLATE_FORGED = "template_forged";
+
+    /** 锻造模板赋予词条的品质权重，顺序与 {@link Grade} 一致：C / B / A / S / SS / SSS。 */
+    private static final double[] TEMPLATE_WEIGHTS = {40.00, 38.00, 20.00, 1.25, 0.50, 0.25};
+
+    /** 这件武备是不是用锻造模板赋予出来的（升级要贵 50%）。 */
+    public static boolean isTemplateForged(ItemStack stack) {
+        CompoundTag root = affixRoot(stack);
+        return root != null && root.getBoolean(TEMPLATE_FORGED);
+    }
+
+    /**
+     * 锻造模板赋予：给一件白板装备按 C40% / B38% / A20% / S1.25% / SS0.5% / SSS0.25% 抽一次武备。
+     *
+     * <p>流派按 {@link #schoolFor} 的类别概率表自动掷（武器 80% 物理、防具 60% 物理、
+     * 工具与法杖各走一边、魔精钢五五开），词条条数与等级沿用该品质的常规规则；
+     * 唯一区别是根节点里会留下 {@link #TEMPLATE_FORGED} 标记，之后每次敲击升级多花 50% 魔素。</p>
+     */
+    public static ItemStack applyTemplateAffix(ItemStack stack, net.minecraft.util.RandomSource random) {
+        Grade grade = rollTemplateGrade(random);
+        CompoundTag root = buildRoot(stack, grade, schoolFor(stack, random), random, false);
+        root.putBoolean(TEMPLATE_FORGED, true);
+        ItemStack output = stack.copyWithCount(1);
+        return writeRoot(output, root, grade);
+    }
+
+    private static Grade rollTemplateGrade(net.minecraft.util.RandomSource random) {
+        Grade[] grades = Grade.values();
+        double roll = random.nextDouble() * 100.0D;
+        double accumulated = 0.0D;
+        for (int i = 0; i < grades.length; i++) {
+            accumulated += TEMPLATE_WEIGHTS[Math.min(i, TEMPLATE_WEIGHTS.length - 1)];
+            if (roll < accumulated) return grades[i];
+        }
+        return Grade.C;
+    }
+
+    /**
+     * 这件武备的副词条还能不能「成长」：有没满 4 级的，或者还没凑齐 4 条（可以再加新的）。
+     */
+    public static boolean hasGrowableSub(ItemStack stack) {
+        CompoundTag root = affixRoot(stack);
+        if (root == null) return false;
+        ListTag subs = root.getList(SUBS, 10);
+        if (hasNotMaxedSub(subs)) return true;
+        return subs.size() < SUB_MAX_COUNT
+                && hasAffixAvailable(subs, root.getCompound(MAIN), stack, schoolOf(root, stack));
+    }
+
+    /**
+     * 武备强化石：强制一次副词条成长。
+     *
+     * <p>走的是和升级跨档同一个 {@link #growSubStage}：空副词条必定补 1～3 条，
+     * 否则 50% 加新词条、50% 升已有词条。已经 4 条全满时原样返回，由菜单那边提示玩家。</p>
+     */
+    public static ItemStack growOneSub(ItemStack stack, net.minecraft.util.RandomSource random) {
+        CompoundTag root = affixRoot(stack);
+        if (root == null || !hasGrowableSub(stack)) return stack;
+        root = root.copy();
+        ListTag subs = root.getList(SUBS, 10);
+        growSubStage(subs, root, stack, schoolOf(root, stack), random);
+        root.put(SUBS, subs);
+        return writeRoot(stack, root, Grade.parse(root.getString(GRADE)));
+    }
+
+    /** 装备改完立刻重算属性：正穿在身上的装备不用再等下一次玩家 tick。 */
+    public static void refreshPlayer(Player player) {
+        if (player != null && !player.level().isClientSide) refresh(player);
+    }
+
+    // ------------------------------------------------------------------
+    // 砂轮剥皮（4.2）：砂轮修复把累积惩罚设成 2^(诅咒数-1)，非诅咒附魔与词条全部丢失。
+    // ------------------------------------------------------------------
+
+    /** 砂轮磨装备：剥掉词条与非诅咒附魔，并把累积惩罚改写成 2^(诅咒附魔数量-1)。 */
+    public static void onGrindstonePlace(net.neoforged.neoforge.event.GrindstoneEvent.OnPlaceItem event) {
+        ItemStack top = event.getTopItem();
+        if (top.isEmpty() || !isEquipment(top)) return;
+        ItemStack bottom = event.getBottomItem();
+        if (bottom != null && !bottom.isEmpty()) return;   // 双槽是“合成修复”，交给原版
+        if (ElementPlating.hasPlating(top) || BlueprintGrinding.isGrindable(top)) return;
+        // 只有“真的带了东西可剥”（词条或附魔）才接管；单纯的累积惩罚不给免费重置。
+        boolean enchanted = EnchantmentHelper.hasAnyEnchantments(top);
+        if (!hasAffix(top) && !enchanted) return;
+        ItemStack output = top.copyWithCount(top.getCount());
+        stripAffixes(output);
+        int curses = countCurses(output);
+        stripNonCurseEnchantments(output);
+        int penalty = cursePenalty(curses);
+        if (penalty <= 0) output.remove(net.minecraft.core.component.DataComponents.REPAIR_COST);
+        else output.set(net.minecraft.core.component.DataComponents.REPAIR_COST, penalty);
+        event.setOutput(output);
+    }
+
+    /** 累积惩罚 = 2^(诅咒魔咒数量 - 1)；没有诅咒就清零。 */
+    public static int cursePenalty(int curses) {
+        if (curses <= 0) return 0;
+        return 1 << Math.min(20, curses - 1);
+    }
+
+    private static int countCurses(ItemStack stack) {
+        ItemEnchantments enchantments = stack.getOrDefault(
+                net.minecraft.core.component.DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY);
+        int count = 0;
+        for (Holder<Enchantment> enchantment : enchantments.keySet()) {
+            if (enchantment.is(net.minecraft.tags.EnchantmentTags.CURSE)) count++;
+        }
+        return count;
+    }
+
+    /** 只留下诅咒附魔，其余全部抹掉（砂轮剥皮的代价）。 */
+    public static void stripNonCurseEnchantments(ItemStack stack) {
+        if (!EnchantmentHelper.hasAnyEnchantments(stack)) return;
+        ItemEnchantments current = stack.getOrDefault(
+                net.minecraft.core.component.DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY);
+        ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(current);
+        mutable.removeIf(enchantment -> !enchantment.is(net.minecraft.tags.EnchantmentTags.CURSE));
+        stack.set(net.minecraft.core.component.DataComponents.ENCHANTMENTS, mutable.toImmutable());
+    }
+
+    /** 抹掉装备上的整套词条数据（含词条前缀名与传说光效）。 */
+    public static void stripAffixes(ItemStack stack) {
+        if (!hasAffix(stack)) return;
+        CustomData data = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+        CompoundTag tag = data == null ? new CompoundTag() : data.copyTag();
+        tag.remove(ROOT);
+        if (tag.isEmpty()) stack.remove(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+        else CustomData.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, stack, tag);
+        stack.remove(net.minecraft.core.component.DataComponents.CUSTOM_NAME);
+        stack.remove(net.minecraft.core.component.DataComponents.ENCHANTMENT_GLINT_OVERRIDE);
+    }
+
+    /** 当前累积惩罚（非仅重命名操作次数）。 */
+    public static int penaltyOf(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return 0;
+        return Math.max(0, stack.getOrDefault(net.minecraft.core.component.DataComponents.REPAIR_COST, 0));
+    }
+
+    /** 魔晶铁砧不损坏；普通铁砧仍保留原版损坏概率。 */
+    public static void onAnvilRepair(AnvilRepairEvent event) {
+        if (hasAffix(event.getOutput())) event.setBreakChance(0.0F);
+    }
+
+    /** 每次装备变化立即重算；Tick 只是兜底，避免旧存档或换手漏刷新。 */
+    public static void onEquipmentChange(LivingEquipmentChangeEvent event) {
+        if (!event.getEntity().level().isClientSide && event.getEntity() instanceof Player player) refresh(player);
+    }
+
+    public static void onPlayerTick(PlayerTickEvent.Post event) {
+        Player player = event.getEntity();
+        if (player.level().isClientSide || player.tickCount % 20 != 0) return;
+        refresh(player);
+    }
+
+    /**
+     * 词条提供的斗气百分比加成，单位是百分数，例如 3.5 表示 +3.5%。
+     *
+     * <p>r291 起这些数值来自真实注册的属性（{@link SpellAttributes#BATTLE_QI_PERCENT}），
+     * 词条刷新时以属性修正的形式写进玩家，所以 Apothic Attributes 一类面板也能读到。</p>
+     */
+    public static double battleQiPercentBonus(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.BATTLE_QI_PERCENT, 0.0);
+    }
+
+    /** 词条提供的斗气固定值加成。 */
+    public static int battleQiFlatBonus(Player player) {
+        return (int)Math.round(SpellAttributes.value(player, SpellAttributes.BATTLE_QI_FLAT, 0.0));
+    }
+
+    /** 词条提供的魔素上限百分比，单位是百分数。 */
+    public static double manaPercentBonus(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.MANA_MAX_PERCENT, 0.0);
+    }
+
+    /** 词条提供的魔素上限固定值。 */
+    public static double manaFlatBonus(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.MANA_MAX_FLAT, 0.0);
+    }
+
+    /** 词条提供的魔素亲和固定值。 */
+    public static double manaAffinityBonus(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.MANA_AFFINITY, 0.0);
+    }
+
+    /** 词条提供的元素精通固定值。 */
+    public static float elementalMasteryBonus(Player player) {
+        return (float)SpellAttributes.value(player, SpellAttributes.ELEMENTAL_MASTERY, 0.0);
+    }
+
+    /** 指定元素词条提供的独立元素伤害乘区（通用元素伤害 + 单元素伤害）。 */
+    public static double elementalDamageMultiplier(Player player, String elementId) {
+        double percent = SpellAttributes.value(player, SpellAttributes.ELEMENTAL_DAMAGE, 0.0)
+                + SpellAttributes.value(player, SpellAttributes.elementDamage(elementId), 0.0);
+        return 1.0 + percent / 100.0;
+    }
+
+    // ------------------------------------------------------------------
+    // r332 物理词条扩充：运行时读这些值。全部走真实注册的属性，所以面板能查到、别的模组也读得到。
+    // ------------------------------------------------------------------
+
+    /** 破甲：攻击时无视目标多少点护甲值。 */
+    public static double armorPenetration(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.ARMOR_PENETRATION, 0.0);
+    }
+
+    /** 物理吸血百分比：造成的物理伤害按这个百分数回血。 */
+    public static double lifestealPercent(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.LIFESTEAL, 0.0);
+    }
+
+    /** 斗气额外恢复：每秒多恢复多少点斗气。 */
+    public static double battleQiRegenBonus(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.BATTLE_QI_REGEN, 0.0);
+    }
+
+    /** 斗气技能强度：每点让斗气技能（拔刀斩、剑气）伤害 +2.5%，这里直接返回倍率。 */
+    public static double battleQiSkillMultiplier(Player player) {
+        return 1.0 + SpellAttributes.value(player, SpellAttributes.BATTLE_QI_SKILL_POWER, 0.0) * 0.025;
+    }
+
+    /** 连击伤害百分比：每层给多少增伤。 */
+    public static double comboDamagePercent(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.COMBO_DAMAGE, 0.0);
+    }
+
+    /** 处决伤害百分比：目标进入处决线时的额外增伤。 */
+    public static double executeDamagePercent(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.EXECUTE_DAMAGE, 0.0);
+    }
+
+    /** 见切伤害百分比：对招架破绽中的目标的额外增伤。 */
+    public static double mikiriDamagePercent(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.MIKIRI_DAMAGE, 0.0);
+    }
+
+    /** 招架特化：完美格挡判定窗口额外延长多少刻。 */
+    public static int parryWindowBonus(Player player) {
+        return (int)Math.round(SpellAttributes.value(player, SpellAttributes.PARRY_WINDOW, 0.0));
+    }
+
+    /** 箭矢伤害固定值。 */
+    public static double arrowDamageFlat(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.ARROW_DAMAGE_FLAT, 0.0);
+    }
+
+    /** 箭矢伤害百分比。 */
+    public static double arrowDamagePercent(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.ARROW_DAMAGE_PERCENT, 0.0);
+    }
+
+    /**
+     * 元素附加：某一件装备/整套装备附带的「哪一系、多少点」元素伤害。
+     *
+     * <p>返回 {@code 元素 id → 点数}；12 系都试一遍，只把有值的放进结果。
+     * 物理命中时按这份表逐系结算附加的元素伤害。</p>
+     */
+    public static java.util.Map<String, Double> elementalAddition(Player player) {
+        java.util.Map<String, Double> map = new java.util.LinkedHashMap<>();
+        if (player == null) return map;
+        for (String element : ELEMENT_IDS) {
+            double value = SpellAttributes.value(player, SpellAttributes.elementAddition(element), 0.0);
+            if (value > 0.0001) map.put(element, value);
+        }
+        return map;
+    }
+
+    private static double totalAffixValue(Player player, String id) {
+        double total = 0.0;
+        for (ItemStack stack : relevantEquipment(player)) total += affixValue(stack, id);
+        return total;
+    }
+
+    private static double affixValue(ItemStack stack, String id) {
+        CompoundTag root = affixRoot(stack);
+        if (root == null) return 0.0;
+        double total = 0.0;
+        CompoundTag main = root.getCompound(MAIN);
+        if (id.equals(main.getString(ID))) total += main.getDouble(VALUE);
+        ListTag subs = root.getList(SUBS, 10);
+        for (int i = 0; i < subs.size(); i++) {
+            CompoundTag sub = subs.getCompound(i);
+            if (id.equals(sub.getString(ID))) total += sub.getDouble(VALUE);
+        }
+        return total;
+    }
+
+    /** 12 个可吃单元素伤害词条的元素 id（11 种初级元素 + 奥术）。 */
+    private static final String[] ELEMENT_IDS = {
+            "fire", "water", "ice", "lightning", "wind", "earth",
+            "nature", "metal", "light", "poison", "sound", "arcane"};
+
+    private static int elementIndex(String id) {
+        for (int i = 0; i < ELEMENT_IDS.length; i++) if (ELEMENT_IDS[i].equals(id)) return i;
+        return -1;
+    }
+
+    private static void refresh(Player player) {
+        clearModifier(player, SpellAttributes.SPELL_POWER, SPELL_POWER_MOD);
+        clearModifier(player, SpellAttributes.SPELL_HASTE, SPELL_HASTE_MOD);
+        clearModifier(player, SpellAttributes.SPELL_CRIT_CHANCE, SPELL_CRIT_MOD);
+        clearModifier(player, SpellAttributes.SPELL_CRIT_DAMAGE, SPELL_CRIT_DAMAGE_MOD);
+        clearModifier(player, SpellAttributes.SPELL_PENETRATION, SPELL_PENETRATION_MOD);
+        clearModifier(player, SpellAttributes.PHYSICAL_CRIT_CHANCE, PHYSICAL_CRIT_MOD);
+        clearModifier(player, SpellAttributes.PHYSICAL_CRIT_DAMAGE, PHYSICAL_CRIT_DAMAGE_MOD);
+        clearModifier(player, SpellAttributes.MANA_COST_REDUCTION, MANA_REDUCTION_MOD);
+        clearModifier(player, Attributes.ATTACK_DAMAGE, ATTACK_DAMAGE_MOD);
+        clearModifier(player, Attributes.ATTACK_DAMAGE, ATTACK_DAMAGE_PERCENT_MOD);
+        clearModifier(player, Attributes.ATTACK_SPEED, ATTACK_SPEED_MOD);
+        clearModifier(player, Attributes.MAX_HEALTH, MAX_HEALTH_MOD);
+        clearModifier(player, Attributes.MAX_HEALTH, MAX_HEALTH_PERCENT_MOD);
+        // 词条专用的“可被外部面板读到”的属性：先清掉上一轮，再按当前装备重新写。
+        clearModifier(player, SpellAttributes.MANA_MAX_PERCENT, AFFIX_MANA_PERCENT_MOD);
+        clearModifier(player, SpellAttributes.MANA_MAX_FLAT, AFFIX_MANA_FLAT_MOD);
+        clearModifier(player, SpellAttributes.MANA_AFFINITY, AFFIX_MANA_AFFINITY_MOD);
+        clearModifier(player, SpellAttributes.ELEMENTAL_MASTERY, AFFIX_MASTERY_MOD);
+        clearModifier(player, SpellAttributes.ELEMENTAL_DAMAGE, AFFIX_ELEMENT_DAMAGE_MOD);
+        clearModifier(player, SpellAttributes.BATTLE_QI_PERCENT, AFFIX_QI_PERCENT_MOD);
+        clearModifier(player, SpellAttributes.BATTLE_QI_FLAT, AFFIX_QI_FLAT_MOD);
+        // r332 物理词条扩充：破甲、吸血、连击、处决、见切、招架窗口、箭矢、斗气恢复 / 技强、元素附加。
+        clearModifier(player, SpellAttributes.ARMOR_PENETRATION, AFFIX_ARMOR_PEN_MOD);
+        clearModifier(player, SpellAttributes.LIFESTEAL, AFFIX_LIFESTEAL_MOD);
+        clearModifier(player, SpellAttributes.BATTLE_QI_REGEN, AFFIX_QI_REGEN_MOD);
+        clearModifier(player, SpellAttributes.BATTLE_QI_SKILL_POWER, AFFIX_QI_SKILL_POWER_MOD);
+        clearModifier(player, SpellAttributes.COMBO_DAMAGE, AFFIX_COMBO_MOD);
+        clearModifier(player, SpellAttributes.EXECUTE_DAMAGE, AFFIX_EXECUTE_MOD);
+        clearModifier(player, SpellAttributes.MIKIRI_DAMAGE, AFFIX_MIKIRI_MOD);
+        clearModifier(player, SpellAttributes.PARRY_WINDOW, AFFIX_PARRY_WINDOW_MOD);
+        clearModifier(player, SpellAttributes.ARROW_DAMAGE_FLAT, AFFIX_ARROW_FLAT_MOD);
+        clearModifier(player, SpellAttributes.ARROW_DAMAGE_PERCENT, AFFIX_ARROW_PERCENT_MOD);
+        for (String element : ELEMENT_IDS) {
+            clearModifier(player, SpellAttributes.elementDamage(element), affixElementModifier(element));
+            clearModifier(player, SpellAttributes.elementAddition(element), affixElementAdditionModifier(element));
+        }
+
+        double spellPower = 0, haste = 0, crit = 0, critDamage = 0, penetration = 0, efficiency = 0;
+        double physicalCrit = 0, physicalCritDamage = 0;
+        double attackDamage = 0, attackDamagePercent = 0, attackSpeed = 0, maxHealth = 0, maxHealthPercent = 0;
+        double manaPercent = 0, manaFlat = 0, affinity = 0, mastery = 0, elementDamage = 0;
+        double qiPercent = 0, qiFlat = 0;
+        double armorPen = 0, lifesteal = 0, qiRegen = 0, qiSkillPower = 0;
+        double comboDamage = 0, executeDamage = 0, mikiriDamage = 0, parryWindow = 0;
+        double arrowFlat = 0, arrowPercent = 0, armorValue = 0, armorToughness = 0;
+        double[] elementValues = new double[ELEMENT_IDS.length];
+        double[] elementAdditions = new double[ELEMENT_IDS.length];
+        for (ItemStack stack : relevantEquipment(player)) {
+            CompoundTag root = affixRoot(stack);
+            if (root == null) continue;
+            List<CompoundTag> all = new ArrayList<>();
+            all.add(root.getCompound(MAIN));
+            ListTag subs = root.getList(SUBS, 10);
+            for (int i = 0; i < subs.size(); i++) all.add(subs.getCompound(i));
+            for (CompoundTag tag : all) {
+                Affix affix = findAffix(tag.getString(ID));
+                if (affix == null) continue;
+                double value = tag.getDouble(VALUE);
+                switch (affix.id()) {
+                    // 法术强度百分比按最终法术伤害百分比换算；固定值仍按属性点数结算（1 点 = 0.21%）。
+                    case "spell_power_percent" -> spellPower += value / 0.21;
+                    case "spell_power_flat" -> spellPower += value;
+                    case "mana_penetration" -> penetration += value * .0025;
+                    case "spell_crit_chance" -> crit += value / 100.0;
+                    case "spell_crit_damage" -> critDamage += value / 100.0;
+                    case "mana_efficiency" -> efficiency += value * .0025;
+                    case "physical_damage_flat" -> attackDamage += value;
+                    case "physical_damage_percent" -> attackDamagePercent += value / 100.0;
+                    case "physical_crit_chance" -> physicalCrit += value / 100.0;
+                    case "physical_crit_damage" -> physicalCritDamage += value / 100.0;
+                    case "attack_speed" -> attackSpeed += value / 100.0;
+                    case "max_health_flat" -> maxHealth += value;
+                    case "max_health_percent" -> maxHealthPercent += value / 100.0;
+                    case "mana_percent" -> manaPercent += value;
+                    case "mana_flat" -> manaFlat += value;
+                    case "mana_affinity" -> affinity += value;
+                    case "elemental_mastery" -> mastery += value;
+                    case "element_damage" -> elementDamage += value;
+                    case "battle_qi_percent" -> qiPercent += value;
+                    case "battle_qi_flat" -> qiFlat += value;
+                    case "armor_penetration" -> armorPen += value;
+                    case "lifesteal" -> lifesteal += value;
+                    case "battle_qi_regen" -> qiRegen += value;
+                    case "battle_qi_skill_power" -> qiSkillPower += value;
+                    case "combo_damage" -> comboDamage += value;
+                    case "execute_damage" -> executeDamage += value;
+                    case "mikiri_damage" -> mikiriDamage += value;
+                    case "parry_window" -> parryWindow += value;
+                    case "arrow_damage_flat" -> arrowFlat += value;
+                    case "arrow_damage_percent" -> arrowPercent += value;
+                    case "armor_value" -> armorValue += value;
+                    case "armor_toughness" -> armorToughness += value;
+                    case "elemental_addition" -> {
+                        int added = elementIndex(tag.getString(ELEMENT));
+                        if (added >= 0) elementAdditions[added] += value;
+                    }
+                    default -> {
+                        int element = elementIndex(affix.id().startsWith("element_")
+                                ? affix.id().substring("element_".length()) : "");
+                        if (element >= 0) elementValues[element] += value;
+                    }
+                }
+            }
+        }
+        addModifier(player.getAttribute(SpellAttributes.SPELL_POWER), SPELL_POWER_MOD, spellPower, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.SPELL_HASTE), SPELL_HASTE_MOD, haste, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.SPELL_CRIT_CHANCE), SPELL_CRIT_MOD, crit, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.SPELL_CRIT_DAMAGE), SPELL_CRIT_DAMAGE_MOD, critDamage, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.SPELL_PENETRATION), SPELL_PENETRATION_MOD, Math.min(.95, penetration), AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.PHYSICAL_CRIT_CHANCE), PHYSICAL_CRIT_MOD, physicalCrit, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.PHYSICAL_CRIT_DAMAGE), PHYSICAL_CRIT_DAMAGE_MOD, physicalCritDamage, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.MANA_COST_REDUCTION), MANA_REDUCTION_MOD, Math.min(.95, efficiency), AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(Attributes.ATTACK_DAMAGE), ATTACK_DAMAGE_MOD, attackDamage, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(Attributes.ATTACK_DAMAGE), ATTACK_DAMAGE_PERCENT_MOD, attackDamagePercent, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);
+        addModifier(player.getAttribute(Attributes.ATTACK_SPEED), ATTACK_SPEED_MOD, attackSpeed, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);
+        addModifier(player.getAttribute(Attributes.MAX_HEALTH), MAX_HEALTH_MOD, maxHealth, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(Attributes.MAX_HEALTH), MAX_HEALTH_PERCENT_MOD, maxHealthPercent, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);
+        addModifier(player.getAttribute(SpellAttributes.MANA_MAX_PERCENT), AFFIX_MANA_PERCENT_MOD, manaPercent, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.MANA_MAX_FLAT), AFFIX_MANA_FLAT_MOD, manaFlat, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.MANA_AFFINITY), AFFIX_MANA_AFFINITY_MOD, affinity, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.ELEMENTAL_MASTERY), AFFIX_MASTERY_MOD, mastery, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.ELEMENTAL_DAMAGE), AFFIX_ELEMENT_DAMAGE_MOD, elementDamage, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.BATTLE_QI_PERCENT), AFFIX_QI_PERCENT_MOD, qiPercent, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.BATTLE_QI_FLAT), AFFIX_QI_FLAT_MOD, qiFlat, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.ARMOR_PENETRATION), AFFIX_ARMOR_PEN_MOD, armorPen, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.LIFESTEAL), AFFIX_LIFESTEAL_MOD, lifesteal, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.BATTLE_QI_REGEN), AFFIX_QI_REGEN_MOD, qiRegen, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.BATTLE_QI_SKILL_POWER), AFFIX_QI_SKILL_POWER_MOD, qiSkillPower, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.COMBO_DAMAGE), AFFIX_COMBO_MOD, comboDamage, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.EXECUTE_DAMAGE), AFFIX_EXECUTE_MOD, executeDamage, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.MIKIRI_DAMAGE), AFFIX_MIKIRI_MOD, mikiriDamage, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.PARRY_WINDOW), AFFIX_PARRY_WINDOW_MOD, parryWindow, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.ARROW_DAMAGE_FLAT), AFFIX_ARROW_FLAT_MOD, arrowFlat, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.ARROW_DAMAGE_PERCENT), AFFIX_ARROW_PERCENT_MOD, arrowPercent, AttributeModifier.Operation.ADD_VALUE);
+        // 护甲值与盔甲韧性直接写进原版属性：原版面板、其它模组都直接读得到，护甲减伤也真的按它算。
+        addModifier(player.getAttribute(Attributes.ARMOR), ARMOR_VALUE_MOD, armorValue, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(Attributes.ARMOR_TOUGHNESS), ARMOR_TOUGHNESS_MOD, armorToughness, AttributeModifier.Operation.ADD_VALUE);
+        for (int i = 0; i < ELEMENT_IDS.length; i++) {
+            addModifier(player.getAttribute(SpellAttributes.elementDamage(ELEMENT_IDS[i])),
+                    affixElementModifier(ELEMENT_IDS[i]), elementValues[i], AttributeModifier.Operation.ADD_VALUE);
+            addModifier(player.getAttribute(SpellAttributes.elementAddition(ELEMENT_IDS[i])),
+                    affixElementAdditionModifier(ELEMENT_IDS[i]), elementAdditions[i], AttributeModifier.Operation.ADD_VALUE);
+        }
+        player.setHealth(Math.min(player.getHealth(), player.getMaxHealth()));
+        ElementMastery.invalidate(player);
+        if (player instanceof ServerPlayer serverPlayer) {
+            ManaData.Snapshot mana = ManaData.get(serverPlayer);
+            net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer,
+                    new ManaSyncPayload(mana.mana(), mana.maxMana(), mana.battleQi(), mana.maxBattleQi(),
+                            mana.exhaustionTicks() > 0, ManaConfig.OVERCHARGE_SAFE_RATIO.get()));
+            ProgressSyncPayload.send(serverPlayer);
+        }
+    }
+
+    private static void clearModifier(LivingEntity entity, net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attribute,
+                                      ResourceLocation id) {
+        AttributeInstance instance = entity.getAttribute(attribute);
+        if (instance != null) instance.removeModifier(id);
+    }
+
+    private static void addModifier(AttributeInstance instance, ResourceLocation id, double value, AttributeModifier.Operation operation) {
+        if (instance != null && Math.abs(value) > 0.00001) {
+            instance.addOrUpdateTransientModifier(new AttributeModifier(id, value, operation));
+        }
+    }
+
+    private static List<ItemStack> relevantEquipment(Player player) {
+        List<ItemStack> stacks = new ArrayList<>();
+        for (ItemStack stack : player.getArmorSlots()) stacks.add(stack);
+        stacks.add(player.getMainHandItem());
+        stacks.add(player.getOffhandItem());
+        return stacks;
+    }
+
+    private static boolean isBoss(LivingEntity entity) {
+        String name = entity.getClass().getSimpleName().toLowerCase(Locale.ROOT);
+        return entity instanceof EnderDragon || entity instanceof WitherBoss || name.contains("swordmaster");
+    }
+
+    public static boolean isBossAffix(ItemStack stack) {
+        CompoundTag root = affixRoot(stack);
+        return root != null && root.getBoolean("boss_drop");
+    }
+
+    private static Grade gradeFor(LivingEntity entity) {
+        String name = entity.getClass().getSimpleName().toLowerCase(Locale.ROOT);
+        if (name.contains("corruptedwither")) return Grade.values()[2 + entity.getRandom().nextInt(4)];
+        if (entity instanceof EnderDragon) return Grade.values()[3 + entity.getRandom().nextInt(3)];
+        if (entity instanceof WitherBoss) return weighted(entity.getRandom(), Grade.B, Grade.S, .55);
+        if (name.contains("swordmaster")) return weighted(entity.getRandom(), Grade.A, Grade.SS, .60);
+        if (entity.level().dimension() == Level.END) return weighted(entity.getRandom(), Grade.A, Grade.SSS, .50);
+        if (entity.level().dimension() == Level.NETHER) return weighted(entity.getRandom(), Grade.C, Grade.A, .70);
+        return weighted(entity.getRandom(), Grade.C, Grade.B, .90);
+    }
+
+    private static Grade weighted(net.minecraft.util.RandomSource random, Grade low, Grade high, double lowChance) {
+        return random.nextDouble() < lowChance ? low : high;
+    }
+
+    private static School forcedSchool(LivingEntity entity) {
+        String name = entity.getClass().getSimpleName().toLowerCase(Locale.ROOT);
+        if (name.contains("swordmaster") || entity instanceof WitherBoss) return School.PHYSICAL;
+        if (name.contains("ancientmagic") || name.contains("magicguard")) return School.MAGIC;
+        return null;
+    }
+
+    /**
+     * 装备的流派偏好，按装备类别掷概率：
+     *
+     * <table border="1">
+     *   <caption>流派概率</caption>
+     *   <tr><th>类别</th><th>物理</th><th>魔法</th></tr>
+     *   <tr><td>原版武器（剑、斧、三叉戟、弓、弩）</td><td>80%</td><td>20%（罕见的「魔剑士」极品）</td></tr>
+     *   <tr><td>原版防具（头盔、胸甲、护腿、靴子）</td><td>60%</td><td>40%</td></tr>
+     *   <tr><td>原版工具（镐、锹、锄）</td><td>100%</td><td>—</td></tr>
+     *   <tr><td>模组法杖、布甲系防具</td><td>—</td><td>100%</td></tr>
+     *   <tr><td>模组魔精钢装备</td><td>50%</td><td>50%</td></tr>
+     * </table>
+     *
+     * <p>布甲以前是看物品名里有没有「布」字，英文环境下名字是 “Rough Cloth Chestplate”，
+     * 判定就翻了车（同一件装备换语言就换流派）。现在优先按注册 id 判定，名字只留作兜底。</p>
+     */
+    private static School schoolFor(ItemStack stack, net.minecraft.util.RandomSource random) {
+        Item item = stack.getItem();
+        if (item instanceof MagicStaffItem) return School.MAGIC;
+        ResourceLocation registryId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item);
+        boolean modded = registryId != null && registryId.getNamespace().equals(GeneratedMod.MOD_ID);
+        String path = registryId == null ? "" : registryId.getPath();
+        if (modded && (path.startsWith("rough_cloth_") || path.startsWith("magic_cloth_") || path.endsWith("_robe"))) {
+            return School.MAGIC;
+        }
+        // 魔精钢装备：物理、魔法各一半（工具也不例外，它本身就是魔法与锻造的产物）。
+        if (modded && path.startsWith("mojing_steel_")) {
+            return random.nextDouble() < 0.50 ? School.PHYSICAL : School.MAGIC;
+        }
+        // 兜底：旧存档里用「布」字命名的布甲仍然固定魔法。
+        if (item instanceof ArmorItem armor && armor.getType() == ArmorItem.Type.CHESTPLATE
+                && stack.getHoverName().getString().contains("布")) return School.MAGIC;
+        // 防具 60/40。
+        if (item instanceof ArmorItem) {
+            return random.nextDouble() < 0.60 ? School.PHYSICAL : School.MAGIC;
+        }
+        // 镐、锹、锄这类纯工具：固定物理。
+        if (item instanceof PickaxeItem || item instanceof ShovelItem || item instanceof HoeItem) {
+            return School.PHYSICAL;
+        }
+        // 剑、斧、三叉戟、弓、弩与其余武器：80/20。
+        return random.nextDouble() < 0.80 ? School.PHYSICAL : School.MAGIC;
+    }
+
+    public static boolean isEquipment(ItemStack stack) {
+        Item item = stack.getItem();
+        return item instanceof ArmorItem || item instanceof TieredItem || item instanceof BowItem
+                || item instanceof CrossbowItem || item instanceof MagicStaffItem;
+    }
+
+    /**
+     * 物理加伤词条同样吃弓、弩与投掷三叉戟：原版弹射物伤害只按弹体自己的初速结算，
+     * 不读射手的攻击伤害属性，所以穿戴与主手装备上的「物理伤害」对射击一直是空的。
+     * 这里在命中入伤时按近战同一公式补一次：(射击伤害 + 固定值) × (1 + 百分比)。
+     *
+     * <p>只取词条自己那两个属性修正（{@link #ATTACK_DAMAGE_MOD} / {@link #ATTACK_DAMAGE_PERCENT_MOD}），
+     * 不读属性总值，避免把武器底伤重复算进弹道。</p>
+     */
+    public static void onRangedIncomingDamage(net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent event) {
+        if (event.getEntity().level().isClientSide || event.getAmount() <= 0.0F) return;
+        net.minecraft.world.damagesource.DamageSource source = event.getSource();
+        if (!(source.getDirectEntity() instanceof net.minecraft.world.entity.projectile.AbstractArrow)
+                && !(source.getDirectEntity() instanceof net.minecraft.world.entity.projectile.ThrownTrident)) return;
+        if (!(source.getEntity() instanceof Player shooter) || shooter == event.getEntity()) return;
+        AttributeInstance attack = shooter.getAttribute(Attributes.ATTACK_DAMAGE);
+        if (attack == null) return;
+        AttributeModifier flat = attack.getModifier(ATTACK_DAMAGE_MOD);
+        AttributeModifier percent = attack.getModifier(ATTACK_DAMAGE_PERCENT_MOD);
+        double bonusFlat = flat == null ? 0.0 : flat.amount();
+        double bonusPercent = percent == null ? 0.0 : percent.amount();
+        // 弓弩专属词条：只在箭矢上生效，单独一个乘区（和通用物理加伤相乘）。
+        boolean arrow = source.getDirectEntity() instanceof net.minecraft.world.entity.projectile.AbstractArrow;
+        double arrowFlat = arrow ? arrowDamageFlat(shooter) : 0.0;
+        double arrowPercent = arrow ? arrowDamagePercent(shooter) / 100.0 : 0.0;
+        if (bonusFlat <= 0.0 && bonusPercent <= 0.0 && arrowFlat <= 0.0 && arrowPercent <= 0.0) return;
+        event.setAmount((float) ((event.getAmount() + bonusFlat + arrowFlat)
+                * (1.0 + bonusPercent) * (1.0 + arrowPercent)));
+    }
+
+    public static boolean hasAffix(ItemStack stack) { return affixRoot(stack) != null; }
+
+    private static CompoundTag affixRoot(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return null;
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        if (data == null || !data.contains(ROOT)) return null;
+        return data.copyTag().getCompound(ROOT);
+    }
+
+    private static Affix findAffix(String id) {
+        for (Affix affix : AFFIXES) if (affix.id().equals(id)) return affix;
+        return null;
+    }
+
+    private static ResourceLocation id(String path) {
+        return ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, path);
+    }
+
+    private EquipmentAffixSystem() { }
+}

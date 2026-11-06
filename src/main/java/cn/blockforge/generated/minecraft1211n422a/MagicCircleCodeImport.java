@@ -159,10 +159,10 @@ public final class MagicCircleCodeImport {
     private static Outcome noCapacity(MagicCircleBlueprint.Carrier carrier, MagicCircleBlueprint blueprint) {
         return Outcome.fail(Component.translatable(
                         "command.dimensional_mana.magiccircle.code.no_capacity",
-                        carrier.fallbackName(), carrier.maxNodes(), carrier.maxLayers(),
+                        Component.translatable(carrier.translationKey()), carrier.maxNodes(), carrier.maxLayers(),
                         blueprint.nodeCount(), blueprint.filledLayerCount()).withStyle(ChatFormatting.RED),
                 Component.translatable("command.dimensional_mana.magiccircle.code.capacity_hint",
-                        MagicCircleBlueprint.Carrier.SILK.fallbackName(),
+                        Component.translatable(MagicCircleBlueprint.Carrier.SILK.translationKey()),
                         MagicCircleBlueprint.Carrier.SILK.maxNodes(),
                         MagicCircleBlueprint.Carrier.SILK.maxLayers()).withStyle(ChatFormatting.GRAY));
     }

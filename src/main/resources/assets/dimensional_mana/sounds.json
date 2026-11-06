@@ -1701,5 +1701,27 @@
         "volume": 1.6
       }
     ]
+  },
+  "magic_crystal_anvil_break": {
+    "subtitle": "subtitles.dimensional_mana.magic_crystal_anvil_break",
+    "sounds": [
+      {
+        "name": "dimensional_mana:block/magic_crystal_anvil_break",
+        "volume": 1.0,
+        "pitch": 1.0,
+        "attenuation_distance": 24
+      }
+    ]
+  },
+  "magic_crystal_anvil_place": {
+    "subtitle": "subtitles.dimensional_mana.magic_crystal_anvil_place",
+    "sounds": [
+      {
+        "name": "dimensional_mana:block/magic_crystal_anvil_place",
+        "volume": 1.0,
+        "pitch": 1.0,
+        "attenuation_distance": 24
+      }
+    ]
   }
 }

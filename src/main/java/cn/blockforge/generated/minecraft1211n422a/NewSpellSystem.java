@@ -2350,6 +2350,7 @@ public final class NewSpellSystem {
         if (event.getEntity().hasEffect(NewSpellContent.PLAGUE)) event.setAmount(event.getAmount() * 0.5F);
         // 鸩毒：任何方式的回血速率减半（与原版中毒的“回血”无关，这里只压治疗量）。
         if (event.getEntity().hasEffect(NewSpellContent.ZHEN_POISON)) event.setAmount(event.getAmount() * 0.5F);
+        if (event.getEntity().hasEffect(NewSpellContent.WOUNDED)) event.setAmount(event.getAmount() * 0.5F);
         MagicEtchingSystem.limitHealing(event);
     }
     public static void jump(net.neoforged.neoforge.event.entity.living.LivingEvent.LivingJumpEvent event) {

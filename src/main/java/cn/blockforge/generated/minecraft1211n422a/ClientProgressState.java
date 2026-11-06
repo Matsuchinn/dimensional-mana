@@ -10,6 +10,7 @@ public final class ClientProgressState {
     private static double affinity = 1.0;
     private static double concentration = 10.0;
     private static int dailyGrowths;
+    private static float elementalMastery;
 
     public static void update(ProgressSyncPayload payload) {
         magicLevel = payload.magicLevel();
@@ -21,6 +22,7 @@ public final class ClientProgressState {
         affinity = payload.affinity();
         concentration = payload.concentration();
         dailyGrowths = payload.dailyGrowths();
+        elementalMastery = payload.elementalMastery();
     }
 
     public static int magicLevel() { return magicLevel; }
@@ -34,6 +36,7 @@ public final class ClientProgressState {
     public static double affinity() { return affinity; }
     public static double concentration() { return concentration; }
     public static int dailyGrowths() { return dailyGrowths; }
+    public static float elementalMastery() { return elementalMastery; }
 
     private ClientProgressState() {}
 }
