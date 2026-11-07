@@ -176,11 +176,16 @@ public final class PhysicalAffixEffects {
             ElementType element = ElementType.byId(entry.getKey());
             if (element == null) {
                 // 奥术不属于 11 种初级元素，没有附着与反应，只算一段奥术法术伤害。
-                SpellDamage.hitResolvedElement(level, attacker, victim, MagicEquipment.ARCANE, extra);
+                // 武备元素附加也能给共鸣核心充能，但不视为暴击。
+                if (SpellDamage.hitResolvedElement(level, attacker, victim, MagicEquipment.ARCANE, extra)) {
+                    ResonanceCore.onElementDamage(attacker, MagicEquipment.ARCANE, false);
+                }
             } else {
                 float resolved = ElementReactionSystem.elementalDamage(attacker, victim, element, extra);
-                if (resolved > 0.0F) {
-                    SpellDamage.hitResolvedElement(level, attacker, victim, element.id(), resolved);
+                if (resolved > 0.0F
+                        && SpellDamage.hitResolvedElement(level, attacker, victim, element.id(), resolved)) {
+                    // 附加元素伤害没有独立暴击判定，因此按普通元素命中充能。
+                    ResonanceCore.onElementDamage(attacker, element.id(), false);
                 }
             }
             if (level instanceof ServerLevel serverLevel) {

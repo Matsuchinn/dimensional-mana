@@ -34,8 +34,7 @@ import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
  * 只给一份通用的「迷失护符」，另外沼泽群系里的任何宝箱都照旧 10% 出剧毒指环。</p>
  */
 public final class RelicLoot {
-    private static final String SKELETON_KILLS = "DimensionalManaSkeletonKills";
-    private static final String SKELETON_REWARD = "DimensionalManaSkeletonReward";
+    private static final String NAMELESS_KILLS = "DimensionalManaNamelessCharmKills";
     private static final int NAMELESS_KILL_TARGET = 100;
 
     public static void addChestLoot(LootTableLoadEvent event) {
@@ -56,7 +55,7 @@ public final class RelicLoot {
                 addPool(event, "smuggler_ring", 0.10F, false);
             }
             if (path.equals("chests/igloo_chest")) addPool(event, "moonlight_blessing", 0.12F, false);
-            if (path.equals("chests/desert_pyramid")) addPool(event, "blazing_blessing", 0.04F, false);
+            if (path.equals("chests/desert_pyramid")) addPool(event, "blazing_blessing", 0.08F, false);
             if (path.equals("chests/abandoned_mineshaft") || path.equals("chests/simple_dungeon")) {
                 addPool(event, "lost_charm", 0.08F, false);
             }
@@ -134,27 +133,22 @@ public final class RelicLoot {
     }
 
     /**
-     * 无名护符：困难模式每累计击杀 100 只骷髅，下一只被击杀的骷髅 50% 掉落。
+     * 无名护符：玩家每击杀 100 个处于「招架破绽」状态的生物，立即必定掉落 1 个。
      *
-     * <p>计数与「下一次机会」都记在击杀者的持久数据里，换维度、重进都不清零。</p>
+     * <p>计数写在击杀者的持久数据中，因此跨维度、跨死亡和重进游戏都不会清零；
+     * 破绽状态由完美招架挂上的 {@link NewSpellContent#PARRY_VULNERABLE} 标记判断。</p>
      */
     private static void rollNamelessCharm(LivingDropsEvent event) {
         LivingEntity entity = event.getEntity();
-        if (!(entity.getType() == net.minecraft.world.entity.EntityType.SKELETON)) return;
+        if (!entity.hasEffect(NewSpellContent.PARRY_VULNERABLE)) return;
         if (!(event.getSource().getEntity() instanceof Player killer)) return;
         CompoundTag data = killer.getPersistentData();
-        if (data.getBoolean(SKELETON_REWARD)) {
-            data.putBoolean(SKELETON_REWARD, false);
-            if (killer.getRandom().nextFloat() < 0.5F) drop(event, entity, "nameless_charm");
-            return;
-        }
-        if (killer.level().getDifficulty() != net.minecraft.world.Difficulty.HARD) return;
-        int kills = data.getInt(SKELETON_KILLS) + 1;
+        int kills = data.getInt(NAMELESS_KILLS) + 1;
         if (kills >= NAMELESS_KILL_TARGET) {
-            data.putInt(SKELETON_KILLS, 0);
-            data.putBoolean(SKELETON_REWARD, true);
+            data.putInt(NAMELESS_KILLS, kills - NAMELESS_KILL_TARGET);
+            drop(event, entity, "nameless_charm");
         } else {
-            data.putInt(SKELETON_KILLS, kills);
+            data.putInt(NAMELESS_KILLS, kills);
         }
     }
 

@@ -50,7 +50,7 @@ side="CLIENT"
 
 [[dependencies.dimensional_mana]]
 modId="geckolib"
-mandatory=true
+type="required"
 versionRange="[4.9.3,)" 
 ordering="AFTER"
 side="BOTH"

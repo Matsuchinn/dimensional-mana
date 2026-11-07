@@ -246,7 +246,7 @@ public final class ManaEvents {
         int qi = effectiveBattleQi(target);
         if (qi <= 0) return;
         int protectiveBattleQi = Math.max(0, qi - battleQiBreakerIgnore(target, event.getSource(), qi));
-        double reduction = Math.min(ManaConfig.BATTLE_QI_REDUCTION_CAP.get(),
+        double reduction = Math.min(RelicEffects.battleQiReductionCap(target),
                 protectiveBattleQi * ManaConfig.BATTLE_QI_REDUCTION_PER_LAYER.get());
         if (reduction <= 0.0) return;
         event.setAmount((float)(event.getAmount() * (1.0 - reduction)));
@@ -278,7 +278,7 @@ public final class ManaEvents {
 
     /** 供指令 / 调试查询：这只生物当前斗气能提供的减伤比例（0 ~ 配置上限）。 */
     public static double battleQiReduction(LivingEntity entity) {
-        return Math.min(ManaConfig.BATTLE_QI_REDUCTION_CAP.get(),
+        return Math.min(RelicEffects.battleQiReductionCap(entity),
                 Math.max(0, effectiveBattleQi(entity)) * ManaConfig.BATTLE_QI_REDUCTION_PER_LAYER.get());
     }
 

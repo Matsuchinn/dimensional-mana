@@ -37,7 +37,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
     private static final int PANEL_HEIGHT = 268;
     private static final int RECIPE_ENTRIES_PER_PAGE = 18;
     private static final List<GuidePage> PAGES = List.of(
-            page("basics", 8), page("crystals", 9), page("furnaces", 9), page("processor", 14),
+            page("basics", 8), page("crystals", 9), page("furnaces", 9), page("processor", 16),
             page("grinding", 8), page("potions", 15), page("exploration", 8), page("enchantments", 12),
             page("magic_equipment", 12), page("progression", 9), page("magic_system", 8), page("schools", 13),
             page("media", 8), page("element_talents", 5), page("element_talents_more", 5),
@@ -54,7 +54,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
             page("new_light_shelter_rift", 9), page("new_poison_pair", 9), page("new_sound_bells", 9),
             page("achievements", 9), page("equipment_affixes", 7), page("adventurer_trade", 10), page("element_plating", 10),
             page("furnace_link", 9), page("mob_combat", 11), page("relics", 19), page("battle_qi_parry", 8),
-            page("plants", 18), page("mana_stone", 6), page("weapon_workbench", 12),
+            page("plants", 18), page("mana_stone", 6), page("weapon_workbench", 16),
+            page("mana_grindstone", 10),
             page("physical_affixes", 12)
     );
     /**
@@ -74,8 +75,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
                     "new_arcane_chaos", "new_nature_tree", "new_metal_ward_swords", "new_light_shelter_rift",
                     "new_poison_pair", "new_sound_bells"),
             chapter("crystals", Items.AMETHYST_CLUSTER, "crystals", "grinding"),
-            chapter("devices", Items.CRAFTING_TABLE, "furnaces", "processor", "weapon_workbench", "furnace_link",
-                    "element_plating"),
+            chapter("devices", Items.CRAFTING_TABLE, "furnaces", "processor", "weapon_workbench", "mana_grindstone",
+                    "furnace_link", "element_plating"),
             chapter("nature", Items.OAK_SAPLING, "plants"),
             chapter("recipes", Items.KNOWLEDGE_BOOK),
             chapter("bestiary", Items.SLIME_BALL),
@@ -685,6 +686,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
         if (id.equals("element_plating")) return Items.SHIELD;
         if (id.equals("furnace_link")) return Items.FURNACE;
         if (id.equals("mob_combat")) return Items.WITHER_SKELETON_SKULL;
+        // 魔晶砂轮用方块自己的物品当图标，一眼能认出是哪台机器。
+        if (id.equals("mana_grindstone")) return GeneratedMod.MOD_ITEMS.get(ManaGrindstoneBlock.BLOCK_ID).get();
         return Items.ENCHANTED_BOOK;
     }
 
@@ -942,6 +945,9 @@ public final class ArcaneCodexGuideScreen extends Screen {
         all.addAll(EnchantBookUpgrade.previews());
         for (CrystalProcessorBlockEntity.ProcessRecipe process : all) {
             if (process.outputs().isEmpty()) continue;
+            // 蚀纹木木棍有 6 种「竖着摆」的摆法，书里只列一条，其余略过，
+            // 免得图鉴里排着六张一模一样的卡片（机器里六种摆法照样都能做）。
+            if (process.id().startsWith("erosion_stick") && !process.id().equals("erosion_stick_0_0")) continue;
             boolean shaped = !process.pattern().isEmpty();
             List<GuideIngredient> ingredients = new ArrayList<>();
             if (shaped) {

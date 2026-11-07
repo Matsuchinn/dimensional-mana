@@ -11,6 +11,7 @@ import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.tags.EntityTypeTags;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
@@ -84,6 +85,9 @@ public final class RelicEffects {
     public static final String SCARLET_SPIRIT_CHARM = "scarlet_spirit_charm";
     public static final String ANGEL_CROWN = "angel_crown";
     public static final String OMNISCIENT_SHARD = "omniscient_shard";
+    public static final String WORLD_BLESSING = "world_blessing";
+    public static final String ADVANCED_BATTLE_QI_ETCHING = "advanced_battle_qi_etching";
+    public static final String AMULET_CASKET = "amulet_casket";
 
     /** 塞拉菲丝：附加随机元素伤害的冷却（5 刻）。 */
     private static final int SERAPHIS_ATTACK_COOLDOWN = 5;
@@ -233,6 +237,10 @@ public final class RelicEffects {
         if (melee && worn(player, NAMELESS_CHARM)) result *= 0.75F;
         if (worn(player, SERENE_BRACELET)) result *= 0.95F;
         if (worn(player, CHOICE_RING)) result *= choiceAggressive(player) ? 1.35F : 0.5F;
+        if (worn(player, WORLD_BLESSING) && player.level().dimension() == Level.OVERWORLD) {
+            String element = ElementPlating.damageElementOf(event.getSource());
+            if (element != null) result *= 0.85F;
+        }
         if (worn(player, SERAPHIS_CHARM) && event.getSource().getEntity() != null) {
             long now = player.level().getGameTime();
             CompoundTag data = player.getPersistentData();
@@ -375,13 +383,50 @@ public final class RelicEffects {
         if (!(event.getSource().getEntity() instanceof Player attacker)) return;
         float damage = event.getNewDamage();
         if (damage <= 0.0F) return;
-        boolean melee = event.getSource().getDirectEntity() == attacker;
+        boolean physical = isPhysicalDamage(event.getSource(), attacker);
         float result = damage;
+        if (physical && worn(attacker, ADVANCED_BATTLE_QI_ETCHING)) result *= 1.35F;
+        boolean melee = event.getSource().getDirectEntity() == attacker;
         if (melee && worn(attacker, STRENGTH_CHARM)) result *= 1.15F;
         if (worn(attacker, CHOICE_RING)) result *= choiceAggressive(attacker) ? 1.25F : 0.75F;
         if (worn(attacker, MOONLIGHT_BLESSING) && isNight(attacker.level())) result *= 1.15F;
         if (worn(attacker, BLAZING_BLESSING) && isDay(attacker.level())) result *= 1.15F;
+        if (worn(attacker, WORLD_BLESSING) && attacker.level().dimension() == Level.OVERWORLD) result *= 1.20F;
         if (result != damage) event.setNewDamage(result);
+    }
+
+    /**
+     * 绝对防御：LivingDamageEvent.Pre 已经拿到护甲、抗性、斗气减伤和自定义护盾后的实际伤害。
+     * 斗气超过一半且这一下不超过最大生命的 25% 时，直接免疫这一击。
+     */
+    public static void onAdvancedBattleQiFinalGuard(LivingDamageEvent.Pre event) {
+        LivingEntity victim = event.getEntity();
+        if (!(victim instanceof Player player) || player.level().isClientSide) return;
+        if (!worn(player, ADVANCED_BATTLE_QI_ETCHING)) return;
+        float damage = event.getNewDamage();
+        if (damage <= 0.0F || LethalDamage.isLethal(event.getSource(), damage)) return;
+        ManaData.Snapshot qi = ManaData.get(player);
+        if (qi.maxBattleQi() > 0 && qi.battleQi() > qi.maxBattleQi() * 0.5
+                && damage <= player.getMaxHealth() * 0.25F) {
+            event.setNewDamage(0.0F);
+        }
+    }
+
+    /** 高阶斗气铭蚀的物理伤害判定：近战和玩家射出的箭矢 / 三叉戟都算，法术与刻蚀真伤不算。 */
+    private static boolean isPhysicalDamage(net.minecraft.world.damagesource.DamageSource source, Player attacker) {
+        if (source == null || attacker == null || SpellDamage.isSpell(source)
+                || MagicEtchingSystem.isTrueDamage(source)) return false;
+        Entity direct = source.getDirectEntity();
+        return direct == attacker
+                || (direct instanceof net.minecraft.world.entity.projectile.AbstractArrow
+                && source.getEntity() == attacker);
+    }
+
+    /** 极限壁垒：默认斗气减伤上限 80%，佩戴高阶斗气铭蚀时提高到 90%。 */
+    public static double battleQiReductionCap(LivingEntity entity) {
+        return worn(entity, ADVANCED_BATTLE_QI_ETCHING)
+                ? Math.max(0.90, ManaConfig.BATTLE_QI_REDUCTION_CAP.get())
+                : ManaConfig.BATTLE_QI_REDUCTION_CAP.get();
     }
 
     // ── 命中之后 ────────────────────────────────────────────────────────────
@@ -438,6 +483,16 @@ public final class RelicEffects {
         // 赤灵护符：这一下把人打死就按这次击杀伤害回等量生命（100%，不再被自身 +15% 放大）。
         if (worn(player, SCARLET_SPIRIT_CHARM) && victim.isDeadOrDying()) {
             grantHealth(player, damage);
+        }
+        // 鲜血回响：物理暴击按本次实际造成的伤害回复斗气，并受当前斗气上限限制。
+        if (worn(player, ADVANCED_BATTLE_QI_ETCHING)
+                && isPhysicalDamage(event.getSource(), player)) {
+            CriticalSystem.Hit hit = CriticalSystem.hit(victim);
+            if (hit != null && hit.critical() && hit.attacker().equals(player.getUUID())) {
+                ManaData.Snapshot qi = ManaData.get(player);
+                ManaData.setBattleQi(player, Math.min(qi.maxBattleQi(),
+                        qi.battleQi() + Math.max(0, Math.round(damage))));
+            }
         }
     }
 
@@ -728,10 +783,10 @@ public final class RelicEffects {
             data.putLong(SERENE_TICK_KEY, 0L);
         }
 
-        // 戴上封魔眼罩时上限减半，当前魔素如果超过新上限就压回去，避免界面显示 60/30 这种数字。
-        if (worn(player, SEAL_BLINDFOLD)) {
+        // 封魔眼罩与高阶斗气铭蚀都会降低魔素上限，换装后立即压回当前值，避免界面长期显示超上限。
+        if (worn(player, SEAL_BLINDFOLD) || worn(player, ADVANCED_BATTLE_QI_ETCHING)) {
             ManaData.Snapshot snapshot = ManaData.get(player);
-            if (snapshot.mana() > snapshot.maxMana()) ManaData.restoreMana(player, 0.0, false);
+            if (snapshot.mana() > snapshot.maxMana()) ManaData.setMana(player, snapshot.maxMana(), false);
         }
 
         if (worn(player, MAGE_DELIGHT)) {
@@ -788,6 +843,7 @@ public final class RelicEffects {
         if ("ice".equals(elementId) && worn(player, MOONLIGHT_BLESSING)) multiplier *= 1.10;
         if ("light".equals(elementId) && worn(player, BLAZING_BLESSING)) multiplier *= 1.15;
         if ("fire".equals(elementId) && worn(player, BLAZING_BLESSING)) multiplier *= 1.10;
+        if (worn(player, WORLD_BLESSING) && player.level().dimension() == Level.OVERWORLD) multiplier *= 1.15;
         if (MagicEquipment.ARCANE.equals(elementId) && worn(player, MAGE_DELIGHT)) multiplier *= 1.15;
         if (worn(player, ELEMENT_ABSORPTION_CHARM)) {
             ElementType element = ElementType.byId(elementId);

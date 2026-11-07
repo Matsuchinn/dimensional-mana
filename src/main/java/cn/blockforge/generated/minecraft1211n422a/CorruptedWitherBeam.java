@@ -38,7 +38,7 @@ import java.util.UUID;
  * 打一条破坏方块、对第一个命中的生物造成其当前生命 90% 的真实伤害。</p>
  *
  * <p><b>追猎</b>：光斑每刻都会检查当前目标。目标被打死 / 消失后，立刻在 64 格内重新挑
- * 一个最近的生物并把光轴转过去；周围一只生物都没有时，光轴以每秒 40° 缓慢自转，
+ * 一个最近的生物并把光轴转过去；周围一只生物都没有时，光轴以每秒 30° 缓慢自转，
  * 边转边粉碎方块，把「尽情破坏」演出来。</p>
  *
  * <p><b>持续笼罩</b>：同一个生物被光斑连续罩住超过 4 秒后，每秒额外吃 1000 点真实伤害
@@ -67,8 +67,8 @@ public final class CorruptedWitherBeam extends Entity {
     public static final int DWELL_DAMAGE_INTERVAL = 20;
     /** 持续笼罩每秒的额外真实伤害。 */
     public static final float DWELL_DAMAGE = 1_000.0F;
-    /** 没有目标时的自转速度：每秒 40°，十秒的射击期刚好转一圈多一点。 */
-    public static final double IDLE_SPIN_PER_TICK = 2.0D;
+    /** 没有目标时的自转速度：每秒 30°（每刻 1.5°），十秒的射击期转大约六分之五圈。 */
+    public static final double IDLE_SPIN_PER_TICK = 1.5D;
     /** 击杀目标后重新索敌的半径。 */
     public static final double RETARGET_RANGE = 64.0D;
 
@@ -92,6 +92,9 @@ public final class CorruptedWitherBeam extends Entity {
     private int haloCooldown;
     private float yaw;
     private float pitch;
+    /** 本刻开始时的角度（只在客户端渲染用）：服务端每刻才同步一次朝向，渲染器拿它跟当前值插值，转起来才不是一跳一跳的。 */
+    private float prevAimYaw;
+    private float prevAimPitch;
     /** 每个目标被光斑连续罩住的刻数（同一时刻只保留当前目标）。 */
     private final Map<UUID, Integer> dwellTicks = new HashMap<>();
 
@@ -133,6 +136,16 @@ public final class CorruptedWitherBeam extends Entity {
 
     public float aimPitch() {
         return this.entityData.get(DATA_PITCH);
+    }
+
+    /** 渲染用的偏航角：从本刻开始的角度平滑插值到当前同步值，消除每刻一跳的台阶。 */
+    public float smoothAimYaw(float partialTick) {
+        return Mth.rotLerp(partialTick, this.prevAimYaw, aimYaw());
+    }
+
+    /** 渲染用的俯仰角：同样按 partialTick 插值。 */
+    public float smoothAimPitch(float partialTick) {
+        return Mth.lerp(partialTick, this.prevAimPitch, aimPitch());
     }
 
     public Vec3 direction() {
@@ -202,7 +215,13 @@ public final class CorruptedWitherBeam extends Entity {
     @Override
     public void tick() {
         super.tick();
-        if (level().isClientSide) return;
+        if (level().isClientSide) {
+            // 记下本刻开始时的角度作为插值起点：下一刻的同步包到达前，渲染器
+            // 都从它平滑过渡到当前值（见 smoothAimYaw / smoothAimPitch）。
+            this.prevAimYaw = aimYaw();
+            this.prevAimPitch = aimPitch();
+            return;
+        }
         CorruptedWither owner = owner();
         if (owner == null || !owner.isAlive()) {
             discard();

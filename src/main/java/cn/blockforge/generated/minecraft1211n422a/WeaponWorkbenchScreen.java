@@ -18,13 +18,14 @@ import java.util.List;
  * 所有文字都走 {@link TextFit}，中英文切换后不会互相盖住，也不会顶出面板。</p>
  */
 public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponWorkbenchMenu> {
-    private static final int PANEL_X = 104;
-    private static final int PANEL_Y = 8;
-    private static final int PANEL_WIDTH = 160;
-    private static final int PANEL_HEIGHT = 144;
+    private final ArcaneLayout.Layout layout;
+    private final int PANEL_X;
+    private final int PANEL_Y;
+    private final int PANEL_WIDTH;
+    private final int PANEL_HEIGHT;
     private static final int MAIN_BOX_Y = 38;
     private static final int MAIN_BOX_HEIGHT = 22;
-    private static final int SUB_BOX_Y = 70;
+    private static final int SUB_BOX_Y = 64;
     private static final int SUB_BOX_STEP = 18;
     private static final int SUB_BOX_HEIGHT = 16;
 
@@ -34,62 +35,47 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
         imageHeight = WeaponWorkbenchMenu.IMAGE_HEIGHT;
         titleLabelX = 8;
         titleLabelY = 5;
-        inventoryLabelX = WeaponWorkbenchMenu.INVENTORY_X;
-        inventoryLabelY = 154;
+        layout = ArcaneGui.layout(menu, ArcaneLayout.Kind.WEAPON);
+        PANEL_X = layout.plate().x(); PANEL_Y = layout.plate().y();
+        PANEL_WIDTH = layout.plate().width(); PANEL_HEIGHT = layout.plate().height();
+        inventoryLabelX = layout.inventoryLabelX();
+        inventoryLabelY = layout.inventoryLabelY();
     }
 
     @Override
     protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         int x = leftPos;
         int y = topPos;
-        graphics.fill(x, y, x + imageWidth, y + imageHeight, 0xF0100B1E);
-        graphics.fillGradient(x + 1, y + 1, x + imageWidth - 1, y + imageHeight - 1, 0xF01B1330, 0xF0091524);
-        graphics.renderOutline(x, y, imageWidth, imageHeight, 0xFF8E68C7);
-        graphics.hLine(x + 6, x + imageWidth - 7, y + 15, 0x668E68C7);
+        ArcaneGui.panel(graphics, x, y, imageWidth, imageHeight, partialTick);
+        ArcaneGui.zones(graphics, layout, x, y);
+        ArcaneGui.conduit(graphics, layout.conduit(), x, y);
+        // 词条区只有暗底和内沿微光，不再增加金边和四角装饰。
+        ArcaneGui.plate(graphics, x + PANEL_X, y + PANEL_Y, PANEL_WIDTH, PANEL_HEIGHT, ArcaneGui.ACCENT);
 
-        slot(graphics, x + WeaponWorkbenchMenu.EQUIP_X - 1, y + WeaponWorkbenchMenu.EQUIP_Y - 1);
-        slot(graphics, x + WeaponWorkbenchMenu.MATERIAL_X - 1, y + WeaponWorkbenchMenu.MATERIAL_Y - 1);
-
-        // 中间的关系线：装备 → 材料 → 锻造，让人一眼看出是从上往下喂。
-        graphics.vLine(x + WeaponWorkbenchMenu.EQUIP_X + 8, y + WeaponWorkbenchMenu.EQUIP_Y + 18,
-                y + WeaponWorkbenchMenu.MATERIAL_Y - 2, 0x66B98CFF);
-
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                slot(graphics, x + WeaponWorkbenchMenu.INVENTORY_X + col * 18 - 1,
-                        y + WeaponWorkbenchMenu.INVENTORY_Y + row * 18 - 1);
-            }
-        }
-        for (int col = 0; col < 9; col++) {
-            slot(graphics, x + WeaponWorkbenchMenu.INVENTORY_X + col * 18 - 1,
-                    y + WeaponWorkbenchMenu.HOTBAR_Y - 1);
-        }
-
-        graphics.fill(x + PANEL_X, y + PANEL_Y, x + PANEL_X + PANEL_WIDTH, y + PANEL_Y + PANEL_HEIGHT, 0x90140E24);
-        graphics.renderOutline(x + PANEL_X, y + PANEL_Y, PANEL_WIDTH, PANEL_HEIGHT, 0xFF8E68C7);
         drawForgeButton(graphics, mouseX, mouseY);
+        ArcaneGui.slots(graphics, menu, x, y);
     }
 
     private void drawForgeButton(GuiGraphics graphics, int mouseX, int mouseY) {
-        int x = leftPos + WeaponWorkbenchMenu.BUTTON_X;
-        int y = topPos + WeaponWorkbenchMenu.BUTTON_Y;
-        int w = WeaponWorkbenchMenu.BUTTON_WIDTH;
-        int h = WeaponWorkbenchMenu.BUTTON_HEIGHT;
+        ArcaneLayout.Box b = layout.button();
+        int x = leftPos + b.x();
+        int y = topPos + b.y();
+        int w = b.width();
+        int h = b.height();
         boolean active = canForge();
         boolean hovered = active && mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
-        graphics.fill(x, y, x + w, y + h, !active ? 0xFF221A30 : hovered ? 0xFF4B3575 : 0xFF33244F);
-        graphics.renderOutline(x, y, w, h, !active ? 0xFF5A4A70 : hovered ? 0xFFFFD26F : 0xFFB98CFF);
+        ArcaneGui.button(graphics, x, y, w, h, hovered, active, ArcaneGui.GOLD);
         TextFit.centered(graphics, font, Component.translatable("gui.dimensional_mana.weapon_workbench.forge"),
-                leftPos + WeaponWorkbenchMenu.BUTTON_X + w / 2, topPos + WeaponWorkbenchMenu.BUTTON_Y + 5,
-                w - 8, active ? 0xFFF3E9FF : 0xFF7C6E94);
+                x + w / 2, y + (h - font.lineHeight) / 2,
+                w - 8, active ? ArcaneGui.TEXT : ArcaneGui.TEXT_FAINT);
     }
 
     @Override
     protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
         TextFit.leftShrunk(graphics, font, title, titleLabelX, titleLabelY,
-                PANEL_X - titleLabelX - 4, 0xFFEAD9FF);
+                PANEL_X - titleLabelX - 4, ArcaneGui.TEXT);
         TextFit.left(graphics, font, playerInventoryTitle, inventoryLabelX, inventoryLabelY,
-                imageWidth - inventoryLabelX * 2, 0xFFBDB0CE, false);
+                imageWidth - inventoryLabelX * 2, ArcaneGui.TEXT_DIM, false);
         renderAffixPanel(graphics);
         renderCostHint(graphics);
     }
@@ -103,10 +89,10 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
         if (stack.isEmpty()) {
             TextFit.centered(graphics, font,
                     Component.translatable("gui.dimensional_mana.weapon_workbench.put_equipment"),
-                    x + PANEL_WIDTH / 2, y + PANEL_HEIGHT / 2 - 4, innerWidth, 0xFF8A7FA8);
+                    x + PANEL_WIDTH / 2, y + PANEL_HEIGHT / 2 - 4, innerWidth, ArcaneGui.TEXT_FAINT);
             return;
         }
-        TextFit.leftShrunk(graphics, font, stack.getHoverName(), x + 6, y + 5, innerWidth, 0xFFF0E6FF);
+        TextFit.leftShrunk(graphics, font, stack.getHoverName(), x + 6, y + 5, innerWidth, ArcaneGui.TEXT);
         EquipmentAffixSystem.View view = EquipmentAffixSystem.view(stack);
         if (view.empty()) {
             TextFit.centered(graphics, font,
@@ -125,25 +111,24 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
         // 主词条：字体稍大的一格。
         int boxX = x + 6;
         int boxY = y + MAIN_BOX_Y;
-        graphics.fill(boxX, boxY, boxX + innerWidth, boxY + MAIN_BOX_HEIGHT, 0xA03A2559);
-        graphics.renderOutline(boxX, boxY, innerWidth, MAIN_BOX_HEIGHT, 0xFFD8A94C);
-        drawScaled(graphics, view.main().name(), boxX + 5, boxY + 5, 1.12F, innerWidth - 78, 0xFFF7E7BE);
+        graphics.fill(boxX, boxY, boxX + innerWidth, boxY + MAIN_BOX_HEIGHT, 0xFF242833);
+        graphics.fill(boxX + 1, boxY + 1, boxX + innerWidth - 1, boxY + 2, 0x185F6377);
+        drawScaled(graphics, view.main().name(), boxX + 5, boxY + 6, 1.0F, innerWidth - 78, ArcaneGui.TEXT);
         drawScaledRight(graphics, Component.literal(mainValueText(view.main())), boxX + innerWidth - 5,
-                boxY + 5, 1.05F, 62, 0xFFFFE9A8);
+                boxY + 6, 1.0F, 62, ArcaneGui.ACCENT);
 
         // 四条副词条：没满的槽位留空（画一个暗淡的占位框）。
         for (int i = 0; i < EquipmentAffixSystem.SUB_MAX_COUNT; i++) {
             int slotY = y + SUB_BOX_Y + i * SUB_BOX_STEP;
-            graphics.fill(boxX, slotY, boxX + innerWidth, slotY + SUB_BOX_HEIGHT, 0x70241A37);
-            graphics.renderOutline(boxX, slotY, innerWidth, SUB_BOX_HEIGHT, 0xFF5C4A78);
+            graphics.fill(boxX, slotY, boxX + innerWidth, slotY + SUB_BOX_HEIGHT, 0x801A1E27);
             EquipmentAffixSystem.AffixLine line = i < view.subs().size() ? view.subs().get(i) : null;
             if (line == null) {
-                graphics.drawString(font, "-", boxX + 5, slotY + 5, 0xFF5F5670, false);
+                graphics.drawString(font, "-", boxX + 5, slotY + 5, ArcaneGui.TEXT_FAINT, false);
                 continue;
             }
-            drawScaled(graphics, line.name(), boxX + 5, slotY + 5, 0.92F, innerWidth - 70, 0xFFDDD2F0);
+            drawScaled(graphics, line.name(), boxX + 5, slotY + 5, 0.92F, innerWidth - 70, ArcaneGui.TEXT_DIM);
             drawScaledRight(graphics, Component.literal(subValueText(line)), boxX + innerWidth - 5,
-                    slotY + 5, 0.92F, 54, 0xFFFFD9F5);
+                    slotY + 5, 0.92F, 54, ArcaneGui.ACCENT);
         }
     }
 
@@ -158,55 +143,63 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
         } else if (ArmamentForge.isSmithingTemplate(material)) {
             if (stack.isEmpty()) {
                 hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_template_need");
-                color = 0xFFFF7777;
+                color = ArcaneGui.WARN;
             } else if (EquipmentAffixSystem.hasAffix(stack)) {
                 hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_template_already");
-                color = 0xFFFF7777;
+                color = ArcaneGui.WARN;
             } else {
                 hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_template");
-                color = 0xFFD8C06C;
+                color = ArcaneGui.GOLD;
             }
         } else if (ArmamentForge.isEnhanceStone(material)) {
             if (stack.isEmpty() || !EquipmentAffixSystem.hasAffix(stack)) {
                 hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_stone_no_affix");
-                color = 0xFFFF7777;
+                color = ArcaneGui.WARN;
             } else if (EquipmentAffixSystem.mainLevel(stack) < ArmamentForge.MAX_LEVEL) {
                 hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_stone_need_max",
                         ArmamentForge.MAX_LEVEL);
-                color = 0xFFFF7777;
+                color = ArcaneGui.WARN;
             } else if (!EquipmentAffixSystem.hasGrowableSub(stack)) {
                 hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_subs_max");
-                color = 0xFFFFD86B;
+                color = ArcaneGui.GOLD;
             } else {
                 hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_stone");
-                color = 0xFFD98CFF;
+                color = ArcaneGui.ACCENT;
             }
         } else if (ArmamentForge.isRerollMaterial(material)) {
             hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_reroll");
-            color = 0xFFD98CFF;
+            color = ArcaneGui.ACCENT;
+        } else if (ArmamentForge.isReforgeTalisman(material)) {
+            if (stack.isEmpty() || !EquipmentAffixSystem.hasAffix(stack)) {
+                hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_reforge_no_affix");
+                color = ArcaneGui.WARN;
+            } else {
+                hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_reforge");
+                color = ArcaneGui.GOLD;
+            }
         } else if (!stack.isEmpty() && EquipmentAffixSystem.hasAffix(stack)) {
             int level = EquipmentAffixSystem.mainLevel(stack);
             if (level >= ArmamentForge.MAX_LEVEL) {
                 hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_max");
-                color = 0xFFFFD86B;
+                color = ArcaneGui.GOLD;
             } else {
                 int cost = ArmamentForge.upgradeCost(stack, level + 1);
                 int value = ArmamentForge.crystalValue(material);
                 if (value < cost) {
                     hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_short", cost);
-                    color = 0xFFFF7777;
+                    color = ArcaneGui.WARN;
                 } else {
                     int refund = ArmamentForge.refundValue(value - cost);
                     hint = refund > 0
                             ? Component.translatable("gui.dimensional_mana.weapon_workbench.hint_cost_refund", cost, refund)
                             : Component.translatable("gui.dimensional_mana.weapon_workbench.hint_cost", cost);
-                    color = 0xFF9AD7FF;
+                    color = ArcaneGui.MANA;
                 }
             }
         }
         if (hint == null) return;
-        drawScaled(graphics, hint, WeaponWorkbenchMenu.BUTTON_X - 2, WeaponWorkbenchMenu.BUTTON_Y + 22,
-                0.82F, 92, color);
+        drawScaled(graphics, hint, layout.button().x(), layout.button().bottom() + 6,
+                0.90F, layout.plate().x() - layout.button().x() - 6, color);
     }
 
     /** 主词条按 LV 显示。 */
@@ -222,17 +215,17 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
 
     private static int gradeColor(String grade) {
         return switch (grade == null ? "" : grade) {
-            case "SSS" -> 0xFFFFC861;
-            case "SS" -> 0xFFD98CFF;
-            case "S" -> 0xFF7FA8FF;
-            case "A" -> 0xFF6FE08C;
+            case "SSS" -> ArcaneGui.GOLD;
+            case "SS" -> ArcaneGui.ACCENT;
+            case "S" -> ArcaneGui.MANA;
+            case "A" -> ArcaneGui.OK;
             case "B" -> 0xFFEDEDED;
             default -> 0xFF9AA0AC;
         };
     }
 
     /**
-     * 放大绘制：主词条 1.15 倍、副词条 0.92 倍。
+     * 自适应绘制：主词条原字号、副词条 0.92 倍。
      *
      * <p>放不下时先整体缩字（最多缩到 {@link TextFit#MIN_SCALE}），实在放不下才截断。
      * 英文词条名（“Spell Crit Damage”）比中文长一倍，不缩字就只能看前半截。</p>
@@ -282,6 +275,7 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
                     && EquipmentAffixSystem.hasGrowableSub(stack);
         }
         if (ArmamentForge.isRerollMaterial(material)) return true;
+        if (ArmamentForge.isReforgeTalisman(material)) return EquipmentAffixSystem.hasAffix(stack);
         int level = EquipmentAffixSystem.mainLevel(stack);
         return level < ArmamentForge.MAX_LEVEL
                 && ArmamentForge.crystalValue(material) >= ArmamentForge.upgradeCost(stack, level + 1);
@@ -289,10 +283,7 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        int x = leftPos + WeaponWorkbenchMenu.BUTTON_X;
-        int y = topPos + WeaponWorkbenchMenu.BUTTON_Y;
-        if (button == 0 && mouseX >= x && mouseX < x + WeaponWorkbenchMenu.BUTTON_WIDTH
-                && mouseY >= y && mouseY < y + WeaponWorkbenchMenu.BUTTON_HEIGHT) {
+        if (button == 0 && layout.button().contains(mouseX - leftPos, mouseY - topPos)) {
             if (canForge() && minecraft != null && minecraft.gameMode != null) {
                 minecraft.gameMode.handleInventoryButtonClick(menu.containerId, WeaponWorkbenchMenu.BUTTON_FORGE);
             }
@@ -333,8 +324,4 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
         graphics.renderComponentTooltip(font, tooltip, mouseX, mouseY);
     }
 
-    private static void slot(GuiGraphics graphics, int x, int y) {
-        graphics.fill(x, y, x + 18, y + 18, 0xFF0C0913);
-        graphics.renderOutline(x, y, 18, 18, 0xFF6B558D);
-    }
 }

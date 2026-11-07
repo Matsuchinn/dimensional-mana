@@ -26,6 +26,7 @@ public final class ManaData {
         CompoundTag t = entity.getPersistentData().getCompound(ROOT);
         double maxMana = t.getDouble("baseMaxMana");
         int maxBattleQi = t.getInt("baseMaxBattleQi");
+        int etchingQiBonus = 0;
         if (entity instanceof Player player) {
             int amulets = MagicAccessoryItem.equippedCount(player, "magic_amulet", "charm");
             double casketMultiplier = MagicTrinketItem.isEquipped(player, "ancient_casket") ? 1.16 : 1.0;
@@ -37,12 +38,20 @@ public final class ManaData {
             // 装备词条：百分比乘区之后再加固定值，换装后由词条系统立即同步。
             maxMana = maxMana * (1.0 + EquipmentAffixSystem.manaPercentBonus(player) / 100.0)
                     + EquipmentAffixSystem.manaFlatBonus(player);
+            // 高阶斗气铭蚀把当前最终魔素上限的 80% 熔铸成同等数值的斗气上限。
+            // 先记录牺牲量再改魔素，保证魔素词条、披风和封魔眼罩等乘区都参与计算。
+            if (RelicEffects.worn(player, RelicEffects.ADVANCED_BATTLE_QI_ETCHING)) {
+                double sacrificed = maxMana * 0.80;
+                maxMana *= 0.20;
+                etchingQiBonus = (int)Math.floor(sacrificed);
+            }
             maxBattleQi = (int)Math.round(maxBattleQi * MagicProgression.maxBattleQiMultiplier(player) * casketMultiplier
                     * battleQiCoatingMultiplier(player)
                     * (1.0 + EquipmentAffixSystem.battleQiPercentBonus(player) / 100.0));
             maxBattleQi += EquipmentAffixSystem.battleQiFlatBonus(player);
             // 斗气进阶的「斗气强化」：每级直接在最终上限上加 10 点（不吃百分比乘区）。
             maxBattleQi += t.getCompound("qiSkills").getInt("battle_qi") * QiProgression.BATTLE_QI_PER_RANK;
+            maxBattleQi += etchingQiBonus;
         }
         maxMana = Math.min(maxMana, ManaConfig.GLOBAL_MANA_CAP.get());
         maxBattleQi = Math.min(maxBattleQi, ManaConfig.GLOBAL_BATTLE_QI_CAP.get());

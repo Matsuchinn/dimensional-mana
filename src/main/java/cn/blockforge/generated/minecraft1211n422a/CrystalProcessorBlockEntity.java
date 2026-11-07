@@ -612,6 +612,30 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
                 "universal_magic_component", "minecraft:anvil", "universal_magic_component",
                 "erosion_log", "universal_magic_component", "minecraft:blaze_powder"),
                 WeaponWorkbenchBlock.BLOCK_ID, 1_000, 300));
+        // 蚀纹木木棍：任意竖着摆 2 块蚀纹木木板 → 4 根木棍，10 魔素 / 3 秒（60 刻）。
+        // 竖着摆有三种列 × 两种行距，一共 6 种摆法，这里逐条登记，玩家不用记唯一姿势。
+        addErosionStickRecipes(recipes);
+        // 魔晶砂轮：铁锭压顶、两根蚀纹木木棍夹住平滑蚀脉石台阶、底下两块蚀纹木木板，
+        // 500 魔素 / 16 秒（320 刻）。它是原版砂轮的进阶版，剥离方向可选。
+        recipes.add(patternRecipe(ManaGrindstoneBlock.BLOCK_ID, List.of(
+                "", "minecraft:iron_ingot", "",
+                "erosion_stick", "smooth_erosion_stone_slab", "erosion_stick",
+                "erosion_planks", "", "erosion_planks"),
+                ManaGrindstoneBlock.BLOCK_ID, 500, 320));
+        // 武备强化石还原：四角极品魔晶原矿、四边武备强化石粉、正中烈焰粉 → 1 颗武备强化石。
+        // 500 魔素 / 8 秒（160 刻），配上研磨器的「一石出 2～4 份粉」就是一条可循环的往返线。
+        recipes.add(patternRecipe(ArmamentForge.ENHANCE_STONE, List.of(
+                "raw_supreme_mana_crystal", ArmamentForge.ENHANCE_STONE_DUST, "raw_supreme_mana_crystal",
+                ArmamentForge.ENHANCE_STONE_DUST, "minecraft:blaze_powder", ArmamentForge.ENHANCE_STONE_DUST,
+                "raw_supreme_mana_crystal", ArmamentForge.ENHANCE_STONE_DUST, "raw_supreme_mana_crystal"),
+                ArmamentForge.ENHANCE_STONE, 500, 160));
+        // 词条重铸符：四角超导魔晶粉、四边钻石、中间一撮武备强化石粉，
+        // 350 魔素 / 20 秒（400 刻）。它是武备加工台「保品级重抽词条」的唯一材料。
+        recipes.add(patternRecipe(ArmamentForge.REFORGE_TALISMAN, List.of(
+                "superconducting_crystal_dust", "minecraft:diamond", "superconducting_crystal_dust",
+                "minecraft:diamond", ArmamentForge.ENHANCE_STONE_DUST, "minecraft:diamond",
+                "superconducting_crystal_dust", "minecraft:diamond", "superconducting_crystal_dust"),
+                ArmamentForge.REFORGE_TALISMAN, 350, 400));
         recipes.add(patternRecipe("ancient_casket", List.of(
                 "", "advanced_mana_crystal", "",
                 "", "minecraft:diamond", "",
@@ -841,6 +865,25 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
         recipes.add(new ProcessRecipe("relic_omniscient_shard",
                 List.of(new IngredientStack("omniscient_page", 3)), List.of(),
                 List.of(new OutputStack("omniscient_shard", 1)), 10_000, 2_400, "omniscient_shard"));
+        // 世界祝福：日与月的恩赐交汇，1000 魔素，20 秒。
+        recipes.add(patternRecipe("relic_world_blessing", List.of(
+                "minecraft:diamond", "advanced_mana_crystal", "minecraft:diamond",
+                "moonlight_blessing", "ancient_magic_fragment", "blazing_blessing",
+                "minecraft:diamond", "advanced_mana_crystal", "minecraft:diamond"),
+                "world_blessing", 1_000, 400));
+        // 高阶斗气铭蚀：四枚无名护符围住封魔眼罩，中心用久经风霜的剑士长剑、精制魔构件和力量护符，
+        // 右下角是剑士护符；10000 魔素 / 150 秒（3000 刻）。
+        recipes.add(patternRecipe("relic_advanced_battle_qi_etching", List.of(
+                "nameless_charm", "seal_blindfold", "nameless_charm",
+                SwordmasterWeaponItem.ITEM_ID, "refined_magic_component", "strength_charm",
+                "nameless_charm", SwordsmanCharmItem.ITEM_ID, "nameless_charm"),
+                "advanced_battle_qi_etching", 10_000, 3_000));
+        // 护符宝匣：特级魔晶、金锭、魔法绸缎、碎裂的古老宝匣和钻石，10000 魔素 / 100 秒（2000 刻）。
+        recipes.add(patternRecipe("relic_amulet_casket", List.of(
+                "special_mana_crystal", "minecraft:gold_ingot", "special_mana_crystal",
+                MagicEquipment.MAGIC_SILK, "cracked_ancient_casket", MagicEquipment.MAGIC_SILK,
+                "minecraft:diamond", MagicEquipment.MAGIC_SILK, "minecraft:diamond"),
+                "amulet_casket", 10_000, 2_000));
     }
 
     /**
@@ -993,6 +1036,27 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
                         new OutputStack("amethyst_dust", 2),
                         new OutputStack("special_mana_crystal_dust", 1)),
                 600, 240, CastingGloveItem.Kind.MASTER.itemId()));
+    }
+
+    /**
+     * 蚀纹木木棍：九宫格里任意竖着摆 2 块蚀纹木木板 → 4 根木棍，10 魔素 / 3 秒（60 刻）。
+     *
+     * <p>「任意竖着」= 3 列 × 2 种上下行距（上中 / 中下）= 6 种摆法，
+     * 每种都单独登记一条，玩家在格子里怎么竖着放都成立，和原版木棍一个手感。</p>
+     */
+    private static void addErosionStickRecipes(List<ProcessRecipe> recipes) {
+        int[][] rowPairs = {{0, 1}, {1, 2}};
+        for (int column = 0; column < 3; column++) {
+            for (int[] rows : rowPairs) {
+                String[] pattern = new String[9];
+                java.util.Arrays.fill(pattern, "");
+                pattern[rows[0] * 3 + column] = "erosion_planks";
+                pattern[rows[1] * 3 + column] = "erosion_planks";
+                recipes.add(patternRecipe("erosion_stick_" + column + "_" + rows[0], List.of(pattern),
+                        List.of(new OutputStack("erosion_stick", 4)),
+                        10, 60, "erosion_stick", false));
+            }
+        }
     }
 
     private static ProcessRecipe simpleRecipe(String id, String primary, String catalyst, String product,

@@ -5,77 +5,48 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 
+/** 魔晶加工台：三个进度指示的位置、宽度和悬停区域都从槽位推导。 */
 public final class CrystalProcessorScreen extends AbstractContainerScreen<CrystalProcessorMenu> {
+    private final ArcaneLayout.Layout layout;
     public CrystalProcessorScreen(CrystalProcessorMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
-        imageWidth = 176;
-        imageHeight = 191;
-        inventoryLabelY = 97;
+        imageWidth = 176; imageHeight = 199;
+        layout = ArcaneGui.layout(menu, ArcaneLayout.Kind.PROCESSOR);
+        titleLabelX = 8; titleLabelY = 6;
+        inventoryLabelX = layout.inventoryLabelX(); inventoryLabelY = layout.inventoryLabelY();
     }
 
     @Override
-    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
-        graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xF0181225);
-        graphics.renderOutline(leftPos, topPos, imageWidth, imageHeight, 0xFF8E68C7);
-
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 3; col++) slot(graphics, leftPos + 16 + col * 18, topPos + 24 + row * 18);
-        }
-        for (int row = 0; row < 2; row++) {
-            for (int col = 0; col < 2; col++) slot(graphics, leftPos + 124 + col * 18, topPos + 24 + row * 18);
-        }
-        slot(graphics, leftPos + 91, topPos + 68);
-
-        graphics.fill(leftPos + 73, topPos + 34, leftPos + 121, topPos + 43, 0xFF241A37);
-        int processWidth = Math.min(48, menu.processProgress() * 48 / menu.processTotal());
-        graphics.fill(leftPos + 73, topPos + 34, leftPos + 73 + processWidth, topPos + 43, 0xFFBA78FF);
-        graphics.renderOutline(leftPos + 73, topPos + 34, 48, 9, 0xFFDFC8FF);
-        graphics.drawString(font, "➜", leftPos + 92, topPos + 24, 0xFFE9D7FF, false);
-
-        graphics.fill(leftPos + 82, topPos + 57, leftPos + 120, topPos + 62, 0xFF241A37);
-        int fuelWidth = Math.min(38, menu.fuelProgress() * 38 / menu.fuelTotal());
-        graphics.fill(leftPos + 82, topPos + 57, leftPos + 82 + fuelWidth, topPos + 62, 0xFF63D9FF);
-        graphics.renderOutline(leftPos + 82, topPos + 57, 38, 5, 0xFFA9EEFF);
-
-        graphics.fill(leftPos + 16, topPos + 90, leftPos + 160, topPos + 97, 0xFF161023);
-        int manaWidth = Math.min(144, menu.mana() * 144 / menu.maxMana());
-        graphics.fillGradient(leftPos + 16, topPos + 90, leftPos + 16 + manaWidth, topPos + 97,
-                0xFF226BC8, 0xFF7E5BFF);
-        graphics.renderOutline(leftPos + 16, topPos + 90, 144, 7, 0xFF8BCBFF);
-
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) slot(graphics, leftPos + 7 + col * 18, topPos + 108 + row * 18);
-        }
-        for (int col = 0; col < 9; col++) slot(graphics, leftPos + 7 + col * 18, topPos + 166);
+    protected void renderBg(GuiGraphics g, float partialTick, int mouseX, int mouseY) {
+        ArcaneGui.panel(g, leftPos, topPos, imageWidth, imageHeight, partialTick);
+        ArcaneGui.zones(g, layout, leftPos, topPos);
+        float process = (float) menu.processProgress() / Math.max(1, menu.processTotal());
+        ArcaneGui.progressArrow(g, layout.arrow(), leftPos, topPos, process, process > 0);
+        ArcaneGui.bar(g, layout.fuel(), leftPos, topPos, (float) menu.fuelProgress() / Math.max(1, menu.fuelTotal()));
+        ArcaneGui.bar(g, layout.mana(), leftPos, topPos, (float) menu.mana() / Math.max(1, menu.maxMana()));
+        ArcaneGui.slots(g, menu, leftPos, topPos, 9, 10, 11, 12);
     }
 
     @Override
-    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
-        // 右上角的魔素数值是右对齐的，标题得先给它让位，否则英文标题会直接压上去。
-        String manaText = Component.translatable("gui.dimensional_mana.processor.mana", menu.mana(), menu.maxMana()).getString();
-        TextFit.left(graphics, font, title, titleLabelX, titleLabelY,
-                Math.max(40, imageWidth - 14 - font.width(manaText) - titleLabelX), 0xFFEAD9FF, false);
-        TextFit.left(graphics, font, playerInventoryTitle, inventoryLabelX, inventoryLabelY,
-                imageWidth - 16 - inventoryLabelX, 0xFFBDB0CE, false);
-        graphics.drawString(font, manaText, imageWidth - 8 - font.width(manaText), 6, 0xFF74D8FF, false);
+    protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
+        TextFit.left(g, font, title, titleLabelX, titleLabelY, imageWidth - 16, ArcaneGui.TEXT, false);
+        TextFit.left(g, font, playerInventoryTitle, inventoryLabelX, inventoryLabelY,
+                54, ArcaneGui.TEXT_DIM, false);
+        // 数值放背包标签行右侧，长标题不再与魔素数值互相挤压。
+        Component mana = Component.translatable("gui.dimensional_mana.processor.mana", menu.mana(), menu.maxMana());
+        int right = layout.inventory().right() - 4;
+        Component fitted = TextFit.clamp(font, mana, right - inventoryLabelX - 58);
+        g.drawString(font, fitted, right - font.width(fitted), inventoryLabelY, ArcaneGui.MANA, false);
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics, mouseX, mouseY, partialTick);
-        super.render(graphics, mouseX, mouseY, partialTick);
-        if (mouseX >= leftPos + 16 && mouseX < leftPos + 160 && mouseY >= topPos + 90 && mouseY < topPos + 97) {
-            graphics.renderTooltip(font, Component.translatable("gui.dimensional_mana.processor.mana_tooltip",
+    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        super.render(g, mouseX, mouseY, partialTick);
+        if (layout.mana().contains(mouseX - leftPos, mouseY - topPos))
+            g.renderTooltip(font, Component.translatable("gui.dimensional_mana.processor.mana_tooltip",
                     menu.mana(), menu.maxMana()), mouseX, mouseY);
-        }
-        if (mouseX >= leftPos + 82 && mouseX < leftPos + 120 && mouseY >= topPos + 57 && mouseY < topPos + 62) {
-            graphics.renderTooltip(font, Component.translatable("gui.dimensional_mana.processor.fuel_tooltip"), mouseX, mouseY);
-        }
-        renderTooltip(graphics, mouseX, mouseY);
-    }
-
-    private static void slot(GuiGraphics graphics, int x, int y) {
-        graphics.fill(x, y, x + 18, y + 18, 0xFF0C0913);
-        graphics.renderOutline(x, y, 18, 18, 0xFF6B558D);
+        if (layout.fuel().contains(mouseX - leftPos, mouseY - topPos))
+            g.renderTooltip(font, Component.translatable("gui.dimensional_mana.processor.fuel_tooltip"), mouseX, mouseY);
+        renderTooltip(g, mouseX, mouseY);
     }
 }

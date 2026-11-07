@@ -172,6 +172,8 @@ public final class ErosionWasteland {
             "erosion_log", "stripped_erosion_log", "erosion_planks", "erosion_slab", "erosion_stairs",
             "erosion_fence", "erosion_fence_gate", "erosion_pressure_plate", "erosion_button",
             "erosion_door", "erosion_trapdoor", "erosion_leaves", "erosion_sapling",
+            // 蚀纹木木棍跟蚀纹木这一家子摆一起（以前落在「魔素」页，和木板隔了一整页）。
+            "erosion_stick",
             "erosion_stone", "smooth_erosion_stone", "erosion_stone_bricks", "erosion_cobblestone",
             "erosion_stone_slab", "smooth_erosion_stone_slab", "erosion_stone_brick_slab", "erosion_cobblestone_slab",
             "erosion_stone_stairs", "smooth_erosion_stone_stairs", "erosion_stone_brick_stairs", "erosion_cobblestone_stairs",

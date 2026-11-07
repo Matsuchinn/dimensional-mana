@@ -23,7 +23,7 @@ import java.util.List;
  */
 public final class ManaEnhanceAmuletItem extends Item implements ICurioItem {
     public ManaEnhanceAmuletItem(Properties properties) {
-        super(properties);
+        super(AccessoryAttributeMirror.apply(properties, MagicEquipment.MANA_AMULET, specs()));
         CuriosApi.registerCurio(this, this);
     }
 
@@ -38,11 +38,19 @@ public final class ManaEnhanceAmuletItem extends Item implements ICurioItem {
         Multimap<Holder<Attribute>, AttributeModifier> modifiers = HashMultimap.create(
                 ICurioItem.super.getAttributeModifiers(slotContext, id, stack));
         if (!MagicEquipment.AMULET_SLOT.equals(slotContext.identifier())) return modifiers;
-        modifiers.put(SpellAttributes.SPELL_POWER,
-                new AttributeModifier(id, 64.0, AttributeModifier.Operation.ADD_VALUE));
-        modifiers.put(SpellAttributes.SPELL_CRIT_CHANCE,
-                new AttributeModifier(id, 0.08, AttributeModifier.Operation.ADD_VALUE));
+        for (AccessoryAttributeMirror.Spec spec : specs()) {
+            modifiers.put(spec.attribute(), new AttributeModifier(id, spec.amount(), spec.operation()));
+        }
         return modifiers;
+    }
+
+    /** 魔素强度 +64、法术暴击率 +8%：Curios 生效的数值与复制进物品数据的数值共用这一份。 */
+    private static List<AccessoryAttributeMirror.Spec> specs() {
+        return List.of(
+                new AccessoryAttributeMirror.Spec(SpellAttributes.SPELL_POWER, 64.0,
+                        AttributeModifier.Operation.ADD_VALUE),
+                new AccessoryAttributeMirror.Spec(SpellAttributes.SPELL_CRIT_CHANCE, 0.08,
+                        AttributeModifier.Operation.ADD_VALUE));
     }
 
     @Override

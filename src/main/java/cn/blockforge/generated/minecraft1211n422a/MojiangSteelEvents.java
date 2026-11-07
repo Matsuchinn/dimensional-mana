@@ -2,6 +2,8 @@ package cn.blockforge.generated.minecraft1211n422a;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.Holder;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -120,35 +122,93 @@ public final class MojiangSteelEvents {
         }
     }
 
-    /** 给一件魔精钢装备的所有附魔 +1 并打标记；没有附魔、已经加过、不是魔精钢都直接跳过。 */
+    /**
+     * 给一件魔精钢装备的附魔 +1，并把「哪些魔咒已经加过、加到了几级」记进物品数据。
+     *
+     * <p>旧版本只用了一个布尔标记，于是「砂轮把附魔洗光 → 重新附魔」时标记还在，
+     * {@link #isBoosted} 一直为真，+1 就再也不生效了。现在改成逐条记账：</p>
+     * <ul>
+     *   <li>记录里的等级和物品当前等级一致 → 这条已经加过，不动；</li>
+     *   <li>物品上没有这条记录（新附上的魔咒，或砂轮洗完重新附上的）→ 这条 +1 并记账；</li>
+     *   <li>附魔被洗光（整个附魔组件为空）→ 账本与标记一起清掉，重新附魔能正常再 +1；</li>
+     *   <li>老存档只有布尔标记、没有账本 → 按「已经加过」迁移，不会一更新就把全服装备再 +1 一次。</li>
+     * </ul>
+     */
     public static void applyEnchantBoost(ItemStack stack) {
-        if (!isMojiangSteel(stack) || isBoosted(stack)) return;
+        if (!isMojiangSteel(stack)) return;
         ItemEnchantments enchantments = stack.getOrDefault(
                 net.minecraft.core.component.DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY);
-        if (enchantments.isEmpty()) return;
+        CustomData data = stack.getOrDefault(
+                net.minecraft.core.component.DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+        if (enchantments.isEmpty()) {
+            // 砂轮把附魔洗掉了：账本一起清，之后重新附魔才能再吃到 +1（就是这次修的 bug）。
+            if (data.contains(BOOST_TAG) || data.contains(BOOST_MAP)) {
+                stack.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                        data.update(tag -> { tag.remove(BOOST_TAG); tag.remove(BOOST_MAP); }));
+            }
+            return;
+        }
+        CompoundTag recorded = data.copyTag().getCompound(BOOST_MAP);
+        boolean legacy = data.contains(BOOST_TAG) && recorded.isEmpty();
         ItemEnchantments.Mutable boosted = new ItemEnchantments.Mutable(enchantments);
+        CompoundTag updated = new CompoundTag();
+        boolean changed = false;
         for (Holder<Enchantment> enchantment : new ArrayList<>(enchantments.keySet())) {
             int level = enchantments.getLevel(enchantment);
-            if (level > 0) boosted.set(enchantment, level + 1);
+            if (level <= 0) continue;
+            String key = enchantment.unwrapKey().map(k -> k.location().toString()).orElse("");
+            if (key.isEmpty()) continue;
+            int was = recorded.getInt(key);
+            int target = (!legacy && was == level) ? level : level + 1;
+            if (target != level) {
+                boosted.set(enchantment, target);
+                changed = true;
+            }
+            updated.putInt(key, target);
         }
-        stack.set(net.minecraft.core.component.DataComponents.ENCHANTMENTS, boosted.toImmutable());
-        net.minecraft.world.item.component.CustomData data = stack.getOrDefault(
-                net.minecraft.core.component.DataComponents.CUSTOM_DATA,
-                net.minecraft.world.item.component.CustomData.EMPTY);
+        if (changed) stack.set(net.minecraft.core.component.DataComponents.ENCHANTMENTS, boosted.toImmutable());
+        if (!updated.isEmpty() && (!updated.equals(recorded) || !data.contains(BOOST_TAG))) {
+            stack.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, data.update(tag -> {
+                tag.remove(BOOST_MAP);
+                tag.put(BOOST_MAP, updated);
+                tag.putBoolean(BOOST_TAG, true);
+            }));
+        }
+    }
+
+    /**
+     * 附魔没了就把「已 +1」的标记与账本一起清掉。
+     *
+     * <p>砂轮磨掉附魔（本模组的砂轮接管，或原版双槽修复）之后物品的附魔组件为空，
+     * 但标记还在，于是重新附魔时 {@link #isBoosted} 一直返回 true，+1 就再也不会生效。
+     * 这里把「没有附魔却还带着标记」当成脏数据清掉，随后玩家再附魔就能正常吃到 +1。</p>
+     *
+     * @return 这件物品当前没有附魔（已经把标记清掉或本来就是空的）时为 true
+     */
+    public static boolean clearBoostIfUnenchanted(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        CustomData data = stack.getOrDefault(
+                net.minecraft.core.component.DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+        if (!data.contains(BOOST_TAG) && !data.contains(BOOST_MAP)) return false;
+        ItemEnchantments enchantments = stack.getOrDefault(
+                net.minecraft.core.component.DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY);
+        if (!enchantments.isEmpty()) return false;
         stack.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
-                data.update(tag -> tag.putBoolean(BOOST_TAG, true)));
+                data.update(tag -> { tag.remove(BOOST_TAG); tag.remove(BOOST_MAP); }));
+        return true;
     }
 
     /** 这件物品的附魔是不是已经被 +1 写进去过了。 */
     public static boolean isBoosted(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return false;
-        return stack.getOrDefault(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
-                        net.minecraft.world.item.component.CustomData.EMPTY)
+        return stack.getOrDefault(net.minecraft.core.component.DataComponents.CUSTOM_DATA, CustomData.EMPTY)
                 .contains(BOOST_TAG);
     }
 
     /** 物品数据里标记「附魔已 +1」的键。 */
     private static final String BOOST_TAG = "MojiangEnchantBoosted";
+    /** 逐条记账：魔咒 id → 写进物品后的等级。 */
+    private static final String BOOST_MAP = "MojiangEnchantLevels";
 
     /** 附魔台三行等级一起抬高：等级越高，出高等级附魔与多条附魔的机会越大。 */
     public static void onEnchantmentLevelSet(EnchantmentLevelSetEvent event) {

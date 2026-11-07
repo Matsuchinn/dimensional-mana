@@ -3,46 +3,46 @@ package cn.blockforge.generated.minecraft1211n422a;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 
+/** 两种魔素熔炉共用：真实槽位中轴上的完整火苗，低燃料平滑缩小并淡出。 */
 public final class ManaFurnaceScreen extends AbstractContainerScreen<ManaFurnaceMenu> {
-    private static final ResourceLocation TEXTURE = ResourceLocation.withDefaultNamespace("textures/gui/container/furnace.png");
-
+    private final ArcaneLayout.Layout layout;
     public ManaFurnaceScreen(ManaFurnaceMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
+        layout = ArcaneGui.layout(menu, ArcaneLayout.Kind.FURNACE);
+        titleLabelX = 8; titleLabelY = 6;
+        inventoryLabelX = layout.inventoryLabelX(); inventoryLabelY = layout.inventoryLabelY();
     }
 
     @Override
-    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
-        graphics.blit(TEXTURE, leftPos, topPos, 0.0F, 0.0F, imageWidth, imageHeight, 256, 256);
-        if (menu.isLit()) {
-            int litHeight = Math.max(1, (int)Math.ceil(menu.getLitProgress() * 13.0F));
-            graphics.blit(TEXTURE, leftPos + 56, topPos + 36 + 12 - litHeight,
-                    176.0F, 12.0F - litHeight, 14, litHeight, 256, 256);
-        }
-        int progressWidth = menu.cookingTotalTicks() <= 0 ? 0
-                : Math.min(24, (int)Math.ceil(menu.cookingProgressTicks() * 24.0F / menu.cookingTotalTicks()));
-        if (progressWidth > 0) {
-            graphics.blit(TEXTURE, leftPos + 79, topPos + 34, 176.0F, 14.0F,
-                    progressWidth, 16, 256, 256);
-        }
+    protected void renderBg(GuiGraphics g, float partialTick, int mouseX, int mouseY) {
+        ArcaneGui.panel(g, leftPos, topPos, imageWidth, imageHeight, partialTick);
+        ArcaneGui.zones(g, layout, leftPos, topPos);
+        ArcaneGui.flameBetween(g, menu, 0, 1, leftPos, topPos,
+                menu.isLit() ? menu.getLitProgress() : 0.0F, partialTick);
+        float progress = (float) menu.cookingProgressTicks() / Math.max(1, menu.cookingTotalTicks());
+        ArcaneGui.progressArrow(g, layout.arrow(), leftPos, topPos, progress, progress > 0);
+        ArcaneGui.slots(g, menu, leftPos, topPos, 2);
     }
 
     @Override
-    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
-        super.renderLabels(graphics, mouseX, mouseY);
+    protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
+        TextFit.left(g, font, title, titleLabelX, titleLabelY, imageWidth - 16, ArcaneGui.TEXT, false);
+        TextFit.left(g, font, playerInventoryTitle, inventoryLabelX, inventoryLabelY,
+                layout.inventory().width() - 8, ArcaneGui.TEXT_DIM, false);
         if (menu.getSlot(0).hasItem() && menu.cookingTotalTicks() > 0) {
-            double seconds = menu.remainingTicks() / 20.0;
-            String text = Component.translatable("gui.dimensional_mana.remaining_time", String.format("%.1f", seconds)).getString();
-            graphics.drawString(font, text, imageWidth - 8 - font.width(text), 6, 0xFF6B3E9E, false);
+            String text = Component.translatable("gui.dimensional_mana.remaining_time",
+                    String.format(java.util.Locale.ROOT, "%.1f", menu.remainingTicks() / 20.0)).getString();
+            int right = imageWidth - 8;
+            if (font.width(text) + 10 < right - font.width(title.getString()) - titleLabelX)
+                g.drawString(font, text, right - font.width(text), titleLabelY, ArcaneGui.MANA, false);
         }
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics, mouseX, mouseY, partialTick);
-        super.render(graphics, mouseX, mouseY, partialTick);
-        renderTooltip(graphics, mouseX, mouseY);
+    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        super.render(g, mouseX, mouseY, partialTick);
+        renderTooltip(g, mouseX, mouseY);
     }
 }

@@ -54,23 +54,42 @@ public final class RelicAccessoryItem extends Item implements ICurioItem {
             Map.entry("mage_delight", 2),
             Map.entry("element_absorption_charm", 1),
             Map.entry("detective_charm", 1),
+            Map.entry("world_blessing", 4),
             Map.entry("universal_belt", 1),
             Map.entry("scarlet_spirit_charm", 2),
             Map.entry("angel_crown", 4),
-            Map.entry("omniscient_shard", 2));
+            Map.entry("omniscient_shard", 2),
+            Map.entry("advanced_battle_qi_etching", 4),
+            Map.entry("amulet_casket", 1));
 
     private final Relics.Relic relic;
 
     public RelicAccessoryItem(Properties properties, Relics.Relic relic) {
-        super(properties);
+        super(AccessoryAttributeMirror.apply(properties, relic.id(), specs(relic)));
         this.relic = relic;
         CuriosApi.registerCurio(this, this);
     }
 
     public Relics.Relic relic() { return relic; }
 
+    /** 面板加成清单：Curios 按这份清单真实生效，同一份也会复制进物品数据给属性检查类 mod 看。 */
+    private static List<AccessoryAttributeMirror.Spec> specs(Relics.Relic relic) {
+        List<AccessoryAttributeMirror.Spec> specs = new java.util.ArrayList<>();
+        for (Relics.AttributeSpec spec : relic.attributes()) {
+            specs.add(new AccessoryAttributeMirror.Spec(spec.attribute(), spec.amount(), spec.operation()));
+        }
+        return specs;
+    }
+
     @Override
     public boolean canEquip(SlotContext slotContext, ItemStack stack) {
+        if (RelicEffects.ADVANCED_BATTLE_QI_ETCHING.equals(relic.id())) {
+            return MagicEquipment.MAGIC_ACCESSORY_SLOT.equals(slotContext.identifier());
+        }
+        if (RelicEffects.AMULET_CASKET.equals(relic.id())) {
+            return List.of(RelicEffects.UNIVERSAL_SLOT, MagicEquipment.MAGIC_ACCESSORY_SLOT,
+                    RelicEffects.CHARM_SLOT).contains(slotContext.identifier());
+        }
         return relic.slot().id().equals(slotContext.identifier())
                 || RelicEffects.UNIVERSAL_SLOT.equals(slotContext.identifier());
     }
@@ -99,6 +118,10 @@ public final class RelicAccessoryItem extends Item implements ICurioItem {
         }
         if (RelicEffects.UNIVERSAL_BELT.equals(relic.id())) {
             CuriosApi.addSlotModifier(modifiers, RelicEffects.UNIVERSAL_SLOT, id, 1.0,
+                    AttributeModifier.Operation.ADD_VALUE);
+        }
+        if (RelicEffects.AMULET_CASKET.equals(relic.id())) {
+            CuriosApi.addSlotModifier(modifiers, RelicEffects.CHARM_SLOT, id, 2.0,
                     AttributeModifier.Operation.ADD_VALUE);
         }
         return modifiers;

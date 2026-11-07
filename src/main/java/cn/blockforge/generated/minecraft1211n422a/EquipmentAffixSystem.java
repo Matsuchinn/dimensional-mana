@@ -34,6 +34,7 @@ import net.minecraft.world.item.TieredItem;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.TridentItem;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.ItemAttributeModifiers;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
@@ -81,6 +82,17 @@ public final class EquipmentAffixSystem {
     private static final String PLAYER_DROP_MARKER = "DimensionalManaPlayerDrop";
     /** 「元素附加」具体是哪一系元素（fire / water / … / arcane）。 */
     private static final String ELEMENT = "element";
+    // ---- r342 评级修正：耐久上限、基础面板、专属特性 ----
+    /** 物品的原始耐久上限，写进 CUSTOM_DATA 里，评级来回变也不会把基础值算错。 */
+    private static final String BASE_MAX_DAMAGE = "DimensionalManaBaseMaxDamage";
+    /** 评级专属特性已经掷过（不管中没中），避免每 20 刻重复抽。 */
+    private static final String TRAIT_ROLLED = "grade_trait_rolled";
+    /** 评级写进词条根节点的修正值，别的模组 / 调试命令能直接读到。 */
+    private static final String GRADE_DURABILITY_FIELD = "grade_durability_pct";
+    private static final String GRADE_PANEL_FIELD = "grade_panel_scale";
+    /** 基础面板修正单独一条属性来源，和词条加成区分开。 */
+    private static final ResourceLocation GRADE_ATTACK_MOD = id("grade_panel_attack_damage");
+    private static final ResourceLocation GRADE_ARMOR_MOD = id("grade_panel_armor");
     /** 弓弩专用物品标签：原版弓、弩都在里面，模组弓只要加进这个标签也认。 */
     private static final net.minecraft.tags.TagKey<Item> BOW_LIKE_TAG = net.minecraft.tags.TagKey.create(
             net.minecraft.core.registries.Registries.ITEM,
@@ -130,30 +142,105 @@ public final class EquipmentAffixSystem {
         return id("affix_element_addition_" + element);
     }
 
+    /**
+     * 武备评级。除词条数量之外，评级还带三项修正（r342 起）：
+     *
+     * <table border="1">
+     *   <caption>评级修正</caption>
+     *   <tr><th>评级</th><th>耐久上限</th><th>基础面板</th><th>专属特性</th></tr>
+     *   <tr><td>C</td><td>-5%</td><td>×0.90</td><td>—</td></tr>
+     *   <tr><td>B</td><td>±0%</td><td>×1.00</td><td>—</td></tr>
+     *   <tr><td>A</td><td>+5%</td><td>×1.05</td><td>附魔时 10% 多 1 条中等级</td></tr>
+     *   <tr><td>S</td><td>+10%</td><td>×1.10</td><td>附魔时 25% 多 1～2 条中等级</td></tr>
+     *   <tr><td>SS</td><td>+15%</td><td>×1.15</td><td>必定 1 条高等级；铁砧 / 加工台消耗 -10%</td></tr>
+     *   <tr><td>SSS</td><td>+20%</td><td>×1.20</td><td>必定 2 条高等级；铁砧 / 加工台消耗 -20%</td></tr>
+     * </table>
+     *
+     * <p>基础面板修正只乘「物品自己的基础数值」（武器基础攻击力 / 防具基础护甲），
+     * 词条加成与魔精钢的独立减伤都不受影响；耐久修正按向下取整算。</p>
+     */
     private enum Grade {
-        C(ChatFormatting.GRAY, 1, 2, 0, 2),
-        B(ChatFormatting.WHITE, 1, 3, 0, 2),
-        A(ChatFormatting.GREEN, 1, 4, 1, 3),
-        S(ChatFormatting.BLUE, 1, 6, 1, 4),
-        SS(ChatFormatting.LIGHT_PURPLE, 1, 8, 2, 4),
-        SSS(ChatFormatting.GOLD, 1, 10, 2, 4);
+        C(ChatFormatting.GRAY, 1, 2, 0, 2, -5, 0.90D),
+        B(ChatFormatting.WHITE, 1, 3, 0, 2, 0, 1.00D),
+        A(ChatFormatting.GREEN, 1, 4, 1, 3, 5, 1.05D),
+        S(ChatFormatting.BLUE, 1, 6, 1, 4, 10, 1.10D),
+        SS(ChatFormatting.LIGHT_PURPLE, 1, 8, 2, 4, 15, 1.15D),
+        SSS(ChatFormatting.GOLD, 1, 10, 2, 4, 20, 1.20D);
 
         final ChatFormatting color;
         final int mainMin;
         final int mainMax;
         final int subMin;
         final int subMax;
+        /** 耐久上限修正，百分数；-5 就是 -5%。 */
+        final int durabilityPct;
+        /** 基础面板修正倍率：0.90 ～ 1.20。 */
+        final double panelScale;
 
-        Grade(ChatFormatting color, int mainMin, int mainMax, int subMin, int subMax) {
+        Grade(ChatFormatting color, int mainMin, int mainMax, int subMin, int subMax,
+              int durabilityPct, double panelScale) {
             this.color = color;
             this.mainMin = mainMin;
             this.mainMax = mainMax;
             this.subMin = subMin;
             this.subMax = subMax;
+            this.durabilityPct = durabilityPct;
+            this.panelScale = panelScale;
         }
 
         static Grade parse(String value) {
             try { return valueOf(value); } catch (IllegalArgumentException ignored) { return C; }
+        }
+
+        /** 按修正后的倍率算耐久上限：向下取整，最少留 1 点。 */
+        int durabilityOf(int base) {
+            return Math.max(1, (int)Math.floor(base * (1.0D + durabilityPct / 100.0D)));
+        }
+
+        /** 铁砧 / 武备加工台消耗的减免比例。 */
+        double discount() {
+            if (this == SS) return 0.10D;
+            if (this == SSS) return 0.20D;
+            return 0.0D;
+        }
+
+        /** 附魔时「额外多出几条」与抽中的概率；0 表示这个评级没有附魔特性。 */
+        int extraEnchantMin() {
+            return switch (this) {
+                case A, SS -> 1;
+                case S -> 1;
+                case SSS -> 2;
+                default -> 0;
+            };
+        }
+
+        int extraEnchantMax() {
+            return switch (this) {
+                case A -> 1;
+                case S -> 2;
+                case SS -> 1;
+                case SSS -> 2;
+                default -> 0;
+            };
+        }
+
+        /** 附魔特性触发概率；1.0 表示必定触发。 */
+        double extraEnchantChance() {
+            return switch (this) {
+                case A -> 0.10D;
+                case S -> 0.25D;
+                case SS, SSS -> 1.0D;
+                default -> 0.0D;
+            };
+        }
+
+        /** 附魔特性的等级区间：A / S 是中等级 2～3，SS / SSS 是高等级 3～5。 */
+        int extraEnchantLevelMin() {
+            return this == A || this == S ? 2 : 3;
+        }
+
+        int extraEnchantLevelMax() {
+            return this == A || this == S ? 3 : 5;
         }
     }
 
@@ -605,6 +692,9 @@ public final class EquipmentAffixSystem {
 
     /** 把词条根节点写进物品：只替换自己这一份自定义数据，别把其它模组的 NBT 一起冲掉。 */
     private static ItemStack writeRoot(ItemStack stack, CompoundTag root, Grade grade) {
+        // 修正值随词条一起写进根节点：工具提示、调试命令、别的模组都能读到这件武备的评级加成。
+        root.putInt(GRADE_DURABILITY_FIELD, grade.durabilityPct);
+        root.putDouble(GRADE_PANEL_FIELD, grade.panelScale);
         CustomData old = stack.get(DataComponents.CUSTOM_DATA);
         CompoundTag data = old == null ? new CompoundTag() : old.copyTag();
         data.put(ROOT, root);
@@ -612,8 +702,161 @@ public final class EquipmentAffixSystem {
         stack.set(DataComponents.CUSTOM_NAME, prefixedName(stack, grade));
         if (grade == Grade.SSS) stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
         else stack.remove(DataComponents.ENCHANTMENT_GLINT_OVERRIDE);
+        applyGradeDurability(stack, grade);
         return stack;
     }
+
+    // ------------------------------------------------------------------
+    // r342 评级修正：耐久上限、基础面板、专属特性
+    // ------------------------------------------------------------------
+
+    /**
+     * 把评级修正里的「耐久上限」写进物品。
+     *
+     * <p>原版耐久上限是物品组件 {@link DataComponents#MAX_DAMAGE}，这里按物品的原始上限
+     * 乘上评级系数，再向下取整。原始上限单独存在 {@link #BASE_MAX_DAMAGE} 里，
+     * 所以同一件装备无论洗练、升级多少次，耐久都只按基础值算一遍，不会 1.05 的 N 次方。</p>
+     */
+    private static void applyGradeDurability(ItemStack stack, Grade grade) {
+        if (!stack.isDamageableItem()) return;
+        CustomData old = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag data = old == null ? new CompoundTag() : old.copyTag();
+        boolean changed = false;
+        int base = data.getInt(BASE_MAX_DAMAGE);
+        if (base <= 0) {
+            // 第一次遇到这件装备：现在的上限就是原版基础值。
+            base = stack.getMaxDamage();
+            if (base <= 0) return;
+            data.putInt(BASE_MAX_DAMAGE, base);
+            changed = true;
+        }
+        int target = grade.durabilityOf(base);
+        if (stack.getOrDefault(DataComponents.MAX_DAMAGE, 0) != target) {
+            stack.set(DataComponents.MAX_DAMAGE, target);
+            // 耐久上限变低了就把已损耐久压回上限内，别出现 “-1/-1” 的怪状态。
+            int damage = stack.getDamageValue();
+            if (damage > target - 1) stack.setDamageValue(Math.max(0, target - 1));
+            changed = true;
+        }
+        // 没有变化就不写组件，避免每秒给每件装备刷一次数据。
+        if (changed) CustomData.set(DataComponents.CUSTOM_DATA, stack, data);
+    }
+
+    /** 词条被剥掉（砂轮磨皮）时把耐久上限还原成原版数值。 */
+    private static void restoreBaseDurability(ItemStack stack) {
+        CustomData old = stack.get(DataComponents.CUSTOM_DATA);
+        if (old == null) return;
+        CompoundTag data = old.copyTag();
+        int base = data.getInt(BASE_MAX_DAMAGE);
+        if (base <= 0) return;
+        data.remove(BASE_MAX_DAMAGE);
+        CustomData.set(DataComponents.CUSTOM_DATA, stack, data);
+        if (stack.isDamageableItem()) {
+            stack.set(DataComponents.MAX_DAMAGE, base);
+            int damage = stack.getDamageValue();
+            if (damage > base - 1) stack.setDamageValue(Math.max(0, base - 1));
+        }
+    }
+
+    /** 这件武备的评级；没有词条返回 {@code null}。 */
+    public static String gradeName(ItemStack stack) {
+        CompoundTag root = affixRoot(stack);
+        return root == null ? null : root.getString(GRADE);
+    }
+
+    /** 只把词条根节点写回物品，不动名字 / 耐久这些已经写好的东西。 */
+    private static void writeRootTag(ItemStack stack, CompoundTag root) {
+        CustomData old = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag data = old == null ? new CompoundTag() : old.copyTag();
+        data.put(ROOT, root);
+        CustomData.set(DataComponents.CUSTOM_DATA, stack, data);
+    }
+
+    /**
+     * 评级专属附魔特性（A / S / SS / SSS）：这件武备**第一次**被附魔时结算一次。
+     *
+     * <p>原版没有「附魔台附魔完成」的事件，所以这里按「物品身上已经有附魔」来判断：
+     * 每秒扫一次身上和手上的装备，第一次发现有附魔就按评级的概率掷一次，
+     * 结果写进 {@link #TRAIT_ROLLED}，不管中没中都不再重掷（不会因为反复穿脱而无限刷附魔）。</p>
+     */
+    private static void applyGradeEnchantTrait(ItemStack stack, Grade grade, Player player) {
+        if (grade.extraEnchantMax() <= 0) return;
+        CompoundTag root = affixRoot(stack);
+        if (root == null || root.getBoolean(TRAIT_ROLLED)) return;
+        if (!EnchantmentHelper.hasAnyEnchantments(stack)) return;
+        net.minecraft.util.RandomSource random = player.getRandom();
+        boolean hit = random.nextDouble() < grade.extraEnchantChance();
+        root = root.copy();
+        root.putBoolean(TRAIT_ROLLED, true);
+        writeRootTag(stack, root);
+        if (!hit) return;
+        int min = grade.extraEnchantMin();
+        int max = grade.extraEnchantMax();
+        int count = max <= min ? min : min + random.nextInt(max - min + 1);
+        List<Holder<Enchantment>> pool = gradeEnchantPool(stack, player);
+        if (pool.isEmpty()) return;
+        ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(
+                stack.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY));
+        List<Holder<Enchantment>> present = new ArrayList<>(mutable.keySet());
+        int added = 0;
+        while (added < count && !pool.isEmpty()) {
+            Holder<Enchantment> holder = pool.remove(random.nextInt(pool.size()));
+            // 和已有的附魔互斥（锋利 / 亡灵杀手这类）就跳过，不造出原版不可能出现的组合。
+            if (!compatibleWithAll(holder, present)) continue;
+            int level = grade.extraEnchantLevelMin()
+                    + random.nextInt(grade.extraEnchantLevelMax() - grade.extraEnchantLevelMin() + 1);
+            level = Math.max(1, Math.min(level, holder.value().getMaxLevel()));
+            // 已经有更高等级的附魔时保留原来的，不降级。
+            if (mutable.getLevel(holder) >= level) continue;
+            mutable.set(holder, level);
+            present.add(holder);
+            added++;
+        }
+        if (added > 0) stack.set(DataComponents.ENCHANTMENTS, mutable.toImmutable());
+    }
+
+    /** 新附魔和身上已有的每一条都不互斥才算能加。 */
+    private static boolean compatibleWithAll(Holder<Enchantment> candidate, List<Holder<Enchantment>> present) {
+        for (Holder<Enchantment> existing : present) {
+            if (!Enchantment.areCompatible(candidate, existing)) return false;
+        }
+        return true;
+    }
+
+    /** 这件装备能附上、且不是诅咒的附魔池。 */
+    private static List<Holder<Enchantment>> gradeEnchantPool(ItemStack stack, Player player) {
+        List<Holder<Enchantment>> pool = new ArrayList<>();
+        player.level().registryAccess()
+                .registryOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
+                .holders()
+                .filter(holder -> !holder.is(net.minecraft.tags.EnchantmentTags.CURSE))
+                .filter(holder -> holder.value().canEnchant(stack))
+                .forEach(pool::add);
+        return pool;
+    }
+
+    /**
+     * 评级带来的「基础面板」加成：只按物品自己注册的基础攻击力 / 基础护甲算，
+     * 不碰词条加成，也不碰魔精钢的独立减伤。
+     *
+     * <p>返回的两个数会在 {@link #refresh(Player)} 里作为独立来源写进玩家属性，
+     * 所以属性面板能查到，数值上等同于「基础值 × 评级倍率」。</p>
+     */
+    private static double[] panelBonus(ItemStack stack, Grade grade) {
+        if (grade.panelScale == 1.0D) return new double[]{0.0D, 0.0D};
+        double attackBase = 0.0D;
+        double armorBase = 0.0D;
+        ItemAttributeModifiers modifiers = stack.getOrDefault(
+                DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        for (ItemAttributeModifiers.Entry entry : modifiers.modifiers()) {
+            if (entry.modifier().operation() != AttributeModifier.Operation.ADD_VALUE) continue;
+            if (entry.attribute().is(Attributes.ATTACK_DAMAGE)) attackBase += entry.modifier().amount();
+            else if (entry.attribute().is(Attributes.ARMOR)) armorBase += entry.modifier().amount();
+        }
+        double scale = grade.panelScale - 1.0D;
+        return new double[]{attackBase * scale, armorBase * scale};
+    }
+
 
     private static CompoundTag affixTag(Affix affix, int level, double value) {
         CompoundTag tag = new CompoundTag();
@@ -662,6 +905,16 @@ public final class EquipmentAffixSystem {
         }
         event.getToolTip().add(Component.translatable("tooltip.dimensional_mana.affix_grade", grade.name())
                 .withStyle(grade.color));
+        // 评级修正值：耐久上限 / 基础面板 / 专属特性，三行都直接写在装备上，玩家一眼能看出差距。
+        String durabilityText = (grade.durabilityPct > 0 ? "+" : "") + grade.durabilityPct + "%";
+        String panelText = String.format(Locale.ROOT, "%.2f", grade.panelScale);
+        event.getToolTip().add(Component.translatable("tooltip.dimensional_mana.grade_bonus",
+                durabilityText, panelText).withStyle(ChatFormatting.AQUA));
+        if (grade.extraEnchantMax() > 0) {
+            event.getToolTip().add(Component.translatable(
+                    "tooltip.dimensional_mana.grade_trait." + grade.name().toLowerCase(Locale.ROOT))
+                    .withStyle(ChatFormatting.DARK_PURPLE));
+        }
         String schoolKey = "tooltip.dimensional_mana.affix_school."
                 + ("magic".equals(root.getString(SCHOOL)) ? "magic" : "physical");
         event.getToolTip().add(Component.translatable("tooltip.dimensional_mana.affix_school",
@@ -796,12 +1049,8 @@ public final class EquipmentAffixSystem {
         while (combined.size() > SUB_MAX_COUNT) combined.remove(random.nextInt(combined.size()));
         a.put(MAIN, main);
         a.put(SUBS, combined);
-        CompoundTag data = new CompoundTag();
-        data.put(ROOT, a);
-        CustomData.set(DataComponents.CUSTOM_DATA, output, data);
-        output.set(DataComponents.CUSTOM_NAME, prefixedName(output, grade));
-        if (grade == Grade.SSS) output.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
-        return output;
+        // 走统一的 writeRoot：名字、光效、评级耐久上限一起结算，也不再把左槽的其它物品数据冲掉。
+        return writeRoot(output, a, grade);
     }
 
     /** 主词条等级上限。 */
@@ -1093,6 +1342,46 @@ public final class EquipmentAffixSystem {
         return writeRoot(stack, root, grade);
     }
 
+    /**
+     * 词条重铸符：**品级不变**，只把主词条与副词条按当前品级的规则重新抽一遍。
+     *
+     * <p>和超导魔晶洗练的区别就在这里：洗练连品质、流派一起重掷（可能掉级），
+     * 重铸只换「词条长什么样」，S 级洗完还是 S 级。条数与等级区间仍然由品级决定，
+     * 所以 SSS 依旧是 2～4 条副词条、主词条更高等级。已经掷过的评级附魔特性
+     * 与锻造模板标记都会保留，不会因为重铸而白送一次附魔。</p>
+     */
+    public static ItemStack reforgeAffixes(ItemStack stack, net.minecraft.util.RandomSource random) {
+        CompoundTag root = affixRoot(stack);
+        if (root == null) return stack;
+        Grade grade = Grade.parse(root.getString(GRADE));
+        CompoundTag fresh = buildRoot(stack, grade, schoolOf(root, stack), random, false);
+        if (root.contains(REROLL)) fresh.putInt(REROLL, root.getInt(REROLL));
+        if (root.getBoolean(TEMPLATE_FORGED)) fresh.putBoolean(TEMPLATE_FORGED, true);
+        if (root.getBoolean("boss_drop")) fresh.putBoolean("boss_drop", true);
+        if (root.getBoolean(TRAIT_ROLLED)) fresh.putBoolean(TRAIT_ROLLED, true);
+        return writeRoot(stack, fresh, grade);
+    }
+
+    /** 评级给的铁砧 / 武备加工台消耗减免（SS 10%、SSS 20%，其余 0）。 */
+    public static double gradeDiscount(ItemStack stack) {
+        CompoundTag root = affixRoot(stack);
+        return root == null ? 0.0D : Grade.parse(root.getString(GRADE)).discount();
+    }
+
+    /**
+     * 铁砧消耗减免：SS / SSS 的武备在铁砧上修、合并、附魔书都便宜 10% / 20%。
+     *
+     * <p>注册时用最低优先级，保证在「同类装备合成」那个监听器改完价格之后
+     * 再打折，不会被打工顺序吃掉。</p>
+     */
+    public static void onAnvilCost(AnvilUpdateEvent event) {
+        double discount = Math.max(gradeDiscount(event.getLeft()), gradeDiscount(event.getRight()));
+        if (discount <= 0.0D) return;
+        long cost = event.getCost();
+        if (cost <= 0L) return;
+        event.setCost(Math.max(1L, (long)Math.ceil(cost * (1.0D - discount))));
+    }
+
     // ------------------------------------------------------------------
     // 武备加工台：武备强化石（副词条强制成长）与锻造模板（白板赋词条）
     // ------------------------------------------------------------------
@@ -1216,11 +1505,15 @@ public final class EquipmentAffixSystem {
         ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(current);
         mutable.removeIf(enchantment -> !enchantment.is(net.minecraft.tags.EnchantmentTags.CURSE));
         stack.set(net.minecraft.core.component.DataComponents.ENCHANTMENTS, mutable.toImmutable());
+        // 魔精钢装备的「附魔 +1」是按已有附魔记账的：附魔被磨光后账本必须作废，不然重新附魔不会再 +1。
+        MojiangSteelEvents.clearBoostIfUnenchanted(stack);
     }
 
     /** 抹掉装备上的整套词条数据（含词条前缀名与传说光效）。 */
     public static void stripAffixes(ItemStack stack) {
         if (!hasAffix(stack)) return;
+        // 先把评级给的耐久上限还原成原版，再抹数据。
+        restoreBaseDurability(stack);
         CustomData data = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
         CompoundTag tag = data == null ? new CompoundTag() : data.copyTag();
         tag.remove(ROOT);
@@ -1250,6 +1543,34 @@ public final class EquipmentAffixSystem {
         Player player = event.getEntity();
         if (player.level().isClientSide || player.tickCount % 20 != 0) return;
         refresh(player);
+        // 每秒扫一遍身上和背包里的武备：补上耐久修正（老存档的装备也能自动补正），
+        // 顺便检查「附魔时多出几条附魔」的评级特性有没有该结算的。
+        // 只做几次标签判断，没词条的物品在第一行就返回，开销可以忽略。
+        for (ItemStack stack : player.getInventory().items) ensureGradeState(stack, player);
+        for (ItemStack stack : equippedAndHeld(player)) ensureGradeState(stack, player);
+    }
+
+    /** 身上穿戴的六格装备（护甲四件 + 主手 + 副手）。 */
+    private static List<ItemStack> equippedAndHeld(Player player) {
+        List<ItemStack> stacks = new ArrayList<>();
+        for (EquipmentSlot slot : new EquipmentSlot[]{
+                EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET,
+                EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND}) {
+            stacks.add(player.getItemBySlot(slot));
+        }
+        return stacks;
+    }
+
+    /**
+     * 让一件武备的评级修正保持最新：耐久上限按当前评级重算，专属附魔特性在
+     * 「这件装备已经有了附魔、还没掷过特性」时结算一次。
+     */
+    private static void ensureGradeState(ItemStack stack, Player player) {
+        CompoundTag root = affixRoot(stack);
+        if (root == null) return;
+        Grade grade = Grade.parse(root.getString(GRADE));
+        applyGradeDurability(stack, grade);
+        applyGradeEnchantTrait(stack, grade, player);
     }
 
     /**
@@ -1408,6 +1729,11 @@ public final class EquipmentAffixSystem {
         clearModifier(player, Attributes.ATTACK_SPEED, ATTACK_SPEED_MOD);
         clearModifier(player, Attributes.MAX_HEALTH, MAX_HEALTH_MOD);
         clearModifier(player, Attributes.MAX_HEALTH, MAX_HEALTH_PERCENT_MOD);
+        // 护甲值 / 盔甲韧性 / 评级面板修正也必须先清，否则卸下装备后旧数值会一直挂着。
+        clearModifier(player, Attributes.ARMOR, ARMOR_VALUE_MOD);
+        clearModifier(player, Attributes.ARMOR_TOUGHNESS, ARMOR_TOUGHNESS_MOD);
+        clearModifier(player, Attributes.ATTACK_DAMAGE, GRADE_ATTACK_MOD);
+        clearModifier(player, Attributes.ARMOR, GRADE_ARMOR_MOD);
         // 词条专用的“可被外部面板读到”的属性：先清掉上一轮，再按当前装备重新写。
         clearModifier(player, SpellAttributes.MANA_MAX_PERCENT, AFFIX_MANA_PERCENT_MOD);
         clearModifier(player, SpellAttributes.MANA_MAX_FLAT, AFFIX_MANA_FLAT_MOD);
@@ -1440,11 +1766,17 @@ public final class EquipmentAffixSystem {
         double armorPen = 0, lifesteal = 0, qiRegen = 0, qiSkillPower = 0;
         double comboDamage = 0, executeDamage = 0, mikiriDamage = 0, parryWindow = 0;
         double arrowFlat = 0, arrowPercent = 0, armorValue = 0, armorToughness = 0;
+        // 评级「基础面板修正」单独记一份：属性面板里能看出是评级给的，不和词条混在一起。
+        double gradeAttack = 0, gradeArmor = 0;
         double[] elementValues = new double[ELEMENT_IDS.length];
         double[] elementAdditions = new double[ELEMENT_IDS.length];
         for (ItemStack stack : relevantEquipment(player)) {
             CompoundTag root = affixRoot(stack);
             if (root == null) continue;
+            // 评级的基础面板修正：只按物品自身的基础数值算，单独记一份，和词条加成区分开。
+            double[] panel = panelBonus(stack, Grade.parse(root.getString(GRADE)));
+            gradeAttack += panel[0];
+            gradeArmor += panel[1];
             List<CompoundTag> all = new ArrayList<>();
             all.add(root.getCompound(MAIN));
             ListTag subs = root.getList(SUBS, 10);
@@ -1531,6 +1863,9 @@ public final class EquipmentAffixSystem {
         addModifier(player.getAttribute(SpellAttributes.ARROW_DAMAGE_PERCENT), AFFIX_ARROW_PERCENT_MOD, arrowPercent, AttributeModifier.Operation.ADD_VALUE);
         // 护甲值与盔甲韧性直接写进原版属性：原版面板、其它模组都直接读得到，护甲减伤也真的按它算。
         addModifier(player.getAttribute(Attributes.ARMOR), ARMOR_VALUE_MOD, armorValue, AttributeModifier.Operation.ADD_VALUE);
+        // 评级基础面板修正：武器基础伤害 ×(评级倍率-1)、防具基础护甲 ×(评级倍率-1)，各自一条来源。
+        addModifier(player.getAttribute(Attributes.ATTACK_DAMAGE), GRADE_ATTACK_MOD, gradeAttack, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(Attributes.ARMOR), GRADE_ARMOR_MOD, gradeArmor, AttributeModifier.Operation.ADD_VALUE);
         addModifier(player.getAttribute(Attributes.ARMOR_TOUGHNESS), ARMOR_TOUGHNESS_MOD, armorToughness, AttributeModifier.Operation.ADD_VALUE);
         for (int i = 0; i < ELEMENT_IDS.length; i++) {
             addModifier(player.getAttribute(SpellAttributes.elementDamage(ELEMENT_IDS[i])),

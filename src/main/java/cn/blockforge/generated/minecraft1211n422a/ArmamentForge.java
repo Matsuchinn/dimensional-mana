@@ -43,6 +43,12 @@ public final class ArmamentForge {
     /** 副词条强化材料：武备强化石，一颗顶一次副词条成长。 */
     public static final String ENHANCE_STONE = "armament_enhancement_stone";
 
+    /** 武备强化石磨出来的粉：词条重铸符的核心材料。 */
+    public static final String ENHANCE_STONE_DUST = "armament_enhancement_stone_dust";
+
+    /** 词条重铸符：品级不变、只重抽主副词条。 */
+    public static final String REFORGE_TALISMAN = "affix_reforge_talisman";
+
     /** 用锻造模板赋予出来的武备，每次敲击升级多花 50% 魔素。 */
     public static final double TEMPLATE_SURCHARGE = 1.5D;
 
@@ -56,12 +62,14 @@ public final class ArmamentForge {
 
     /**
      * 按装备算升级价：普通武备就是 {@link #upgradeCost(int)}，
-     * 锻造模板打造出来的武备（{@link EquipmentAffixSystem#isTemplateForged}）再加 50%，向上取整。
+     * 锻造模板打造出来的武备（{@link EquipmentAffixSystem#isTemplateForged}）再加 50%，
+     * SS / SSS 武备再减 10% / 20%（{@link EquipmentAffixSystem#gradeDiscount}），全程向上取整。
      */
     public static int upgradeCost(ItemStack equipment, int nextLevel) {
-        int base = upgradeCost(nextLevel);
-        if (!EquipmentAffixSystem.isTemplateForged(equipment)) return base;
-        return (int) Math.ceil(base * TEMPLATE_SURCHARGE);
+        double cost = upgradeCost(nextLevel);
+        if (EquipmentAffixSystem.isTemplateForged(equipment)) cost *= TEMPLATE_SURCHARGE;
+        cost *= 1.0D - EquipmentAffixSystem.gradeDiscount(equipment);
+        return Math.max(1, (int) Math.ceil(cost));
     }
 
     /** 是不是武备强化石。 */
@@ -98,15 +106,22 @@ public final class ArmamentForge {
         return crystal == null ? 0 : crystal.value();
     }
 
+    /** 是不是词条重铸符（保品级重抽词条）。 */
+    public static boolean isReforgeTalisman(ItemStack stack) {
+        return stack != null && !stack.isEmpty()
+                && stack.is(GeneratedMod.MOD_ITEMS.get(REFORGE_TALISMAN).get());
+    }
+
     /** 是不是超导魔晶（洗练用）。 */
     public static boolean isRerollMaterial(ItemStack stack) {
         return stack != null && !stack.isEmpty()
                 && stack.is(GeneratedMod.MOD_ITEMS.get(REROLL_MATERIAL).get());
     }
 
-    /** 材料格只收五种魔晶、超导魔晶、武备强化石和锻造模板；魔晶粉、其它杂物一律不收。 */
+    /** 材料格只收五种魔晶、超导魔晶、武备强化石、词条重铸符和锻造模板；魔晶粉、其它杂物一律不收。 */
     public static boolean acceptsMaterial(ItemStack stack) {
-        return crystalValue(stack) > 0 || isRerollMaterial(stack) || isEnhanceStone(stack) || isSmithingTemplate(stack);
+        return crystalValue(stack) > 0 || isRerollMaterial(stack) || isEnhanceStone(stack)
+                || isReforgeTalisman(stack) || isSmithingTemplate(stack);
     }
 
     /**

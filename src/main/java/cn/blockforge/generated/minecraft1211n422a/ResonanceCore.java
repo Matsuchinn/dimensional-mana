@@ -21,8 +21,8 @@ import java.util.List;
  * <p>所有数值都写在玩家自己的持久化数据里，因此死亡、换维度、退出重进都会保留；
  * 客户端只收到一份只读快照用于 HUD 显示。</p>
  *
- * <p>充能规则：造成对应元素的伤害就充能，这一下暴击 +2.0、不暴击 +1.0，最快每 5 刻一次；
- * 切换元素立即清零。
+ * <p>充能规则：造成对应元素的伤害就充能，这一下暴击 +2.0、不暴击 +1.0，最快每 2 刻一次；
+ * 切换元素立即清零。武备的元素附加伤害在实际命中后也走同一套充能规则。
  * 每点充能提供 0.35% 该元素伤害（独立乘区），上限 100 点即 +35%。</p>
  *
  * <p>元素共鸣期间玩家获得“魔力通透”：法术伤害 +15%（独立乘区）、法术暴击率 +10%、
@@ -42,8 +42,8 @@ public final class ResonanceCore {
     public static final int PULSE_INTERVAL = 30;
     public static final double PULSE_RADIUS = 8.0;
     public static final float PULSE_DAMAGE = 50.0F;
-    /** 每次充能的冷却，单位游戏刻：5 刻（0.25 秒）最多充能一次。 */
-    public static final int CHARGE_COOLDOWN = 5;
+    /** 每次充能的冷却，单位游戏刻：2 刻（0.1 秒）最多充能一次。 */
+    public static final int CHARGE_COOLDOWN = 2;
     /** 对应元素伤害暴击时一次充入的量。 */
     public static final double CRIT_CHARGE = 2.0;
     /** 对应元素伤害没暴击时一次充入的量。 */

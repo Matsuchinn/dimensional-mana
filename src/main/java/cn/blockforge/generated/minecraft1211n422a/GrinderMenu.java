@@ -31,10 +31,10 @@ public final class GrinderMenu extends AbstractContainerMenu {
         this.data.set(1, grinder.getItem() instanceof GrinderItem item ? item.processTicks() : 360);
         this.data.set(3, this.maxTier);
 
-        addSlot(new Slot(container, 0, 44, 35) {
+        addSlot(new Slot(container, 0, 44, 24) {
             @Override public boolean mayPlace(ItemStack stack) { return crystalTier(stack) >= 0 && crystalTier(stack) <= data.get(3); }
         });
-        addSlot(new Slot(container, 1, 116, 35) {
+        addSlot(new Slot(container, 1, 116, 24) {
             @Override public boolean mayPlace(ItemStack stack) { return false; }
         });
 
@@ -85,7 +85,9 @@ public final class GrinderMenu extends AbstractContainerMenu {
     private void finishGrinding() {
         GrindingResult result = grindingResult(container.getItem(0));
         if (result == null) return;
-        ItemStack dust = result.stack();
+        // 真正发货才掷数量：强化石 → 粉这种「2～4 个」的配方在这里出随机数。
+        ItemStack dust = result.recipe().roll(owner.getRandom());
+        if (dust.isEmpty()) return;
         container.getItem(0).shrink(1);
         ItemStack output = container.getItem(1);
         if (output.isEmpty()) container.setItem(1, dust);
@@ -108,7 +110,7 @@ public final class GrinderMenu extends AbstractContainerMenu {
 
     private static GrindingResult grindingResult(ItemStack input) {
         GrinderRecipes.Recipe recipe = GrinderRecipes.find(input);
-        return recipe == null ? null : new GrindingResult(recipe.tier(), recipe.output().copy());
+        return recipe == null ? null : new GrindingResult(recipe.tier(), recipe);
     }
 
     private void playGrindingSound(int progress) {
@@ -118,7 +120,15 @@ public final class GrinderMenu extends AbstractContainerMenu {
                 SoundSource.PLAYERS, 0.55F, pitch);
     }
 
-    private record GrindingResult(int tier, ItemStack stack) {}
+    /**
+     * 一次研磨的结果。{@code stack()} 是「最多能出多少」的预览版本：
+     * 占位容量按上限判断，免得随机出货把产物槽挤爆。
+     */
+    private record GrindingResult(int tier, GrinderRecipes.Recipe recipe) {
+        ItemStack stack() {
+            return recipe.output().copy();
+        }
+    }
 
     public int progress() { return data.get(0); }
     public int totalProgress() { return Math.max(1, data.get(1)); }

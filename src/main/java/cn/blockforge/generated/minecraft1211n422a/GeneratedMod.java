@@ -462,6 +462,10 @@ public final class GeneratedMod {
     public static final DeferredHolder<MenuType<?>, MenuType<WeaponWorkbenchMenu>> WEAPON_WORKBENCH_MENU = MENUS.register(
             WeaponWorkbenchBlock.BLOCK_ID,
             () -> new MenuType<>(WeaponWorkbenchMenu::new, FeatureFlags.DEFAULT_FLAGS));
+    /** 魔晶砂轮：两个输入格 + 一个成品格 + 一个「模式切换」按钮。 */
+    public static final DeferredHolder<MenuType<?>, MenuType<ManaGrindstoneMenu>> MANA_GRINDSTONE_MENU = MENUS.register(
+            ManaGrindstoneBlock.BLOCK_ID,
+            () -> new MenuType<>(ManaGrindstoneMenu::new, FeatureFlags.DEFAULT_FLAGS));
     /** 冒险者交易界面：窗口 id + 实体 id，客户端靠实体 id 找回那只冒险者。 */
     public static final DeferredHolder<MenuType<?>, MenuType<AdventurerTradeMenu>> ADVENTURER_TRADE_MENU = MENUS.register(
             "adventurer_trade", () -> net.neoforged.neoforge.common.extensions.IMenuTypeExtension.create(
@@ -699,9 +703,25 @@ public final class GeneratedMod {
                 BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_PURPLE).strength(5.0F, 600.0F)
                         .requiresCorrectToolForDrops().sound(SoundType.METAL)
                         .lightLevel(state -> 6)), Rarity.EPIC);
+        // 蚀纹木木棍：魔晶加工台里由 2 块蚀纹木木板竖着压出来的基础材料，
+        // 也是魔晶砂轮的三根木构件之一。它归「自然」页，跟蚀纹木这一家子摆一起
+        // （见 ErosionWasteland.NATURAL_IDS），主创造页会自动跳过它。
+        simple("erosion_stick", Rarity.COMMON);
+        // 魔晶砂轮：原版砂轮的全部功能 + 可自由切换的两种剥离方向（洗附魔 / 洗词条）。
+        // noOcclusion 不能省：模型只占一格的一部分，少了它会把四周方块贴着的面全部剔掉（看起来像透明）。
+        device(ManaGrindstoneBlock.BLOCK_ID, () -> new ManaGrindstoneBlock(
+                BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_PURPLE).strength(3.5F, 600.0F)
+                        .requiresCorrectToolForDrops().sound(SoundType.STONE).noOcclusion()
+                        .lightLevel(state -> 5)), Rarity.RARE);
         // 武备强化石：武备加工台的第二种材料，满级武备用它把副词条一路顶到满。
         MOD_ITEMS.put(ArmamentStoneLoot.ITEM_ID, ITEMS.register(ArmamentStoneLoot.ITEM_ID,
                 () -> new ArmamentStoneItem(new Item.Properties().rarity(Rarity.EPIC)
+                        .component(net.minecraft.core.component.DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true))));
+        // 武备强化石粉：强化石在下界合金研磨器里磨 10 秒的产物（2～4 份），词条重铸符的核心材料。
+        simple(ArmamentForge.ENHANCE_STONE_DUST, Rarity.EPIC);
+        // 词条重铸符：武备加工台的新材料，品级不变、只重抽主副词条。
+        MOD_ITEMS.put(ArmamentForge.REFORGE_TALISMAN, ITEMS.register(ArmamentForge.REFORGE_TALISMAN,
+                () -> new AffixReforgeTalismanItem(new Item.Properties().rarity(Rarity.EPIC)
                         .component(net.minecraft.core.component.DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true))));
 
         simple("raw_lesser_mana_crystal", Rarity.COMMON);
@@ -828,6 +848,9 @@ public final class GeneratedMod {
             magicItem(relic.id(), ITEMS.register(relic.id(), () -> new RelicAccessoryItem(
                     relicProperties(relic), relic)));
         }
+        // 高阶斗气铭蚀属于「次元物语：斗气」；从魔法页移出后加入斗气页。
+        MAGIC_ITEM_IDS.remove(RelicEffects.ADVANCED_BATTLE_QI_ETCHING);
+        QI_ITEM_IDS.add(RelicEffects.ADVANCED_BATTLE_QI_ETCHING);
         // 元素精通护符：通用饰品 / 魔法饰品 / 护符三个栏位都能戴，佩戴 +50 元素精通。
         magicItem(ElementalMasteryCharmItem.ITEM_ID, ITEMS.register(ElementalMasteryCharmItem.ITEM_ID,
                 () -> new ElementalMasteryCharmItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE))));
@@ -1178,6 +1201,10 @@ public final class GeneratedMod {
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<WeaponWorkbenchBlockEntity>> WEAPON_WORKBENCH_BLOCK_ENTITY =
             BLOCK_ENTITIES.register(WeaponWorkbenchBlock.BLOCK_ID, () -> BlockEntityType.Builder.of(
                     WeaponWorkbenchBlockEntity::new, MOD_BLOCKS.get(WeaponWorkbenchBlock.BLOCK_ID).get()).build(null));
+    /** 魔晶砂轮：存三个格子和当前模式，每个 tick 重算一次成品。 */
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ManaGrindstoneBlockEntity>> MANA_GRINDSTONE_BLOCK_ENTITY =
+            BLOCK_ENTITIES.register(ManaGrindstoneBlock.BLOCK_ID, () -> BlockEntityType.Builder.of(
+                    ManaGrindstoneBlockEntity::new, MOD_BLOCKS.get(ManaGrindstoneBlock.BLOCK_ID).get()).build(null));
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<MagicCircleBaseBlockEntity>> MAGIC_CIRCLE_BASE_BLOCK_ENTITY =
             BLOCK_ENTITIES.register("magic_circle_base", () -> BlockEntityType.Builder.of(MagicCircleBaseBlockEntity::new,
                     MOD_BLOCKS.get("magic_circle_base").get()).build(null));
@@ -1300,7 +1327,7 @@ public final class GeneratedMod {
     /** 饰品的物品属性：t0/t1 带附魔光效，其余按梯度给普通稀有度。 */
     private static Item.Properties relicProperties(Relics.Relic relic) {
         Item.Properties properties = new Item.Properties().stacksTo(1).rarity(relic.tier().rarity());
-        return relic.tier().glint()
+        return relic.glint()
                 ? properties.component(net.minecraft.core.component.DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true)
                 : properties;
     }
@@ -1321,6 +1348,7 @@ public final class GeneratedMod {
         if (id.endsWith("_casting_gloves")) return 70;
         if ("ancient_casket".equals(id) || "greater_magic_etching".equals(id)) return 80;
         if (ResonanceCore.ITEM_ID.equals(id)) return 90;
+        if (RelicEffects.AMULET_CASKET.equals(id)) return 82;
         return -1;
     }
 
@@ -1445,6 +1473,8 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onLivingDrops);
         NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onTooltip);
         NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onAnvilUpdate);
+        // 铁砧折扣放在最低优先级：等合成改完价再打折。
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, EquipmentAffixSystem::onAnvilCost);
         NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onEquipmentChange);
         NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onAnvilRepair);
         NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onGrindstonePlace);
@@ -1531,6 +1561,7 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(RelicEffects::onIncomingDamage);
         // 天使庇护的保命兜底要排在所有伤害乘区之后；死亡兜底同理，排在其它死亡处理之后。
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, RelicEffects::onAngelShelterFinalGuard);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, RelicEffects::onAdvancedBattleQiFinalGuard);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, RelicEffects::onAngelShelterDeathGuard);
         NeoForge.EVENT_BUS.addListener(RelicEffects::onDamagePre);
         NeoForge.EVENT_BUS.addListener(RelicEffects::onDamagePost);

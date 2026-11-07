@@ -121,6 +121,11 @@ public final class WeaponWorkbenchMenu extends AbstractContainerMenu {
             reroll(player, equipment);
             return;
         }
+        // 词条重铸符：品级保持不变，只把主副词条按当前品级重抽一遍。
+        if (ArmamentForge.isReforgeTalisman(material)) {
+            reforge(player, equipment);
+            return;
+        }
         int value = ArmamentForge.crystalValue(material);
         if (value <= 0) {
             message(player, "message.dimensional_mana.weapon_workbench.invalid_material");
@@ -190,6 +195,21 @@ public final class WeaponWorkbenchMenu extends AbstractContainerMenu {
         EquipmentAffixSystem.View view = EquipmentAffixSystem.view(rerolled);
         message(player, "message.dimensional_mana.weapon_workbench.rerolled",
                 view.gradeName(), EquipmentAffixSystem.rerollCount(rerolled));
+    }
+
+    /** 词条重铸符：不碰品级与流派，只换主词条 / 副词条的内容。 */
+    private void reforge(Player player, ItemStack equipment) {
+        if (!EquipmentAffixSystem.hasAffix(equipment)) {
+            message(player, "message.dimensional_mana.weapon_workbench.no_affix");
+            return;
+        }
+        consumeOneMaterial();
+        ItemStack reforged = EquipmentAffixSystem.reforgeAffixes(equipment, player.getRandom());
+        container.setItem(WeaponWorkbenchBlockEntity.EQUIPMENT_SLOT, reforged);
+        EquipmentAffixSystem.refreshPlayer(player);
+        playSound(player, SoundEvents.ENCHANTMENT_TABLE_USE, 1.12F);
+        EquipmentAffixSystem.View view = EquipmentAffixSystem.view(reforged);
+        message(player, "message.dimensional_mana.weapon_workbench.reforged", view.gradeName());
     }
 
     /**

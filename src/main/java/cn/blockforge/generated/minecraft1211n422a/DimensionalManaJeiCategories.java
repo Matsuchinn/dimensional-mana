@@ -53,6 +53,11 @@ public final class DimensionalManaJeiCategories {
             builder.addRecipeArrow().setPosition(34, 13);
             builder.addText(Component.translatable("jei.dimensional_mana.grinder_time"), 4, 40);
             builder.addText(Component.translatable("jei.dimensional_mana.grinder_tier", recipe.tier() + 1), 4, 50);
+            // 随机数量的配方（强化石 → 2～4 份粉）把区间标出来，别让人以为固定出 4 个。
+            if (recipe.minCount() != recipe.maxCount()) {
+                builder.addText(Component.translatable("jei.dimensional_mana.grinder_range",
+                        recipe.minCount(), recipe.maxCount()), 4, 30);
+            }
         }
     }
 

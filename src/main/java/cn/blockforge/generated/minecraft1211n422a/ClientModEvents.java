@@ -762,6 +762,7 @@ public final class ClientModEvents {
         event.register(GeneratedMod.PROFESSIONAL_FURNACE_MENU.get(), ManaFurnaceScreen::new);
         event.register(GeneratedMod.CRYSTAL_PROCESSOR_MENU.get(), CrystalProcessorScreen::new);
         event.register(GeneratedMod.WEAPON_WORKBENCH_MENU.get(), WeaponWorkbenchScreen::new);
+        event.register(GeneratedMod.MANA_GRINDSTONE_MENU.get(), ManaGrindstoneScreen::new);
         event.register(GeneratedMod.ADVENTURER_TRADE_MENU.get(), AdventurerTradeScreen::new);
     }
 

@@ -77,8 +77,10 @@ public final class CorruptedWitherBeamRenderer extends EntityRenderer<CorruptedW
         // 局部 +Z 对准光轴：先绕 Y 转水平朝向，再绕 X 抬头。
         // （PoseStack.mulPose 是右乘，后写的先作用在向量上；顺序写反的话
         //   仰角会被 cos(偏航) 吃掉，朝东/西时射线就会变成水平的。）
-        pose.mulPose(Axis.YP.rotation((float)Math.toRadians(-beam.aimYaw())));
-        pose.mulPose(Axis.XP.rotation((float)Math.toRadians(beam.aimPitch())));
+        // 角度走 smoothAim*：服务端每刻才同步一次，这里按 partialTick 帧间插值，
+        // 自转和追猎转向都是连续平滑的，不再有 50ms 一跳的台阶感。
+        pose.mulPose(Axis.YP.rotation((float)Math.toRadians(-beam.smoothAimYaw(partialTick))));
+        pose.mulPose(Axis.XP.rotation((float)Math.toRadians(beam.smoothAimPitch(partialTick))));
         PoseStack.Pose snapshot = pose.last();
 
         if (!beam.isFiring()) {

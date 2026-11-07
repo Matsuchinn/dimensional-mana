@@ -60,7 +60,7 @@ public final class CastingGloveItem extends Item implements ICurioItem {
     private final Kind kind;
 
     public CastingGloveItem(Properties properties, Kind kind) {
-        super(properties);
+        super(AccessoryAttributeMirror.apply(properties, kind.itemId(), specs(kind)));
         this.kind = kind;
         CuriosApi.registerCurio(this, this);
     }
@@ -78,11 +78,20 @@ public final class CastingGloveItem extends Item implements ICurioItem {
         Multimap<Holder<Attribute>, AttributeModifier> modifiers = HashMultimap.create(
                 ICurioItem.super.getAttributeModifiers(slotContext, id, stack));
         if (!MagicEquipment.HANDS_SLOT.equals(slotContext.identifier())) return modifiers;
-        if (kind.spellHaste > 0) modifiers.put(SpellAttributes.SPELL_HASTE,
-                new AttributeModifier(id, kind.spellHaste, AttributeModifier.Operation.ADD_VALUE));
-        if (kind.critChance > 0) modifiers.put(SpellAttributes.SPELL_CRIT_CHANCE,
-                new AttributeModifier(id, kind.critChance, AttributeModifier.Operation.ADD_VALUE));
+        for (AccessoryAttributeMirror.Spec spec : specs(kind)) {
+            modifiers.put(spec.attribute(), new AttributeModifier(id, spec.amount(), spec.operation()));
+        }
         return modifiers;
+    }
+
+    /** 手套的面板加成：Curios 生效的数值与复制进物品数据的数值共用这一份。 */
+    private static List<AccessoryAttributeMirror.Spec> specs(Kind kind) {
+        List<AccessoryAttributeMirror.Spec> specs = new java.util.ArrayList<>();
+        if (kind.spellHaste > 0) specs.add(new AccessoryAttributeMirror.Spec(
+                SpellAttributes.SPELL_HASTE, kind.spellHaste, AttributeModifier.Operation.ADD_VALUE));
+        if (kind.critChance > 0) specs.add(new AccessoryAttributeMirror.Spec(
+                SpellAttributes.SPELL_CRIT_CHANCE, kind.critChance, AttributeModifier.Operation.ADD_VALUE));
+        return specs;
     }
 
     @Override

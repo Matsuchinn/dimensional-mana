@@ -22,7 +22,7 @@ public final class Relics {
     /** 饰品挂在哪个 Curios 栏位。BROOCH 复用 Curios 原有的 body（中文「胸饰」）栏位。 */
     public enum Slot {
         RING("ring"), CHARM("charm"), NECKLACE("necklace"), BRACELET("bracelet"),
-        BROOCH("body"), BELT("belt"), HEAD("head");
+        BROOCH("body"), BELT("belt"), HEAD("head"), MAGIC_ACCESSORY("magic_accessory");
 
         private final String id;
         Slot(String id) { this.id = id; }
@@ -61,6 +61,7 @@ public final class Relics {
         public String nameKey() { return "item.dimensional_mana." + id; }
         public String lineKey(int index) { return "tooltip.dimensional_mana.relic." + id + "." + index; }
         public String obtainKey() { return "tooltip.dimensional_mana.relic." + id + ".obtain"; }
+        public boolean glint() { return tier.glint() || id.equals("world_blessing"); }
     }
 
     /** 装备时由 Curios 属性修正直接生效的加成。 */
@@ -73,6 +74,8 @@ public final class Relics {
     private static final AttributeSpec HEALTH_MINUS_35 = new AttributeSpec(Attributes.MAX_HEALTH, -0.35,
             AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);
     private static final AttributeSpec SPELL_CRIT_35 = new AttributeSpec(SpellAttributes.SPELL_CRIT_CHANCE, 0.35,
+            AttributeModifier.Operation.ADD_VALUE);
+    private static final AttributeSpec ELEMENTAL_MASTERY_45 = new AttributeSpec(SpellAttributes.ELEMENTAL_MASTERY, 45.0,
             AttributeModifier.Operation.ADD_VALUE);
 
     /** 注册顺序就是创造页里的显示顺序：t3 → t2 → t1 → t0。 */
@@ -101,12 +104,15 @@ public final class Relics {
             new Relic("mage_delight", Slot.RING, Tier.T1, 0xFFC85BFF, List.of()),
             new Relic("element_absorption_charm", Slot.NECKLACE, Tier.T1, 0xFF86C8FF, List.of()),
             new Relic("detective_charm", Slot.CHARM, Tier.T1, 0xFFB08A55, List.of()),
+            new Relic("world_blessing", Slot.CHARM, Tier.T1, 0xFFE4C8FF, List.of(ELEMENTAL_MASTERY_45)),
 
             // ── t0 ────────────────────────────────────────────────────────────
             new Relic("universal_belt", Slot.BELT, Tier.T0, 0xFFE8E8E8, List.of()),
             new Relic("scarlet_spirit_charm", Slot.CHARM, Tier.T0, 0xFFE03030, List.of()),
             new Relic("angel_crown", Slot.HEAD, Tier.T0, 0xFFFFE88A, List.of()),
-            new Relic("omniscient_shard", Slot.CHARM, Tier.T0, 0xFF9FE8FF, List.of()));
+            new Relic("omniscient_shard", Slot.CHARM, Tier.T0, 0xFF9FE8FF, List.of()),
+            new Relic("advanced_battle_qi_etching", Slot.MAGIC_ACCESSORY, Tier.T0, 0xFFD8A04A, List.of()),
+            new Relic("amulet_casket", Slot.MAGIC_ACCESSORY, Tier.T0, 0xFFB887FF, List.of()));
 
     private Relics() { }
 }

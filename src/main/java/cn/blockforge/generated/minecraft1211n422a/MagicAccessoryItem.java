@@ -29,7 +29,7 @@ public final class MagicAccessoryItem extends Item implements ICurioItem {
     private final Kind kind;
 
     public MagicAccessoryItem(Properties properties, Kind kind) {
-        super(properties);
+        super(AccessoryAttributeMirror.apply(properties, "magic_accessory_" + kind.name().toLowerCase(java.util.Locale.ROOT), specs(kind)));
         this.kind = kind;
         CuriosApi.registerCurio(this, this);
     }
@@ -46,10 +46,18 @@ public final class MagicAccessoryItem extends Item implements ICurioItem {
         Multimap<Holder<Attribute>, AttributeModifier> modifiers = HashMultimap.create(
                 ICurioItem.super.getAttributeModifiers(slotContext, id, stack));
         if (kind == Kind.RING && kind.slot.equals(slotContext.identifier())) {
-            modifiers.put(SpellAttributes.SPELL_POWER, new AttributeModifier(
-                    id, 0.03, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
+            for (AccessoryAttributeMirror.Spec spec : specs(kind)) {
+                modifiers.put(spec.attribute(), new AttributeModifier(id, spec.amount(), spec.operation()));
+            }
         }
         return modifiers;
+    }
+
+    /** 智慧戒指的 3% 魔素强度：Curios 生效的数值与复制进物品数据的数值共用这一份。 */
+    private static List<AccessoryAttributeMirror.Spec> specs(Kind kind) {
+        if (kind != Kind.RING) return List.of();
+        return List.of(new AccessoryAttributeMirror.Spec(SpellAttributes.SPELL_POWER, 0.03,
+                AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
     }
 
     public static int equippedCount(LivingEntity entity, String itemId, String slot) {
