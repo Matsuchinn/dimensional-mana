@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:goblin_first",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:goblin_chief_spawn_egg"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.goblin_chief.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.goblin_chief.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

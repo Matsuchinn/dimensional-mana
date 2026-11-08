@@ -167,6 +167,18 @@ public final class MagicCrystalAnvilMenu extends AnvilMenu {
 
     @Override
     protected void onTake(Player player, ItemStack stack) {
+        // 进度「词条锻造师」：真的在铁砧上完成一次修理 / 合并 / 改名，取走结果才算。
+        // 「铁砧也讲规矩」只管把铁砧做出来，两条不再靠同一个条件点亮。
+        if (player instanceof ServerPlayer smithPlayer && !stack.isEmpty()) {
+            MagicProgression.awardAdvancement(smithPlayer, "affix_forge");
+        }
+        // 进度「融合与继承」：两件都带词条的同类装备并成了一件，取走才算。
+        if (player instanceof ServerPlayer mergePlayer && !stack.isEmpty()
+                && EquipmentAffixSystem.hasAffix(stack)
+                && EquipmentAffixSystem.hasAffix(getSlot(0).getItem())
+                && EquipmentAffixSystem.hasAffix(getSlot(1).getItem())) {
+            MagicProgression.awardAdvancement(mergePlayer, "affix_merge");
+        }
         // 原版会照经验价格扣等级；这里把三件经验数据原样备份，调用完立刻还原。
         float progress = player.experienceProgress;
         int level = player.experienceLevel;

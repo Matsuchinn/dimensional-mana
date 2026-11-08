@@ -1,5 +1,5 @@
 {
-  "parent": "dimensional_mana:first_mana_crystal",
+  "parent": "dimensional_mana:crystal_processor",
   "display": {
     "icon": {
       "id": "dimensional_mana:superconducting_crystal_dust"

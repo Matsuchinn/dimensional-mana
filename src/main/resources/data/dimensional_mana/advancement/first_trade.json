@@ -1,5 +1,5 @@
 {
-  "parent": "dimensional_mana:root",
+  "parent": "dimensional_mana:first_accessory",
   "display": {
     "icon": {
       "id": "minecraft:emerald"

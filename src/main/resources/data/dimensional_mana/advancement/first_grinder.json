@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:first_mana_crystal",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:wooden_grinder"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.first_grinder.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.first_grinder.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

@@ -88,7 +88,7 @@ public final class ArcaneGui {
     }
 
     /** 专用纹理使用双线性过滤；颜色、混合和矩阵状态在异常时也恢复。 */
-    private static void textured(GuiGraphics g, ResourceLocation texture, float cx, float cy,
+    static void textured(GuiGraphics g, ResourceLocation texture, float cx, float cy,
                                  float width, float height, float angle, int rgb, float alpha) {
         if (alpha <= 0 || width <= 0 || height <= 0) return;
         PoseStack pose = g.pose();

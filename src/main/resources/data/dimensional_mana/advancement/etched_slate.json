@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:circle_wand",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:etched_slate"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.etched_slate.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.etched_slate.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

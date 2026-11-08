@@ -1,5 +1,6 @@
 package cn.blockforge.generated.minecraft1211n422a;
 
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -334,6 +335,11 @@ public final class CorruptedWitherEvents {
         wither.setInvulnerableTicks(220);
         wither.beginCorruptedRain();
         level.addFreshEntity(wither);
+        // 进度「深渊的狂宴」：召唤仪式成功，记在离祭坛最近的那位玩家头上。
+        if (level.getNearestPlayer(spawn.getX(), spawn.getY(), spawn.getZ(), 48.0D, false)
+                instanceof ServerPlayer summoner) {
+            MagicProgression.awardAdvancement(summoner, "wither_summon");
+        }
         level.playSound(null, spawn.getX(), spawn.getY(), spawn.getZ(),
                 CorruptedWitherSounds.get("spawn"), SoundSource.HOSTILE, 4.0F, 1.0F);
         level.sendParticles(net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER,

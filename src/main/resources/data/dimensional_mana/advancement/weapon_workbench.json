@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:affix_forge",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:weapon_workbench"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.weapon_workbench.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.weapon_workbench.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

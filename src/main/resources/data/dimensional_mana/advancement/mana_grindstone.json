@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:first_grinder",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:mana_grindstone"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.mana_grindstone.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.mana_grindstone.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

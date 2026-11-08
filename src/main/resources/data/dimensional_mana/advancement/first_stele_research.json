@@ -1,5 +1,5 @@
 {
-  "parent": "dimensional_mana:root",
+  "parent": "dimensional_mana:first_spell",
   "display": {
     "icon": {"id": "dimensional_mana:ancient_magic_stele"},
     "title": {"translate": "advancement.dimensional_mana.first_stele_research.title"},

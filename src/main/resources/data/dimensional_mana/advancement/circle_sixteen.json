@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:circle_first_run",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:carving_stone_blank"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.circle_sixteen.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.circle_sixteen.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

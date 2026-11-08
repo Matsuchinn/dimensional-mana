@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:perfect_parry",
+  "display": {
+    "icon": {
+      "id": "minecraft:iron_sword"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.stagger_kill.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.stagger_kill.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

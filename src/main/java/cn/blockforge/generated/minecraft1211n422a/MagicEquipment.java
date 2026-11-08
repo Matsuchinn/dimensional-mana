@@ -59,8 +59,8 @@ public final class MagicEquipment {
     private static final double AMULET_CRIT_HEAL_PERCENT = 0.0128;
     private static final double AMULET_CRIT_HEAL_FLAT = 22.0;
     private static final int AMULET_CRIT_HEAL_COOLDOWN = 44;
-    /** 伤害偏转披风的反射冷却 2.3 秒。 */
-    private static final int REFLECT_COOLDOWN = 46;
+    /** 伤害偏转披风的反射冷却 15 tick（0.75 秒）。 */
+    private static final int REFLECT_COOLDOWN = 15;
     private static final String CRIT_HEAL_KEY = "DimensionalManaAmuletCritHeal";
     private static final String REFLECT_KEY = "DimensionalManaCloakReflect";
 
@@ -199,7 +199,7 @@ public final class MagicEquipment {
         ManaData.restoreMana(caster, 0.5, false);
     }
 
-    /** 伤害偏转披风的反伤：45% 伤害回到伤害者身上，2.3 秒冷却。 */
+    /** 伤害偏转披风的反伤：45% 伤害回到伤害者身上，15 tick（0.75 秒）冷却。 */
     public static void tryReflect(LivingEntity victim, LivingEntity attacker, float damage) {
         if (victim == null || attacker == null || damage <= 0.0F || victim.level().isClientSide) return;
         if (attacker == victim || cloakCount(victim, DEFLECT_CLOAK) <= 0) return;

@@ -93,6 +93,10 @@ public final class SpellAttributes {
     public static final DeferredHolder<Attribute, Attribute> ARROW_DAMAGE_FLAT = register("arrow_damage_flat", 0.0, 0.0, 10000.0);
     /** 箭矢伤害百分比：弓 / 弩命中的额外伤害，单位是百分数。 */
     public static final DeferredHolder<Attribute, Attribute> ARROW_DAMAGE_PERCENT = register("arrow_damage_percent", 0.0, 0.0, 1000.0);
+    /** 盾牌弹反：成功格挡后把这次被格挡伤害的这个百分比反弹给攻击者。 */
+    public static final DeferredHolder<Attribute, Attribute> PARRY_REFLECT = register("parry_reflect_percent", 0.0, 0.0, 100.0);
+    /** 三叉戟戳刺：投掷 / 激流冲刺命中时的额外伤害，单位是百分数（不影响近战平A）。 */
+    public static final DeferredHolder<Attribute, Attribute> TRIDENT_THRUST = register("trident_thrust_percent", 0.0, 0.0, 1000.0);
 
     /**
      * 元素附加（12 系）：物理命中时额外附带这个点数的对应元素伤害。
@@ -118,6 +122,7 @@ public final class SpellAttributes {
             BATTLE_QI_PERCENT, BATTLE_QI_FLAT,
             ARMOR_PENETRATION, LIFESTEAL, BATTLE_QI_REGEN, BATTLE_QI_SKILL_POWER, COMBO_DAMAGE,
             EXECUTE_DAMAGE, MIKIRI_DAMAGE, PARRY_WINDOW, ARROW_DAMAGE_FLAT, ARROW_DAMAGE_PERCENT,
+            PARRY_REFLECT, TRIDENT_THRUST,
             ELEMENT_ADDITION_FIRE, ELEMENT_ADDITION_WATER, ELEMENT_ADDITION_ICE, ELEMENT_ADDITION_LIGHTNING,
             ELEMENT_ADDITION_WIND, ELEMENT_ADDITION_EARTH, ELEMENT_ADDITION_NATURE, ELEMENT_ADDITION_METAL,
             ELEMENT_ADDITION_LIGHT, ELEMENT_ADDITION_POISON, ELEMENT_ADDITION_SOUND, ELEMENT_ADDITION_ARCANE,

@@ -109,6 +109,13 @@ public final class Goblin extends PathfinderMob implements ManaRegenSource {
     private static final double SUPPORT_RADIUS = 32.0;
     /** 首领召集半径：首领参战后，100 格内的同族都会来作战。 */
     private static final double CHIEF_RADIUS = 100.0;
+    /** 【敬而远之】的感知半径：带威压的玩家进到这个距离，成年哥布林就开始四散逃跑。 */
+    private static final double DREAD_RADIUS = 24.0;
+    /** 威压来源的扫描节流：10 刻扫一次就够了，避免营地几十只哥布林每刻各查一遍实体。 */
+    private static final int DREAD_SCAN_INTERVAL = 10;
+    /** 望风而逃期间临时挂上的移速加成（+50%），跑远了就摘掉。 */
+    private static final ResourceLocation DREAD_SPEED_ID =
+            ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "goblin_dread_speed");
     /** 萨满一次回血回复目标最大生命的 30%。 */
     private static final float HEAL_FRACTION = 0.30F;
     /** 与哥布林结盟的四种元素史莱姆：毒、木（自然）、风、水。 */
@@ -131,6 +138,9 @@ public final class Goblin extends PathfinderMob implements ManaRegenSource {
     /** 捡东西的扫描节流：掉落物查询按 10 刻一次，不再每刻对 8 格内所有掉落物做一次查询。 */
     private int lootScanCooldown;
     private int panicTicks;
+    /** 【敬而远之】的威压来源缓存与上次扫描时刻（见 {@link #dreadSource()}）。 */
+    private Player dreadCache;
+    private long dreadScanAt;
     private int companionDeaths;
     private int companionCount = 1;
     private int companionScanCooldown;
@@ -235,14 +245,16 @@ public final class Goblin extends PathfinderMob implements ManaRegenSource {
     @Override
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
-        goalSelector.addGoal(1, new FleeGoal());
-        goalSelector.addGoal(2, new CombatGoal());
-        goalSelector.addGoal(3, new EatGoal());
-        goalSelector.addGoal(4, new GatherGoal());
-        goalSelector.addGoal(5, new PickupGoal());
-        goalSelector.addGoal(6, new WaterAvoidingRandomStrollGoal(this, 0.85));
-        goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0F));
-        goalSelector.addGoal(8, new RandomLookAroundGoal(this));
+        // 望风而逃排在逃跑、战斗之前：闻到威压先掉头，打不过也先跑。
+        goalSelector.addGoal(1, new DreadFleeGoal());
+        goalSelector.addGoal(2, new FleeGoal());
+        goalSelector.addGoal(3, new CombatGoal());
+        goalSelector.addGoal(4, new EatGoal());
+        goalSelector.addGoal(5, new GatherGoal());
+        goalSelector.addGoal(6, new PickupGoal());
+        goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 0.85));
+        goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 8.0F));
+        goalSelector.addGoal(9, new RandomLookAroundGoal(this));
 
         targetSelector.addGoal(1, new HurtByTargetGoal(this));
         // 都会看「走不到」黑名单（MobPathing）：哥布林以前每刻都重算路径，
@@ -264,6 +276,21 @@ public final class Goblin extends PathfinderMob implements ManaRegenSource {
     public boolean isAlliedTo(Entity other) {
         if (other instanceof ElementalSlime slime && slime.isGoblinAlly()) return true;
         return other instanceof Goblin || super.isAlliedTo(other);
+    }
+
+    /**
+     * 带【敬而远之】的玩家不会成为哥布林的主动目标：威压就是这么用的。
+     *
+     * <p>例外是「他刚打过我」——挨打后 {@code getLastHurtByMob()} 就是那个玩家，
+     * 这时允许锁定并还手；幼崽本来就不主动打架，不适用这条豁免。</p>
+     */
+    @Override
+    public void setTarget(LivingEntity target) {
+        if (target instanceof Player player && variant != GoblinVariant.YOUNG
+                && player.hasEffect(GeneratedMod.GOBLIN_DREAD) && getLastHurtByMob() != player) {
+            return;
+        }
+        super.setTarget(target);
     }
 
     @Override
@@ -1293,6 +1320,118 @@ public final class Goblin extends PathfinderMob implements ManaRegenSource {
     }
 
     // ------------------------------------------------------------ 目标行为
+
+    /**
+     * 附近最该躲的威压玩家：带【敬而远之】、活着、不是在旁观/创造模式，而且不是刚揍过我的那个。
+     *
+     * <p>「刚揍过我的那个」不算威压来源，所以玩家主动攻击成年哥布林时它会被迫还手，
+     * 而不是一路逃跑——这符合「被打了才不跑」的设计。幼崽压根不调用这里。</p>
+     *
+     * <p>这个判定每刻都会被 Goal 问一次，如果每次都扫一遍实体列表，营地几十只哥布林
+     * 每刻就是几十次范围查询。所以按 {@link #DREAD_SCAN_INTERVAL} 节流并缓存结果，
+     * 反正玩家跑不出 24 格只需要半秒。</p>
+     */
+    private Player dreadSource() {
+        long now = level().getGameTime();
+        if (now - dreadScanAt < DREAD_SCAN_INTERVAL) {
+            return dreadCache != null && dreadQualifies(dreadCache) ? dreadCache : null;
+        }
+        dreadScanAt = now;
+        if (!(level() instanceof ServerLevel level)) {
+            dreadCache = null;
+            return null;
+        }
+        Player best = null;
+        double bestSqr = DREAD_RADIUS * DREAD_RADIUS;
+        for (Player player : level.getEntitiesOfClass(Player.class,
+                getBoundingBox().inflate(DREAD_RADIUS, 12.0, DREAD_RADIUS),
+                player -> player.isAlive() && !player.isSpectator() && !player.isCreative()
+                        && player.hasEffect(GeneratedMod.GOBLIN_DREAD))) {
+            if (player == getLastHurtByMob()) continue;
+            double distance = distanceToSqr(player);
+            if (distance < bestSqr) {
+                bestSqr = distance;
+                best = player;
+            }
+        }
+        dreadCache = best;
+        return best;
+    }
+
+    /** 缓存的玩家还值不值得怕：还在范围内、还带着威压、没被我打过。 */
+    private boolean dreadQualifies(Player player) {
+        return player.isAlive() && !player.isSpectator() && !player.isCreative()
+                && player.hasEffect(GeneratedMod.GOBLIN_DREAD)
+                && player != getLastHurtByMob()
+                && distanceToSqr(player) <= DREAD_RADIUS * DREAD_RADIUS;
+    }
+
+    /**
+     * 望风而逃：成年哥布林（战士 / 弓箭手 / 萨满 / 首领）看到带威压的玩家就四散逃开，移速 +50%。
+     *
+     * <p>幼崽被故意排除在外——它们太小太蠢，反应不过来，照常慢吞吞地晃，
+     * 玩家才能靠追幼崽来献祭解除状态。</p>
+     */
+    private final class DreadFleeGoal extends Goal {
+        private int screamCooldown;
+
+        DreadFleeGoal() {
+            setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
+        }
+
+        @Override
+        public boolean canUse() {
+            return variant != GoblinVariant.YOUNG && !NewSpellSystem.immobilized(Goblin.this)
+                    && dreadSource() != null;
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            return canUse();
+        }
+
+        @Override
+        public boolean requiresUpdateEveryTick() {
+            return true;
+        }
+
+        @Override
+        public void start() {
+            AttributeInstance speed = getAttribute(Attributes.MOVEMENT_SPEED);
+            if (speed != null && speed.getModifier(DREAD_SPEED_ID) == null) {
+                speed.addOrUpdateTransientModifier(new AttributeModifier(DREAD_SPEED_ID, 0.5,
+                        AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
+            }
+            // 被打过的那个玩家允许还手，否则先松开当前目标专心跑。
+            if (getTarget() != getLastHurtByMob()) setTarget(null);
+            Goblin.this.playSound(GoblinSounds.get("panic"), 1.0F, 1.5F);
+        }
+
+        @Override
+        public void tick() {
+            Player dread = dreadSource();
+            if (dread == null) return;
+            if (getTarget() != getLastHurtByMob()) setTarget(null);
+            Vec3 away = DefaultRandomPos.getPosAway(Goblin.this, 16, 7, dread.position());
+            if (away == null) away = DefaultRandomPos.getPosAway(Goblin.this, 12, 6, position());
+            if (away != null && (getNavigation().isDone() || tickCount % 20 == 0)) {
+                // 导航倍率给 1.0：真正的 +50% 挂在移速属性上，跑累了摘掉就恢复原速。
+                getNavigation().moveTo(away.x, away.y, away.z, 1.0);
+            }
+            setSprinting(true);
+            if (screamCooldown-- <= 0) {
+                screamCooldown = 60;
+                Goblin.this.playSound(GoblinSounds.get("panic"), 0.7F, 1.6F);
+            }
+        }
+
+        @Override
+        public void stop() {
+            setSprinting(false);
+            AttributeInstance speed = getAttribute(Attributes.MOVEMENT_SPEED);
+            if (speed != null) speed.removeModifier(DREAD_SPEED_ID);
+        }
+    }
 
     private final class FleeGoal extends Goal {
         private int screamCooldown;

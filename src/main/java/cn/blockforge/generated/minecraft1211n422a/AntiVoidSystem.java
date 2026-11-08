@@ -383,6 +383,8 @@ public final class AntiVoidSystem {
             player.teleportTo(target, x, safeY, z, player.getYRot(), player.getXRot());
         }
         DeathLawPenalty.applyLawDebt(player);
+        // 进度「死亡的代价」：走回溯之门把掉落物找回来，代价是魔素上限 -1%。
+        MagicProgression.awardAdvancement(player, "rift_return");
         finishGate(player, level, gatePos);
         player.displayClientMessage(Component.translatable("message.dimensional_mana.gate_retrospect"), false);
     }
@@ -398,6 +400,8 @@ public final class AntiVoidSystem {
         player.teleportTo(target, spawn.getX() + 0.5D, spawn.getY(), spawn.getZ() + 0.5D,
                 player.getRespawnAngle(), 0.0F);
         finishGate(player, level, gatePos);
+        // 进度「归乡」：走归乡之门（蓝门）回家，不用付回溯之门那 1% 代价。
+        MagicProgression.awardAdvancement(player, "home_gate");
         player.displayClientMessage(Component.translatable("message.dimensional_mana.gate_return_home"), false);
     }
 
@@ -432,6 +436,8 @@ public final class AntiVoidSystem {
         data.putBoolean(INTRO_DONE, true);
         data.putInt(INTRO_PENDING, 0);
         giveMissingBooks(player);
+        // 进度「灵魂的中转站」：走进星之间隙那块发光门板，仪式才算走完。
+        MagicProgression.awardAdvancement(player, "soul_transit");
         streamEffect(level, player.getX(), player.getY() + 1.0D, player.getZ());
         ServerLevel overworld = player.server.getLevel(Level.OVERWORLD);
         if (overworld == null) return;

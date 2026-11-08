@@ -1,0 +1,13 @@
+{
+  "parent": "dimensional_mana:slime_tame",
+  "display": {
+    "icon": {"id": "dimensional_mana:mana_elemental_slime_spawn_egg"},
+    "title": {"translate": "advancement.dimensional_mana.slime_tame_five.title"},
+    "description": {"translate": "advancement.dimensional_mana.slime_tame_five.description"},
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {"done": {"trigger": "minecraft:impossible"}}
+}

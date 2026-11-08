@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:mana_stone_disease",
+  "display": {
+    "icon": {
+      "id": "minecraft:golden_apple"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.mana_stone_cured.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.mana_stone_cured.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

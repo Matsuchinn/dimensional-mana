@@ -176,6 +176,12 @@ public final class GeneratedMod {
     /** 元素精通强化：元素精通药水的属性型效果，Ⅰ级 +8，每升一级再多 +8。 */
     public static final DeferredHolder<MobEffect, MobEffect> ELEMENTAL_MASTERY = EFFECTS.register("elemental_mastery",
             ElementalMasteryEffect::new);
+    /** 畏缩：史莱姆待在驱逐火把范围里时挂上的隐形标记（不显示粒子 / 图标）。 */
+    public static final DeferredHolder<MobEffect, MobEffect> SLIME_DREAD = EFFECTS.register("slime_dread",
+            SlimeDreadEffect::new);
+    /** 【敬而远之】：击杀哥布林营地首领后获得的 2 小时威压，哥布林见了你掉头就跑。 */
+    public static final DeferredHolder<MobEffect, MobEffect> GOBLIN_DREAD = EFFECTS.register("goblin_dread",
+            GoblinDreadEffect::new);
     /** 强化补魔剂多回的那 15%：存在物品组件上，不需要为每一级补魔剂各开一个物品。 */
     public static final DeferredHolder<net.minecraft.core.component.DataComponentType<?>,
             net.minecraft.core.component.DataComponentType<Float>> POTION_BOOST = DATA_COMPONENTS.register("potion_boost",
@@ -657,6 +663,14 @@ public final class GeneratedMod {
     public static final DeferredItem<BucketItem> PURE_LIQUID_MANA_BUCKET = ITEMS.register("pure_liquid_mana_bucket",
             () -> new BucketItem(PURE_LIQUID_MANA.get(), new Item.Properties().craftRemainder(Items.BUCKET)
                     .stacksTo(1).rarity(Rarity.RARE)));
+    /**
+     * 史莱姆驱逐火把：原版火把同款 14 级光照，把 5×5 区块划成史莱姆禁刷区，16 格内把已有的史莱姆熏跑。
+     * 物品在静态块里注册（要用自定义 BlockItem 写说明栏），这里先摆出方块本身给数据类和渲染层引用。
+     */
+    public static final DeferredBlock<Block> SLIME_REPELLENT_TORCH = BLOCKS.register(SlimeRepellentTorchBlock.BLOCK_ID,
+            () -> new SlimeRepellentTorchBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_LIGHT_GREEN).noCollission().instabreak()
+                    .lightLevel(state -> 14).sound(SoundType.WOOD).pushReaction(PushReaction.DESTROY)));
 
     static {
         for (ElementType element : ElementType.values()) {
@@ -707,6 +721,12 @@ public final class GeneratedMod {
         // 也是魔晶砂轮的三根木构件之一。它归「自然」页，跟蚀纹木这一家子摆一起
         // （见 ErosionWasteland.NATURAL_IDS），主创造页会自动跳过它。
         simple("erosion_stick", Rarity.COMMON);
+        // 史莱姆驱逐火把：自动生成在「次元物语：自然」页，跟植物材料摆在一起。
+        MOD_BLOCKS.put(SlimeRepellentTorchBlock.BLOCK_ID, SLIME_REPELLENT_TORCH);
+        MOD_ITEMS.put(SlimeRepellentTorchBlock.BLOCK_ID, ITEMS.register(SlimeRepellentTorchBlock.BLOCK_ID,
+                () -> new SlimeRepellentTorchItem(SLIME_REPELLENT_TORCH.get(),
+                        new Item.Properties().rarity(Rarity.UNCOMMON))));
+        NATURAL_ITEM_IDS.add(SlimeRepellentTorchBlock.BLOCK_ID);
         // 魔晶砂轮：原版砂轮的全部功能 + 可自由切换的两种剥离方向（洗附魔 / 洗词条）。
         // noOcclusion 不能省：模型只占一格的一部分，少了它会把四周方块贴着的面全部剔掉（看起来像透明）。
         device(ManaGrindstoneBlock.BLOCK_ID, () -> new ManaGrindstoneBlock(
@@ -875,8 +895,12 @@ public final class GeneratedMod {
         QI_ITEM_IDS.add(SwordsmanCharmItem.ITEM_ID);
         QI_ITEM_IDS.add(CombatCodexItem.ITEM_ID);
         for (QiProgression.Ability ability : QiProgression.Ability.values()) QI_ITEM_IDS.add(ability.manualId());
-        simple("purification_core", Rarity.RARE);
-        simple("radiant_core", Rarity.EPIC);
+        // 两枚只从掉落表里来的核心材料：说明栏要写清「哪来的、能做什么」，
+        // 所以用带说明栏的物品类，而不是 simple() 的白板物品。
+        MOD_ITEMS.put("purification_core", ITEMS.register("purification_core", () ->
+                new LoreMaterialItem(new Item.Properties().rarity(Rarity.RARE), "purification_core", 1)));
+        MOD_ITEMS.put("radiant_core", ITEMS.register("radiant_core", () ->
+                new LoreMaterialItem(new Item.Properties().rarity(Rarity.EPIC), "radiant_core", 1)));
         simple("omniscient_page", Rarity.EPIC);
         // 两副施法手套：迅捷（速度/冷却）与大师（暴击/必定暴击）。
         for (CastingGloveItem.Kind kind : CastingGloveItem.Kind.values()) {
@@ -1452,6 +1476,9 @@ public final class GeneratedMod {
         modBus.addListener(QiSyncPayload::register);
         modBus.addListener(QiActionPayload::register);
         modBus.addListener(AnvilManaPayload::register);
+        // 武备加工台：词条锁定（勾选下发 + 防手滑状态回推）。
+        modBus.addListener(WorkbenchLockPayload::register);
+        modBus.addListener(WorkbenchGuardPayload::register);
         modBus.addListener(OpenCombatCodexPayload::register);
         modBus.addListener(MagicCircleSyncPayload::register);
         modBus.addListener(MagicCircleActionPayload::register);
@@ -1484,6 +1511,8 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onContainerOpen);
         // 弓、弩、投掷三叉戟命中时补算物理伤害词条（弹射物不吃近战那条攻击伤害属性）。
         NeoForge.EVENT_BUS.addListener(EquipmentAffixSystem::onRangedIncomingDamage);
+        // 三叉戟专属词条【戳刺】：激流冲刺的撞击不是弹射物，只能在受击阶段按「玩家正在激流」认出来。
+        NeoForge.EVENT_BUS.addListener(ShieldTridentEffects::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(MojiangSteelEvents::onGetEnchantmentLevel);
         NeoForge.EVENT_BUS.addListener(MojiangSteelEvents::onEnchantmentLevelSet);
         NeoForge.EVENT_BUS.addListener(MojiangSteelEvents::onPlayerTick);
@@ -1507,6 +1536,14 @@ public final class GeneratedMod {
         // r290：最后一道闸——任何经任何途径进入反虚空的生物都在这里被拦下（含土史莱姆 bug 的旁路）。
         NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onBlockBreak);
+        // 史莱姆驱逐火把：5×5 区块内禁刷史莱姆，16 格内把已经刷出来的史莱姆熏走。
+        NeoForge.EVENT_BUS.addListener(SlimeRepellentTorchEvents::onFinalizeSpawn);
+        NeoForge.EVENT_BUS.addListener(SlimeRepellentTorchEvents::onEntityJoin);
+        // 进度：击杀类与法阵投影的摆放事件（每秒轮询覆盖不到的那些）。
+        NeoForge.EVENT_BUS.addListener(AdvancementTriggers::onLivingDeath);
+        // 【敬而远之】：击杀营地首领给威压，献祭 3 只幼崽可解除，玩家死亡则一并消散。
+        NeoForge.EVENT_BUS.addListener(GoblinDread::onLivingDeath);
+        NeoForge.EVENT_BUS.addListener(AdvancementTriggers::onBlockPlaced);
         NeoForge.EVENT_BUS.addListener(events::onJoin);
         NeoForge.EVENT_BUS.addListener(events::onEquipmentChange);
         NeoForge.EVENT_BUS.addListener(events::onLogin);
@@ -1603,6 +1640,8 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(GoblinSpawning::onLivingDeath);
         NeoForge.EVENT_BUS.addListener(RoughGearEvents::onPlayerTick);
         NeoForge.EVENT_BUS.addListener(RoughGearEvents::onShieldBlock);
+        // 盾牌专属词条【弹反】：成功格挡后按百分比把被挡下的伤害反弹给攻击者。
+        NeoForge.EVENT_BUS.addListener(ShieldTridentEffects::onShieldBlock);
         NeoForge.EVENT_BUS.addListener(RoughGearEvents::onAnvilUpdate);
         NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::onExplosion);

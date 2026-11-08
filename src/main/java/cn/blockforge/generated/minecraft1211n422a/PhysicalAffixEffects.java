@@ -219,6 +219,9 @@ public final class PhysicalAffixEffects {
      */
     private static boolean isPhysicalHit(DamageSource source, ServerPlayer attacker) {
         if (source == null || SpellDamage.isSpell(source) || MagicEtchingSystem.isTrueDamage(source)) return false;
+        // 盾牌弹反打出的伤害不是"攻击"：它不受吸血、连击、处决、见切这些攻击者收益影响
+        // （伤害源本身也不带实体，这里再显式挡一道，换成别的伤害类型也不会被误算）。
+        if (ShieldTridentEffects.isReflect(source)) return false;
         Entity direct = source.getDirectEntity();
         return direct == attacker;
     }
@@ -283,9 +286,10 @@ public final class PhysicalAffixEffects {
         return attacker.level().getGameTime() - state.tick() > COMBO_WINDOW_TICKS ? 0 : state.stacks();
     }
 
-    /** 这件装备是不是能出专属词条的那类武器（给图鉴 / 调试查询用）。 */
+    /** 这件装备是不是能出专属词条的那类装备（给图鉴 / 调试查询用）。 */
     public static boolean accepts(ItemStack stack) {
-        return EquipmentAffixSystem.isSwordLike(stack) || EquipmentAffixSystem.isBowLike(stack);
+        return EquipmentAffixSystem.isSwordLike(stack) || EquipmentAffixSystem.isBowLike(stack)
+                || EquipmentAffixSystem.isShieldLike(stack) || EquipmentAffixSystem.isTridentLike(stack);
     }
 
     private PhysicalAffixEffects() { }

@@ -1,5 +1,5 @@
 {
-  "parent": "dimensional_mana:root",
+  "parent": "dimensional_mana:magic_level_5",
   "display": {
     "icon": {"id": "dimensional_mana:mana_harmonizer"},
     "title": {"translate": "advancement.dimensional_mana.exhaustion_growth.title"},

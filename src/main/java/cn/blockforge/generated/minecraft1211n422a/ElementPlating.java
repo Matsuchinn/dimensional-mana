@@ -50,6 +50,9 @@ import java.util.Map;
  *   <li>受击结算：护甲每层 5% 该元素伤害抗性（全身 16 层封顶 80%），在最终伤害阶段结算；
  *       举盾时每层 25% 概率完美格挡该元素伤害，同时按公式额外侵蚀盾牌耐久。
  *       元素归属除了自家的 {@code spell_*} 类型，也认原版火焰、冻结与闪电。</li>
+ *   <li>魔法镀层（超导魔晶粉）：摆法和消耗完全一样，只是粉换成超导魔晶粉。护甲每层
+ *       6% 全元素伤害抗性（全身 16 层封顶 96%）、受元素伤害时每层额外掉 1 点耐久；
+ *       盾牌每层 40% 全魔法伤害免疫率（4 层 100%），举盾吃魔法伤害时盾牌额外掉 1 点耐久。</li>
  *   <li>砂轮：清掉全部镀层与附魔，每层返还 1~2 份对应粉末。</li>
  * </ul>
  */
@@ -65,14 +68,30 @@ public final class ElementPlating {
     /** 盾牌每层镀层提供的完美格挡概率。 */
     public static final double PERFECT_BLOCK_PER_LAYER = 0.25;
 
+    /**
+     * 魔法镀层的「元素」id：用超导魔晶粉镀出来，不算十二系元素里的一系，
+     * 但复用同一套层数、加工台配方与砂轮拆除流程。
+     */
+    public static final String SUPERCONDUCTING = "superconducting";
+    /** 魔法镀层护甲每层提供的全元素伤害抗性。 */
+    public static final double SUPER_RESIST_PER_LAYER = 0.06;
+    /** 四件护甲各打满 4 层（16 层）时的全元素抗性极值。 */
+    public static final double SUPER_MAX_RESIST = 0.96;
+    /** 魔法镀层盾牌每层提供的全魔法伤害免疫率（4 层 = 100%）。 */
+    public static final double SUPER_IMMUNITY_PER_LAYER = 0.40;
+    /** 魔法镀层物品的微光颜色（和超导魔晶粉末的发光色一致）。 */
+    public static final int SUPER_COLOR = 0x8FD8FF;
+
     public static final int ARMOR_MANA_COST = 200;
     public static final int ARMOR_TICKS = 300;
     public static final int SHIELD_MANA_COST = 40;
     public static final int SHIELD_TICKS = 100;
 
     private static final String ROOT_KEY = "ElementPlating";
+    /** 魔法镀层用的粉末物品 id（超导魔晶粉末）。 */
+    private static final String SUPERCONDUCTING_POWDER = "superconducting_crystal_dust";
     private static final int ARCANE_COLOR = 0xFFC85BFF;
-    /** 十二种可镀层元素，顺序固定，图鉴与说明按这个顺序显示。 */
+    /** 十二种可镀层元素 + 魔法镀层（超导），顺序固定，图鉴与说明按这个顺序显示。 */
     private static final List<String> ELEMENTS = createElements();
     /** 元素结晶粉末物品 id → 元素 id（奥术元素使用 mana 粉末）。 */
     private static final Map<String, String> POWDER_ELEMENT = new LinkedHashMap<>();
@@ -86,6 +105,9 @@ public final class ElementPlating {
             POWDER_ELEMENT.put(variant.powderId(), variant.damageElementId());
             ELEMENT_POWDER.put(variant.damageElementId(), variant.powderId());
         }
+        // 魔法镀层：同一套「中心装备 + 四周 8 份粉」的摆法，粉换成超导魔晶粉。
+        POWDER_ELEMENT.put(SUPERCONDUCTING_POWDER, SUPERCONDUCTING);
+        ELEMENT_POWDER.put(SUPERCONDUCTING, SUPERCONDUCTING_POWDER);
     }
 
     private ElementPlating() { }
@@ -94,16 +116,24 @@ public final class ElementPlating {
         List<String> ids = new ArrayList<>();
         for (ElementType element : ElementType.values()) ids.add(element.id());
         ids.add(MagicEquipment.ARCANE);
+        // 超导排在最后：物品名前缀与说明栏都按这个顺序显示。
+        ids.add(SUPERCONDUCTING);
         return List.copyOf(ids);
     }
 
     public static List<String> elements() { return ELEMENTS; }
+
+    /** 这一「元素」是不是魔法镀层（超导魔晶粉镀出来的那一种）。 */
+    public static boolean isSuperconducting(String elementId) {
+        return SUPERCONDUCTING.equals(elementId);
+    }
 
     public static Component elementName(String elementId) {
         return Component.translatable("gui.dimensional_mana.plating.element." + elementId);
     }
 
     public static int elementColor(String elementId) {
+        if (SUPERCONDUCTING.equals(elementId)) return SUPER_COLOR;
         if (MagicEquipment.ARCANE.equals(elementId)) return ARCANE_COLOR;
         ElementType type = ElementType.byId(elementId);
         return type == null ? 0xFFFFFFFF : type.color();
@@ -280,10 +310,23 @@ public final class ElementPlating {
     }
 
     /**
+     * 这一下算不算「魔法 / 元素伤害」，魔法镀层（超导魔晶粉）就看这一条。
+     *
+     * <p>自家法术的十二种 {@code spell_*} 类型，加上原版火焰、冻结与落雷——
+     * 它们没有 {@code spell_*} 类型，但玩家真正挨到的元素伤害大半就是岩浆、着火、细雪和落雷。</p>
+     */
+    public static boolean isMagicDamage(DamageSource source) {
+        return SpellDamage.isSpell(source) || damageElementOf(source) != null;
+    }
+
+    /**
      * 盾牌的完美格挡：举盾且盾牌镀了该元素时掷一次概率，成功就把这一下整个取消。
      *
      * <p>这里刻意不排除 {@link DamageTypeTags#BYPASSES_SHIELD}：普通元素伤害原版盾牌本来
      * 就能完全挡下，镀层真正能发挥作用的地方恰恰是被盾牌穿透的元素伤害（例如声波）。</p>
+     *
+     * <p>魔法镀层（超导魔晶粉）走单独一条：任意魔法/元素伤害都吃，每层 40% 免疫率、
+     * 4 层就是 100%，每次举盾吃下魔法伤害时盾牌额外再掉 1 点耐久。</p>
      */
     public static void onIncomingDamage(LivingIncomingDamageEvent event) {
         if (event.isCanceled()) return;
@@ -291,16 +334,31 @@ public final class ElementPlating {
         if (LethalDamage.isLethal(event.getSource(), event.getAmount())) return;
         if (!(event.getEntity() instanceof Player player) || player.level().isClientSide) return;
         if (!player.isBlocking() || event.getAmount() <= 0.0F) return;
+        ItemStack shield = player.getUseItem();
+        EquipmentSlot shieldSlot = player.getUsedItemHand() == InteractionHand.MAIN_HAND
+                ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND;
+
+        // 魔法镀层：不受元素归属限制，只看「是不是魔法/元素伤害」。
+        int superLayers = layers(shield, SUPERCONDUCTING);
+        if (superLayers > 0 && isMagicDamage(event.getSource())) {
+            // 举盾吃下魔法伤害，盾牌额外消耗 +1 点耐久（每个盾牌每一下只算一次）。
+            shield.hurtAndBreak(1, player, shieldSlot);
+            glow(player, SUPERCONDUCTING, 8);
+            if (player.getRandom().nextFloat() < Math.min(1.0F, superLayers * SUPER_IMMUNITY_PER_LAYER)) {
+                perfectBlockEffect(player, SUPERCONDUCTING);
+                event.setCanceled(true);
+                return;
+            }
+        }
+
         String elementId = damageElementOf(event.getSource());
         if (elementId == null) return;
-        ItemStack shield = player.getUseItem();
         int layers = layers(shield, elementId);
         if (layers <= 0) return;
 
         // 元素侵蚀：(伤害 ÷ 10 + 1) × 层数，无论是否完美格挡都会发生。
         int erosion = ((int)(event.getAmount() / 10.0F) + 1) * layers;
-        shield.hurtAndBreak(erosion, player, player.getUsedItemHand() == InteractionHand.MAIN_HAND
-                ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND);
+        shield.hurtAndBreak(erosion, player, shieldSlot);
         glow(player, elementId, 8);
         if (player.getRandom().nextFloat() < Math.min(1.0F, layers * PERFECT_BLOCK_PER_LAYER)) {
             perfectBlockEffect(player, elementId);
@@ -312,26 +370,44 @@ public final class ElementPlating {
      * 护甲的镀层减伤：在 {@code LivingDamageEvent.Pre} 结算，此时盔甲、附魔与药水减伤都已
      * 经算完，这里乘上的抗性就是最终落到血量上的数字，不会被后续流程覆盖。
      *
-     * <p>每层 5% 该元素抗性，全身层数相加、封顶 80%；每层再让该部位多掉 1 点耐久。</p>
+     * <p>普通元素镀层每层 5% 该元素抗性，全身层数相加、封顶 80%；魔法镀层（超导魔晶粉）
+     * 每层 6% 全元素抗性，全身 16 层封顶 96%，两个乘区各自独立相乘。
+     * 每层都会让对应部位多掉 1 点耐久。</p>
      */
     public static void onDamagePre(LivingDamageEvent.Pre event) {
         if (!(event.getEntity() instanceof Player player) || player.level().isClientSide) return;
         float amount = event.getNewDamage();
         if (amount <= 0.0F) return;
+        // 魔法镀层不挑元素，所以先判大类；普通元素镀层再按具体元素归属结算。
+        if (!isMagicDamage(event.getSource())) return;
         String elementId = damageElementOf(event.getSource());
-        if (elementId == null) return;
         int totalArmorLayers = 0;
+        int totalSuperLayers = 0;
         for (EquipmentSlot slot : ARMOR_SLOTS) {
             ItemStack armor = player.getItemBySlot(slot);
-            int layers = layers(armor, elementId);
-            if (layers <= 0) continue;
-            totalArmorLayers += layers;
-            armor.hurtAndBreak(layers, player, slot);
+            if (elementId != null) {
+                int layers = layers(armor, elementId);
+                if (layers > 0) {
+                    totalArmorLayers += layers;
+                    armor.hurtAndBreak(layers, player, slot);
+                }
+            }
+            int superLayers = layers(armor, SUPERCONDUCTING);
+            if (superLayers > 0) {
+                totalSuperLayers += superLayers;
+                armor.hurtAndBreak(superLayers, player, slot);
+            }
         }
-        if (totalArmorLayers <= 0) return;
-        double resist = Math.min(MAX_RESIST, totalArmorLayers * RESIST_PER_LAYER);
-        event.setNewDamage(amount * (float)(1.0 - resist));
-        glow(player, elementId, 10);
+        if (totalArmorLayers <= 0 && totalSuperLayers <= 0) return;
+        double keep = 1.0;
+        if (totalArmorLayers > 0) {
+            keep *= 1.0 - Math.min(MAX_RESIST, totalArmorLayers * RESIST_PER_LAYER);
+        }
+        if (totalSuperLayers > 0) {
+            keep *= 1.0 - Math.min(SUPER_MAX_RESIST, totalSuperLayers * SUPER_RESIST_PER_LAYER);
+        }
+        event.setNewDamage(amount * (float)keep);
+        glow(player, totalSuperLayers > 0 ? SUPERCONDUCTING : elementId, 10);
     }
 
     private static void perfectBlockEffect(Player player, String elementId) {
@@ -392,12 +468,27 @@ public final class ElementPlating {
         List<Component> info = new ArrayList<>();
         for (Plating plating : layers) {
             int count = plating.layers();
+            boolean superc = isSuperconducting(plating.elementId());
             if (shield) {
-                info.add(Component.translatable("gui.dimensional_mana.plating.shield.chance",
-                                elementName(plating.elementId()), (int)Math.round(count * PERFECT_BLOCK_PER_LAYER * 100))
-                        .withStyle(ChatFormatting.GOLD));
-                info.add(Component.translatable("gui.dimensional_mana.plating.shield.wear",
-                                elementName(plating.elementId()), count)
+                if (superc) {
+                    info.add(Component.translatable("gui.dimensional_mana.plating.superconducting.shield.immunity",
+                                    Math.min(100, (int)Math.round(count * SUPER_IMMUNITY_PER_LAYER * 100)))
+                            .withStyle(ChatFormatting.AQUA));
+                    info.add(Component.translatable("gui.dimensional_mana.plating.superconducting.shield.wear")
+                            .withStyle(ChatFormatting.RED));
+                } else {
+                    info.add(Component.translatable("gui.dimensional_mana.plating.shield.chance",
+                                    elementName(plating.elementId()), (int)Math.round(count * PERFECT_BLOCK_PER_LAYER * 100))
+                            .withStyle(ChatFormatting.GOLD));
+                    info.add(Component.translatable("gui.dimensional_mana.plating.shield.wear",
+                                    elementName(plating.elementId()), count)
+                            .withStyle(ChatFormatting.RED));
+                }
+            } else if (superc) {
+                info.add(Component.translatable("gui.dimensional_mana.plating.superconducting.armor.resist",
+                                (int)Math.round(count * SUPER_RESIST_PER_LAYER * 100))
+                        .withStyle(ChatFormatting.AQUA));
+                info.add(Component.translatable("gui.dimensional_mana.plating.superconducting.armor.wear")
                         .withStyle(ChatFormatting.RED));
             } else {
                 info.add(Component.translatable("gui.dimensional_mana.plating.armor.resist",

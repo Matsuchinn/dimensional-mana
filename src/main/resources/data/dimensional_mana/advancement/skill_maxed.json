@@ -2,7 +2,7 @@
   "parent": "dimensional_mana:first_skill",
   "display": {
     "icon": {
-      "id": "dimensional_mana:skill_repentance_stone"
+      "id": "minecraft:enchanted_book"
     },
     "title": {
       "translate": "advancement.dimensional_mana.skill_maxed.title"

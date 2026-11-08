@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:affix_sss",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:mojing_steel_chestplate"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.all_sss.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.all_sss.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

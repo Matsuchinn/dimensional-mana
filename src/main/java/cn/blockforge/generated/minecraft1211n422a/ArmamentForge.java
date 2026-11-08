@@ -125,6 +125,15 @@ public final class ArmamentForge {
     }
 
     /**
+     * 这个材料会不会「重抽词条」：超导魔晶洗练和词条重铸符重铸都算。
+     *
+     * <p>只有这两种材料才需要防手滑锁定：升级、强化石、锻造模板都是往好里改，不怕手滑。</p>
+     */
+    public static boolean rerollsAffixes(ItemStack stack) {
+        return isRerollMaterial(stack) || isReforgeTalisman(stack);
+    }
+
+    /**
      * 溢出找零：超出的魔素按 50% 向下取整折算，再按面额从大到小换成物品。
      *
      * <p>算例：特级（12000）敲 1→2（204），溢出 11796，打五折 5898，

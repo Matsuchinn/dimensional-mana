@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:erosion_biome",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:erosion_log"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.erosion_wood.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.erosion_wood.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

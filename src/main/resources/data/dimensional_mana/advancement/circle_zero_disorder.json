@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:circle_first_run",
+  "display": {
+    "icon": {
+      "id": "minecraft:ender_eye"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.circle_zero_disorder.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.circle_zero_disorder.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

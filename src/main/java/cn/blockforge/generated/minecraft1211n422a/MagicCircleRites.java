@@ -331,6 +331,8 @@ public final class MagicCircleRites {
         // v2.1 触发节点元素槽：触发时给周围的目标（或触发者）附加对应元素的附着。
         applyTriggerAttachments(level, pos, facing, entity);
         visualPulse(level, pos, entity);
+        // 试运行不落地任何效果，也不该点亮进度；真正跑起来的那一发才算。
+        if (!test && caster != null) awardCircleAdvancements(caster, evaluation, outcome);
         if (actor != null) {
             actor.displayClientMessage(Component.translatable(
                     "message.dimensional_mana.magiccircle.rite.triggered",
@@ -352,6 +354,30 @@ public final class MagicCircleRites {
             if (outcome.hasAny()) {
                 actor.displayClientMessage(outcome.describe().copy().withStyle(ChatFormatting.LIGHT_PURPLE), false);
             }
+        }
+    }
+
+    /**
+     * 法阵跑通之后的进度判定：
+     * <ul>
+     *   <li>全自动防线：这一发真的打中过怪；</li>
+     *   <li>生命花园：这一发真的治到过人；</li>
+     *   <li>精准爆破：一发同时打中 3 个以上目标；</li>
+     *   <li>降维打击：4 层叠加 + 16 个基座的满配；</li>
+     *   <li>真理之眼：元素槽一个都不打架，0 紊乱跑起来。</li>
+     * </ul>
+     */
+    private static void awardCircleAdvancements(ServerPlayer player, MagicCircleCost.Evaluation evaluation,
+                                                Outcome outcome) {
+        if (outcome.hurt > 0) MagicProgression.awardAdvancement(player, "circle_first_run");
+        if (outcome.heal > 0) MagicProgression.awardAdvancement(player, "circle_heal");
+        if (outcome.hurt >= 3) MagicProgression.awardAdvancement(player, "circle_blast");
+        if (evaluation.filledLayers() >= 4 && evaluation.baseCount() >= 16) {
+            MagicProgression.awardAdvancement(player, "circle_sixteen");
+        }
+        // 零紊乱要配得上「真理之眼」：阵得有 8 个节点以上，随便摆一个输出块不算。
+        if (evaluation.disorder() <= 0 && evaluation.nodeCount() >= 8) {
+            MagicProgression.awardAdvancement(player, "circle_zero_disorder");
         }
     }
 

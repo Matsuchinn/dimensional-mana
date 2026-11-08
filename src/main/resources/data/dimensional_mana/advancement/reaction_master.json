@@ -1,7 +1,7 @@
 {
   "parent": "dimensional_mana:first_reaction",
   "display": {
-    "icon": {"id": "dimensional_mana:special_mana_crystal"},
+    "icon": {"id": "dimensional_mana:element_mastery_charm"},
     "title": {"translate": "advancement.dimensional_mana.reaction_master.title"},
     "description": {"translate": "advancement.dimensional_mana.reaction_master.description"},
     "frame": "challenge",

@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:relic_t0",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:world_blessing"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.world_blessing.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.world_blessing.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

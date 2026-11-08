@@ -513,6 +513,13 @@ public final class ManaCommands {
         line(source, "command.dimensional_mana.affixes.line",
                 Component.translatable("attribute.name.dimensional_mana.arrow_damage_percent"),
                 format(EquipmentAffixSystem.arrowDamagePercent(player)) + "%");
+        // 专属词条：盾牌弹反与三叉戟戳刺。
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.parry_reflect_percent"),
+                format(EquipmentAffixSystem.parryReflectPercent(player)) + "%");
+        line(source, "command.dimensional_mana.affixes.line",
+                Component.translatable("attribute.name.dimensional_mana.trident_thrust_percent"),
+                format(EquipmentAffixSystem.tridentThrustPercent(player)) + "%");
         // 护甲值 / 盔甲韧性直接读原版属性（包含装备本身给的那部分）。
         line(source, "command.dimensional_mana.affixes.line",
                 Component.translatable("attribute.name.dimensional_mana.armor_value"),

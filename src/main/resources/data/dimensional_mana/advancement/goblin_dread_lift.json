@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:goblin_dread",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:goblin_young_spawn_egg"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.goblin_dread_lift.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.goblin_dread_lift.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

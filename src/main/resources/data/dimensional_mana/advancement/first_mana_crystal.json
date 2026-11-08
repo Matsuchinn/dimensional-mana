@@ -1,5 +1,5 @@
 {
-  "parent": "dimensional_mana:root",
+  "parent": "dimensional_mana:first_raw_crystal",
   "display": {
     "icon": {
       "id": "dimensional_mana:lesser_mana_crystal"

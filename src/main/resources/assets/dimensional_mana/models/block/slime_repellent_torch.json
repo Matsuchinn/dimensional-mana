@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/template_torch",
+  "textures": {
+    "torch": "dimensional_mana:block/slime_repellent_torch"
+  }
+}

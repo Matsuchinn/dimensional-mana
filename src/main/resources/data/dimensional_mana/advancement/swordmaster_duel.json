@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:goblin_first",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:swordmaster_sigil"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.swordmaster_duel.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.swordmaster_duel.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

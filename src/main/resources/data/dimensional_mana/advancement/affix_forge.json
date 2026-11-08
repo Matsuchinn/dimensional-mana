@@ -1,7 +1,7 @@
 {
-  "parent": "dimensional_mana:root",
+  "parent": "dimensional_mana:magic_crystal_anvil",
   "display": {
-    "icon": {"id": "dimensional_mana:magic_crystal_anvil"},
+    "icon": {"id": "minecraft:anvil"},
     "title": {"translate": "advancement.dimensional_mana.affix_forge.title"},
     "description": {"translate": "advancement.dimensional_mana.affix_forge.description"},
     "frame": "goal",

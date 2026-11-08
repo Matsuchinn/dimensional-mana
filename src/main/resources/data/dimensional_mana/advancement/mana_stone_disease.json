@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:corrupted_mob",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:corrupted_spider_eye"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.mana_stone_disease.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.mana_stone_disease.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:magic_level_15",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:talent_scroll_shared"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.all_talents.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.all_talents.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

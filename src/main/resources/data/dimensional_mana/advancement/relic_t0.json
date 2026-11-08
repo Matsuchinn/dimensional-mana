@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:boss_affix_trophy",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:advanced_battle_qi_etching"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.relic_t0.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.relic_t0.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

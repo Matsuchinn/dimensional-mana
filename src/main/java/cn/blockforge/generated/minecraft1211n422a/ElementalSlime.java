@@ -211,6 +211,12 @@ public final class ElementalSlime extends Slime {
             level().playSound(null, blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME, getSoundSource(), 0.9F, 1.5F);
             player.displayClientMessage(Component.translatable(
                     "entity.dimensional_mana.elemental_slime.tamed", getDisplayName()), false);
+            // 进度「史莱姆伙伴」：不管喂的是特级魔晶、铁锭还是靠音符盒，第一次驯服都算。
+            // 顺带记一笔「这个变种收过了」，凑够 5 种 / 12 种分别发《五色同伴》《万物皆友》。
+            if (player instanceof ServerPlayer serverPlayer) {
+                MagicProgression.awardAdvancement(serverPlayer, "slime_tame");
+                SlimeTameProgress.onTame(serverPlayer, variant);
+            }
         }
     }
 
@@ -1078,6 +1084,9 @@ public final class ElementalSlime extends Slime {
         if (!(level() instanceof ServerLevel server) || replicationLimit <= 0 || now < replicationCooldown
                 || getRandom().nextFloat() >= 0.50F) return;
         replicationCooldown = now + 5 * 20L;
+        // 自动复制走的是 addFreshEntity 旁路，不经过刷怪事件，这里单独挡一次：
+        // 驱逐火把的 5×5 区块里既不许刷新史莱姆，也不许原来的史莱姆分裂出新的。
+        if (SlimeRepellentTorchEvents.spawnBlocked(server, blockPosition())) return;
         ElementalSlime copy = GeneratedMod.elementalSlimeType(variant).create(server);
         if (copy == null) return;
         copy.moveTo(getX() + (getRandom().nextDouble() - 0.5) * 1.5, getY(),

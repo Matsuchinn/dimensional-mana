@@ -121,6 +121,7 @@ public final class ClientModEvents {
         NeoForge.EVENT_BUS.addListener(ClientModEvents::antiVoidFogColor);
         NeoForge.EVENT_BUS.addListener(ClientModEvents::antiVoidFogDistance);
         NeoForge.EVENT_BUS.addListener(ClientModEvents::replaceMagicCrystalAnvilScreen);
+        NeoForge.EVENT_BUS.addListener(AdvancementBackground::onBackgroundRendered);
         NeoForge.EVENT_BUS.addListener(ClientSpellVisuals::tick);
         NeoForge.EVENT_BUS.addListener(ClientSpellVisuals::render);
         NeoForge.EVENT_BUS.addListener(ClientParryVisuals::tick);
@@ -207,6 +208,8 @@ public final class ClientModEvents {
             ItemBlockRenderTypes.setRenderLayer(GeneratedMod.MOD_BLOCKS.get("astral_rift_frame").get(), RenderType.translucent());
             ItemBlockRenderTypes.setRenderLayer(GeneratedMod.MOD_BLOCKS.get("rift_gate_crimson").get(), RenderType.translucent());
             ItemBlockRenderTypes.setRenderLayer(GeneratedMod.MOD_BLOCKS.get("rift_gate_azure").get(), RenderType.translucent());
+            // 驱逐火把是一根细柱，贴图四周留空：必须走 cutout，否则空白部分会画成黑方块。
+            ItemBlockRenderTypes.setRenderLayer(GeneratedMod.SLIME_REPELLENT_TORCH.get(), RenderType.cutout());
         });
     }
 
@@ -819,6 +822,18 @@ public final class ClientModEvents {
                     .withStyle(ChatFormatting.AQUA));
             event.getTooltip().add(Component.translatable(
                     "effect.dimensional_mana.elemental_mastery.repeat").withStyle(ChatFormatting.DARK_GRAY));
+            return;
+        }
+        // 【敬而远之】：这个状态太罕见，玩家不给提示根本猜不到怎么解除，所以逐条写清楚。
+        if (event.getEffectInstance().is(GeneratedMod.GOBLIN_DREAD)) {
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.goblin_dread.no_spawn").withStyle(ChatFormatting.GREEN));
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.goblin_dread.flee").withStyle(ChatFormatting.GREEN));
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.goblin_dread.remove").withStyle(ChatFormatting.GOLD));
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.goblin_dread.death").withStyle(ChatFormatting.GRAY));
             return;
         }
         if (!event.getEffectInstance().is(GeneratedMod.MANA_EXHAUSTION)) return;

@@ -150,12 +150,14 @@ public final class SwordmasterEvents {
     }
 
     // ---------------------------------------------------------------- 死亡
-    /** 剑士死亡：清掉雇佣名字，并让这座村庄进入补充冷却（10 分钟后可以再刷新一位）。 */
+    /**
+     * 剑士死亡：只清掉雇佣名字。
+     *
+     * <p>村庄那边不再补人——一座村庄只要自然刷出过剑士，账本就永久有效，杀掉了也不会再刷第二个。</p>
+     */
     public static void onLivingDeath(LivingDeathEvent event) {
-        if (event.getEntity() instanceof WanderingSwordmaster swordmaster
-                && swordmaster.level() instanceof ServerLevel level) {
+        if (event.getEntity() instanceof WanderingSwordmaster swordmaster) {
             swordmaster.dismiss();
-            SwordmasterVillageData.get(level).markDefeated(level, swordmaster.homePos(), level.getGameTime());
         }
         // 雇主死亡：所有维度、所有受雇于他的剑士立刻解除雇佣。
         if (event.getEntity() instanceof ServerPlayer player && player.getServer() != null) {

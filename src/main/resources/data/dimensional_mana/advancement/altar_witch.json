@@ -1,0 +1,13 @@
+{
+  "parent": "dimensional_mana:first_stele_research",
+  "display": {
+    "icon": {"id": "dimensional_mana:wandering_witch_spawn_egg"},
+    "title": {"translate": "advancement.dimensional_mana.altar_witch.title"},
+    "description": {"translate": "advancement.dimensional_mana.altar_witch.description"},
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {"done": {"trigger": "minecraft:impossible"}}
+}

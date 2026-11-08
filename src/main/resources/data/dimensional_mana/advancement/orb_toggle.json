@@ -2,7 +2,7 @@
   "parent": "dimensional_mana:first_accessory",
   "display": {
     "icon": {
-      "id": "dimensional_mana:magic_master_cloak"
+      "id": "minecraft:ender_pearl"
     },
     "title": {
       "translate": "advancement.dimensional_mana.orb_toggle.title"

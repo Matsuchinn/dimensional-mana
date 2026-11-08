@@ -483,6 +483,9 @@ public final class ElementalSlimeSpawning {
         if (!SpawnControl.hostileSpawningAllowed(level)) return;
         // r290：连雷击、爆炸这类「声音召怪」的旁路也一并封死——反虚空里任何途径都不许出史莱姆。
         if (level.dimension().equals(AntiVoidSystem.ANTI_VOID)) return;
+        // 史莱姆驱逐火把：这里是所有元素史莱姆刷怪的公共出口，先按中心点拦一次；
+        // 落点会随机偏 ±3 格，所以下面挑到实际落脚点后还会再拦一次。
+        if (SlimeRepellentTorchEvents.spawnBlocked(level, pos)) return;
         for (int i = 0; i < count; i++) {
             ElementalSlime slime = GeneratedMod.elementalSlimeType(variant).create(level);
             if (slime == null) continue;
@@ -514,6 +517,8 @@ public final class ElementalSlimeSpawning {
                 slime.moveTo(offset.getX() + 0.5, targetY, offset.getZ() + 0.5,
                         level.random.nextFloat() * 360.0F, 0);
                 placed = level.noCollision(slime) && (fluidSurface || airborne || hasFullGroundSupport(level, slime));
+                // 落脚点落在驱逐火把的 5×5 区块里就不许刷，换下一个落点。
+                if (placed && SlimeRepellentTorchEvents.spawnBlocked(level, offset)) placed = false;
             }
             if (!placed) {
                 slime.discard();

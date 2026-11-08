@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:magic_crystal_anvil",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:refined_magic_component"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.affix_merge.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.affix_merge.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

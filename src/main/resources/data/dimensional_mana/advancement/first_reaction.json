@@ -1,7 +1,7 @@
 {
   "parent": "dimensional_mana:reaction_root",
   "display": {
-    "icon": {"id": "minecraft:fire_charge"},
+    "icon": {"id": "minecraft:prismarine_shard"},
     "title": {"translate": "advancement.dimensional_mana.first_reaction.title"},
     "description": {"translate": "advancement.dimensional_mana.first_reaction.description"},
     "frame": "goal",

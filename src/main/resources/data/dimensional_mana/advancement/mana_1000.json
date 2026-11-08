@@ -2,7 +2,7 @@
   "parent": "dimensional_mana:mana_500",
   "display": {
     "icon": {
-      "id": "dimensional_mana:supreme_mana_crystal"
+      "id": "dimensional_mana:supreme_mana_crystal_block"
     },
     "title": {
       "translate": "advancement.dimensional_mana.mana_1000.title"

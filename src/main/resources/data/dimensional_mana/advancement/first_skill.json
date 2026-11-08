@@ -1,5 +1,5 @@
 {
-  "parent": "dimensional_mana:root",
+  "parent": "dimensional_mana:magic_level_1",
   "display": {
     "icon": {"id": "minecraft:experience_bottle"},
     "title": {"translate": "advancement.dimensional_mana.first_skill.title"},

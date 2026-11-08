@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:goblin_chief",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:goblin_clan_crest"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.goblin_dread.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.goblin_dread.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

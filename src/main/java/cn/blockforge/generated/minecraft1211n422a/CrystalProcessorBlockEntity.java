@@ -662,6 +662,15 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
                 "", "superconducting_crystal_dust", ""),
                 "etched_slate", 300, 300));
 
+        // 史莱姆驱逐火把：八种驱虫植物围着一朵绽放的维斯珀德索恩，250 魔素 / 4 秒（80 刻）。
+        // 中心那朵是关键——黄昏才开花的暮刺花，配上蕾薇莉亚、卢梅西亚、桑吉洛拉和秽生草，
+        // 烧出来的火苗带植物气息，史莱姆闻了就不肯靠近。
+        recipes.add(patternRecipe(SlimeRepellentTorchBlock.BLOCK_ID, List.of(
+                "levilia", "minecraft:coal", "blood_kiss",
+                "lumelia", "vesper_bloom", "lumelia",
+                "withered_grass_block", "erosion_stick", "withered_grass_block"),
+                SlimeRepellentTorchBlock.BLOCK_ID, 250, 80));
+
         addElementCrystalRecipes(recipes);
         addDistortedCrystalRecipes(recipes);
         addElementRingRecipes(recipes);

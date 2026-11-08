@@ -1,5 +1,5 @@
 {
-  "parent": "dimensional_mana:root",
+  "parent": "dimensional_mana:first_mana_crystal",
   "display": {
     "icon": {
       "id": "dimensional_mana:medium_general_staff"

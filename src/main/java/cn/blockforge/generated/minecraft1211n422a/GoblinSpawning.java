@@ -53,6 +53,8 @@ public final class GoblinSpawning {
         if (level.dimension()!=Level.OVERWORLD || level.getGameTime()%200!=0) return;
         for (ServerPlayer player:level.players()) {
             if(player.isSpectator()) continue;
+            // 带着【敬而远之】的玩家 64 格内根本不刷巡逻队，连抽签都省了。
+            if(GoblinDread.playerNearbyHasDread(player)) continue;
             RandomSource random=player.getRandom();
             if(random.nextFloat()>=(level.isDay()?PATROL_CHANCE_DAY:PATROL_CHANCE_NIGHT)) continue;
             if(level.getEntitiesOfClass(Goblin.class,player.getBoundingBox().inflate(64),Goblin::isAlive).size()>=PATROL_LOCAL_CAP) continue;
@@ -87,6 +89,19 @@ public final class GoblinSpawning {
         return roll<4?GoblinVariant.YOUNG:roll<7?GoblinVariant.WARRIOR:
                 roll<9?GoblinVariant.ARCHER:GoblinVariant.SHAMAN;
     }
+
+    /**
+     * 【敬而远之】的禁刷闸门。
+     *
+     * <p>刷怪蛋、指令召唤、幼崽成年转职、其它模组主动召唤，这四类都是玩家 / 脚本直接触发的，
+     * 不算「自然生成」，照常放行；巡逻队（EVENT）与营地（STRUCTURE）则整片掐掉。</p>
+     */
+    private static boolean blockedByDread(ServerLevel level, BlockPos pos, MobSpawnType reason) {
+        if (reason == MobSpawnType.SPAWN_EGG || reason == MobSpawnType.COMMAND
+                || reason == MobSpawnType.CONVERSION || reason == MobSpawnType.MOB_SUMMONED) return false;
+        return GoblinDread.suppressesSpawn(level, pos);
+    }
+
     private static boolean isGoblinBiome(ServerLevel level,BlockPos pos) {
         var biome=level.getBiome(pos);
         return biome.is(BiomeTags.IS_FOREST)||biome.is(BiomeTags.IS_TAIGA)
@@ -99,6 +114,8 @@ public final class GoblinSpawning {
     public static Goblin spawn(ServerLevel level,BlockPos pos,GoblinVariant variant,MobSpawnType reason) {
         // 野外刷怪的统一闸门：关掉后巡逻队、营地居民、首领全都不生成。
         if(!SpawnControl.hostileSpawningAllowed(level)) return null;
+        // 【敬而远之】：带威压的玩家 64 格内不自然刷哥布林（巡逻队与营地都算）。
+        if(blockedByDread(level,pos,reason)) return null;
         EntityType<Goblin> type=GeneratedMod.goblinType(variant);
         if(type==null) return null;
         Goblin goblin=type.create(level);
@@ -139,6 +156,9 @@ public final class GoblinSpawning {
             PendingCamp pending=iterator.next();
             if(pending.level()!=level) continue;
             BlockPos center=pending.center();
+            // 营地正好落在带威压玩家的 64 格内：先留在队列里，等状态散了再安置居民，
+            // 不能直接 mark，否则这座营地会被永久记成「已经安置过」，从此空无一人。
+            if(GoblinDread.suppressesSpawn(level,center)) continue;
             GoblinCampPiece camp = pending.camp();
             var bounds = camp.getBoundingBox();
             boolean ready = true;

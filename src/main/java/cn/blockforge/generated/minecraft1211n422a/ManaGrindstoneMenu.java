@@ -158,6 +158,11 @@ public final class ManaGrindstoneMenu extends AbstractContainerMenu {
         }
         container.setChanged();
         playFinishSound(player, merged, mode);
+        // 进度「破铜烂铁」：真的把一件带词条的装备磨成了白板才算。
+        if (!merged && mode == ManaGrindstoneLogic.MODE_AFFIXES
+                && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+            MagicProgression.awardAdvancement(serverPlayer, "affix_blank");
+        }
     }
 
     /**

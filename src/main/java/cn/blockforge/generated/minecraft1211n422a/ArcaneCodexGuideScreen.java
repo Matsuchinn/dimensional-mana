@@ -52,11 +52,11 @@ public final class ArcaneCodexGuideScreen extends Screen {
             page("new_thunder", 8), page("new_wind_storm", 9), page("new_earth_stone", 9),
             page("new_arcane_chaos", 9), page("new_nature_tree", 9), page("new_metal_ward_swords", 8),
             page("new_light_shelter_rift", 9), page("new_poison_pair", 9), page("new_sound_bells", 9),
-            page("achievements", 9), page("equipment_affixes", 7), page("adventurer_trade", 10), page("element_plating", 10),
+            page("achievements", 10), page("equipment_affixes", 7), page("adventurer_trade", 10), page("element_plating", 12),
             page("furnace_link", 9), page("mob_combat", 11), page("relics", 19), page("battle_qi_parry", 8),
-            page("plants", 18), page("mana_stone", 6), page("weapon_workbench", 16),
+            page("plants", 18), page("mana_stone", 6), page("weapon_workbench", 18),
             page("mana_grindstone", 10),
-            page("physical_affixes", 12)
+            page("physical_affixes", 14)
     );
     /**
      * 章节里按 id 引用页面，不再手写页码：页码一改就容易对不上，之前“元素镀层”那一页
@@ -100,7 +100,8 @@ public final class ArcaneCodexGuideScreen extends Screen {
             new RecipeKind("smelting", Items.FURNACE),
             new RecipeKind("blasting", Items.BLAST_FURNACE),
             new RecipeKind("mana_forge", Items.CRYING_OBSIDIAN),
-            new RecipeKind("professional", Items.NETHER_STAR),
+            new RecipeKind("professional",
+                    GeneratedMod.MOD_ITEMS.get("professional_crystal_furnace").get()),
             new RecipeKind("stonecutting", Items.STONECUTTER),
             new RecipeKind("smithing", Items.SMITHING_TABLE),
             new RecipeKind("grinding", Items.BOWL),

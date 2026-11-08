@@ -62,6 +62,11 @@ public final class ElementTalentData {
     public static boolean unlock(ServerPlayer player, ElementType element) {
         if (element == null || get(player).isUnlocked(element)) return false;
         tag(player).putBoolean("unlocked_" + element.id(), true);
+        // 进度：第一个天赋，以及集齐十一种。
+        MagicProgression.awardAdvancement(player, "first_element_talent");
+        if (get(player).unlocked().size() >= ElementType.values().length) {
+            MagicProgression.awardAdvancement(player, "all_talents");
+        }
         player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
                 "message.dimensional_mana.element_unlocked",
                 net.minecraft.network.chat.Component.translatable(element.translationKey())), false);

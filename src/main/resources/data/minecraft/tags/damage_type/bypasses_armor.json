@@ -16,6 +16,7 @@
     "dimensional_mana:etching_true",
     "dimensional_mana:sonic_pierce",
     "dimensional_mana:plant_true",
-    "dimensional_mana:wither_beam_true"
+    "dimensional_mana:wither_beam_true",
+    "dimensional_mana:parry_reflect"
   ]
 }

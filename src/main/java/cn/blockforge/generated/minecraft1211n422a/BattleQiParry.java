@@ -626,6 +626,8 @@ public final class BattleQiParry {
         grantFullPower(player);
         // 斗气经验 +20；戴着剑士护符再给 2 秒的 +25% 移速。
         QiSkills.onPerfectParry(player);
+        // 进度「完美的一击」：第一次把攻击弹开就点亮。
+        AdvancementTriggers.onPerfectParry(player);
     }
 
     /**

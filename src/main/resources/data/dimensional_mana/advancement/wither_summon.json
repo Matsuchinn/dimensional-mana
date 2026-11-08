@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:ancient_steel",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:corrupted_wither_skull"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.wither_summon.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.wither_summon.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

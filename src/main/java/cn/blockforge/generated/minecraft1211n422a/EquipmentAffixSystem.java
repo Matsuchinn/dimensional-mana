@@ -29,6 +29,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.PickaxeItem;
 import net.minecraft.world.item.ShovelItem;
+import net.minecraft.world.item.ShieldItem;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.TieredItem;
 import net.minecraft.world.item.TooltipFlag;
@@ -60,6 +61,7 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -90,9 +92,13 @@ public final class EquipmentAffixSystem {
     /** 评级写进词条根节点的修正值，别的模组 / 调试命令能直接读到。 */
     private static final String GRADE_DURABILITY_FIELD = "grade_durability_pct";
     private static final String GRADE_PANEL_FIELD = "grade_panel_scale";
-    /** 基础面板修正单独一条属性来源，和词条加成区分开。 */
-    private static final ResourceLocation GRADE_ATTACK_MOD = id("grade_panel_attack_damage");
-    private static final ResourceLocation GRADE_ARMOR_MOD = id("grade_panel_armor");
+    /**
+     * 评级修正前的基础数值：按「属性修正 id → 原始数值」记在 CUSTOM_DATA 里。
+     *
+     * <p>有这份账本，同一件装备无论洗练、重铸、升级多少次，都只在原版基础值上乘一次评级倍率，
+     * 不会出现 1.05 的 N 次方。老存档里没有这份账本的装备会以当前数值当基础值补记。</p>
+     */
+    private static final String GRADE_PANEL_BASE = "grade_panel_base_amounts";
     /** 弓弩专用物品标签：原版弓、弩都在里面，模组弓只要加进这个标签也认。 */
     private static final net.minecraft.tags.TagKey<Item> BOW_LIKE_TAG = net.minecraft.tags.TagKey.create(
             net.minecraft.core.registries.Registries.ITEM,
@@ -130,6 +136,8 @@ public final class EquipmentAffixSystem {
     private static final ResourceLocation AFFIX_PARRY_WINDOW_MOD = id("affix_parry_window");
     private static final ResourceLocation AFFIX_ARROW_FLAT_MOD = id("affix_arrow_damage_flat");
     private static final ResourceLocation AFFIX_ARROW_PERCENT_MOD = id("affix_arrow_damage_percent");
+    private static final ResourceLocation AFFIX_PARRY_REFLECT_MOD = id("affix_parry_reflect");
+    private static final ResourceLocation AFFIX_TRIDENT_THRUST_MOD = id("affix_trident_thrust");
     private static final ResourceLocation ARMOR_VALUE_MOD = id("affix_armor_value");
     private static final ResourceLocation ARMOR_TOUGHNESS_MOD = id("affix_armor_toughness");
 
@@ -246,8 +254,8 @@ public final class EquipmentAffixSystem {
 
     private enum School { MAGIC, PHYSICAL }
 
-    /** 词条允许出现在哪类装备上：剑专属、弓弩专属、任意。 */
-    private enum SlotKind { ANY, SWORD, BOW }
+    /** 词条允许出现在哪类装备上：剑专属、弓弩专属、盾牌专属、三叉戟专属、任意。 */
+    private enum SlotKind { ANY, SWORD, BOW, SHIELD, TRIDENT }
 
     /**
      * 一条词条定义。
@@ -350,6 +358,15 @@ public final class EquipmentAffixSystem {
             mainOnly("arrow_damage_flat", "affix.dimensional_mana.arrow_damage_flat", false, 1, 1, School.PHYSICAL, SlotKind.BOW),
             // 箭矢伤害 +百分比：仅弓弩，初始 4%，每级 +4%，12 级 48%。
             mainOnly("arrow_damage_percent", "affix.dimensional_mana.arrow_damage_percent", true, 4, 4, School.PHYSICAL, SlotKind.BOW),
+            // 弹反：仅盾牌，主词条初始 2%、每级 +2%、12 级 24%；副词条 0.5～1.5、每级 +1.5（最高 +4 = 7.5）。
+            // 效果见 ShieldTridentEffects#onShieldBlock：成功格挡后把这一下被格挡伤害的百分比反弹给攻击者。
+            new Affix("parry_reflect", "affix.dimensional_mana.parry_reflect", true, 2, 2, .5, 1.5, 1.5,
+                    School.PHYSICAL, "parry_reflect", SlotKind.SHIELD, false),
+            // 戳刺：仅三叉戟，主词条初始 4%、每级 +4%、12 级 48%；副词条 2～4、每级 +2（最高 +4 = 12）。
+            // 只在投掷命中与激流冲刺撞击时结算，近战平A 不生效（见 EquipmentAffixSystem#onRangedIncomingDamage
+            // 与 ShieldTridentEffects#onIncomingDamage）。
+            new Affix("trident_thrust", "affix.dimensional_mana.trident_thrust", true, 4, 4, 2, 4, 2,
+                    School.PHYSICAL, "trident_thrust", SlotKind.TRIDENT, false),
 
             // ---- r332 物理词条扩充：新增副词条（初始无等级，最多 +4） ----
             // 护甲值：初始 0.5～2，每级 +1，最高 6。
@@ -411,12 +428,16 @@ public final class EquipmentAffixSystem {
         net.minecraft.world.Container container = chest.getContainer();
         net.minecraft.util.RandomSource random = player.serverLevel().random;
         Grade grade = chestGrade(player.level().dimension(), random);
+        boolean granted = false;
         for (int slot = 0; slot < container.getContainerSize(); slot++) {
             ItemStack stack = container.getItem(slot);
             if (!isEquipment(stack) || hasAffix(stack)) continue;
             apply(stack, grade, schoolFor(stack, random), random, null);
             container.setItem(slot, stack);
+            granted = true;
         }
+        // 进度「第一滴血」：箱子里的装备真的被赋上评级词条了才算。
+        if (granted) MagicProgression.awardAdvancement(player, "affix_chest");
     }
 
     private static Grade chestGrade(net.minecraft.resources.ResourceKey<Level> dimension,
@@ -666,12 +687,14 @@ public final class EquipmentAffixSystem {
         }
     }
 
-    /** 武器类型硬隔离：剑类才出剑专属词条，弓弩才出箭矢专属词条。 */
+    /** 武器类型硬隔离：剑类才出剑专属词条，弓弩才出箭矢专属词条，盾牌 / 三叉戟各有自己的池子。 */
     private static boolean allowedOn(Affix affix, ItemStack stack) {
         return switch (affix.slot()) {
             case ANY -> true;
             case SWORD -> isSwordLike(stack);
             case BOW -> isBowLike(stack);
+            case SHIELD -> isShieldLike(stack);
+            case TRIDENT -> isTridentLike(stack);
         };
     }
 
@@ -679,6 +702,18 @@ public final class EquipmentAffixSystem {
     public static boolean isSwordLike(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return false;
         return stack.is(ItemTags.SWORDS) || stack.getItem() instanceof SwordItem;
+    }
+
+    /** 盾牌判定：原版盾牌、模组小圆盾都继承 {@link ShieldItem}。 */
+    public static boolean isShieldLike(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        return stack.getItem() instanceof ShieldItem;
+    }
+
+    /** 三叉戟判定：原版三叉戟直接继承 {@code Item}，所以要单独认一次类型。 */
+    public static boolean isTridentLike(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        return stack.getItem() instanceof TridentItem;
     }
 
     /**
@@ -703,6 +738,7 @@ public final class EquipmentAffixSystem {
         if (grade == Grade.SSS) stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
         else stack.remove(DataComponents.ENCHANTMENT_GLINT_OVERRIDE);
         applyGradeDurability(stack, grade);
+        applyGradePanel(stack, grade);
         return stack;
     }
 
@@ -836,27 +872,111 @@ public final class EquipmentAffixSystem {
     }
 
     /**
-     * 评级带来的「基础面板」加成：只按物品自己注册的基础攻击力 / 基础护甲算，
-     * 不碰词条加成，也不碰魔精钢的独立减伤。
+     * 评级「基础面板修正」：把物品自己注册的基础攻击力 / 基础护甲按评级倍率写回物品自己的
+     * {@link DataComponents#ATTRIBUTE_MODIFIERS}。
      *
-     * <p>返回的两个数会在 {@link #refresh(Player)} 里作为独立来源写进玩家属性，
-     * 所以属性面板能查到，数值上等同于「基础值 × 评级倍率」。</p>
+     * <p>以前这份加成挂在玩家属性上，伤害确实变了，但物品 Tooltip 上的攻击伤害 / 护甲值还是
+     * 白板数值，玩家根本看不出 C 和 SSS 差在哪。写进物品自己的属性组件之后：手持时 Tooltip
+     * 显示的就是修正后的攻击伤害，穿上时显示的就是修正后的护甲值，掉在地上、放进箱子、
+     * 被别的属性检查模组读到的也都是修正后的数值，而且拿在手上 / 穿在身上就真的按它结算。</p>
+     *
+     * <p>只乘 {@link AttributeModifier.Operation#ADD_VALUE} 的攻击伤害与护甲值——也就是物品的
+     * 基础数值；词条加成是另外挂在玩家身上的独立来源，不在这里，不会被评级再乘一次。</p>
      */
-    private static double[] panelBonus(ItemStack stack, Grade grade) {
-        if (grade.panelScale == 1.0D) return new double[]{0.0D, 0.0D};
-        double attackBase = 0.0D;
-        double armorBase = 0.0D;
-        ItemAttributeModifiers modifiers = stack.getOrDefault(
+    private static void applyGradePanel(ItemStack stack, Grade grade) {
+        ItemAttributeModifiers current = stack.getOrDefault(
                 DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
-        for (ItemAttributeModifiers.Entry entry : modifiers.modifiers()) {
-            if (entry.modifier().operation() != AttributeModifier.Operation.ADD_VALUE) continue;
-            if (entry.attribute().is(Attributes.ATTACK_DAMAGE)) attackBase += entry.modifier().amount();
-            else if (entry.attribute().is(Attributes.ARMOR)) armorBase += entry.modifier().amount();
+        if (current.modifiers().isEmpty()) return;
+        CustomData old = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag data = old == null ? new CompoundTag() : old.copyTag();
+        CompoundTag stored = data.getCompound(GRADE_PANEL_BASE);
+        List<ItemAttributeModifiers.Entry> entries = new ArrayList<>(current.modifiers().size());
+        CompoundTag next = new CompoundTag();
+        boolean changed = false;
+        for (ItemAttributeModifiers.Entry entry : current.modifiers()) {
+            AttributeModifier modifier = entry.modifier();
+            boolean scale = modifier.operation() == AttributeModifier.Operation.ADD_VALUE
+                    && (entry.attribute().is(Attributes.ATTACK_DAMAGE) || entry.attribute().is(Attributes.ARMOR));
+            if (!scale) {
+                entries.add(entry);
+                continue;
+            }
+            String key = modifier.id().toString();
+            // 第一次遇到这件装备时，它现在的数值就是原版基础值。
+            double base = stored.contains(key) ? stored.getDouble(key) : modifier.amount();
+            next.putDouble(key, base);
+            double amount = round2(base * grade.panelScale);
+            if (Math.abs(amount - modifier.amount()) > 1.0E-6D) {
+                changed = true;
+                entries.add(new ItemAttributeModifiers.Entry(entry.attribute(),
+                        new AttributeModifier(modifier.id(), amount, modifier.operation()), entry.slot()));
+            } else {
+                entries.add(entry);
+            }
         }
-        double scale = grade.panelScale - 1.0D;
-        return new double[]{attackBase * scale, armorBase * scale};
+        // 没有变化就不写组件，避免每秒给每件装备刷一次数据。
+        if (!changed && next.equals(stored)) return;
+        data.put(GRADE_PANEL_BASE, next);
+        CustomData.set(DataComponents.CUSTOM_DATA, stack, data);
+        if (changed) {
+            // 是否在 Tooltip 里显示属性行沿用物品原本的设置，不能因为评级被强行打开。
+            stack.set(DataComponents.ATTRIBUTE_MODIFIERS,
+                    new ItemAttributeModifiers(entries, current.showInTooltip()));
+        }
     }
 
+    /** 词条被剥掉（砂轮磨皮）时把基础攻击力 / 护甲值还原成原版数值。 */
+    private static void restoreBasePanel(ItemStack stack) {
+        CustomData old = stack.get(DataComponents.CUSTOM_DATA);
+        if (old == null) return;
+        CompoundTag data = old.copyTag();
+        if (!data.contains(GRADE_PANEL_BASE)) return;
+        CompoundTag stored = data.getCompound(GRADE_PANEL_BASE);
+        data.remove(GRADE_PANEL_BASE);
+        CustomData.set(DataComponents.CUSTOM_DATA, stack, data);
+        ItemAttributeModifiers current = stack.getOrDefault(
+                DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        List<ItemAttributeModifiers.Entry> entries = new ArrayList<>(current.modifiers().size());
+        boolean changed = false;
+        for (ItemAttributeModifiers.Entry entry : current.modifiers()) {
+            AttributeModifier modifier = entry.modifier();
+            String key = modifier.id().toString();
+            if (stored.contains(key) && Math.abs(stored.getDouble(key) - modifier.amount()) > 1.0E-6D) {
+                entries.add(new ItemAttributeModifiers.Entry(entry.attribute(),
+                        new AttributeModifier(modifier.id(), stored.getDouble(key), modifier.operation()),
+                        entry.slot()));
+                changed = true;
+            } else {
+                entries.add(entry);
+            }
+        }
+        if (changed) {
+            stack.set(DataComponents.ATTRIBUTE_MODIFIERS,
+                    new ItemAttributeModifiers(entries, current.showInTooltip()));
+        }
+    }
+
+    /** 一件装备某条属性的「评级前基础值」：优先读写入时存下的原值，老装备就按当前值算。 */
+    private static double gradeBaseAmount(ItemStack stack, Holder<net.minecraft.world.entity.ai.attributes.Attribute> attribute) {
+        ItemAttributeModifiers modifiers = stack.getOrDefault(
+                DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag stored = data == null ? new CompoundTag()
+                : data.copyTag().getCompound(GRADE_PANEL_BASE);
+        double total = 0.0D;
+        for (ItemAttributeModifiers.Entry entry : modifiers.modifiers()) {
+            if (entry.modifier().operation() != AttributeModifier.Operation.ADD_VALUE) continue;
+            if (!entry.attribute().is(attribute)) continue;
+            String key = entry.modifier().id().toString();
+            total += stored.contains(key) ? stored.getDouble(key) : entry.modifier().amount();
+        }
+        return total;
+    }
+
+    /** 保留两位小数，避免 8 × 0.9 这种乘法把 7.2 变成 7.199999999999999。 */
+    private static double round2(double value) {
+        return Math.round(value * 100.0D) / 100.0D;
+    }
 
     private static CompoundTag affixTag(Affix affix, int level, double value) {
         CompoundTag tag = new CompoundTag();
@@ -905,11 +1025,11 @@ public final class EquipmentAffixSystem {
         }
         event.getToolTip().add(Component.translatable("tooltip.dimensional_mana.affix_grade", grade.name())
                 .withStyle(grade.color));
-        // 评级修正值：耐久上限 / 基础面板 / 专属特性，三行都直接写在装备上，玩家一眼能看出差距。
+        // 评级修正值：耐久上限一行，基础面板再按装备类别单独一行，玩家一眼能看出差距。
         String durabilityText = (grade.durabilityPct > 0 ? "+" : "") + grade.durabilityPct + "%";
-        String panelText = String.format(Locale.ROOT, "%.2f", grade.panelScale);
-        event.getToolTip().add(Component.translatable("tooltip.dimensional_mana.grade_bonus",
-                durabilityText, panelText).withStyle(ChatFormatting.AQUA));
+        event.getToolTip().add(Component.translatable("tooltip.dimensional_mana.grade_bonus", durabilityText)
+                .withStyle(ChatFormatting.AQUA));
+        appendGradePanelLine(event.getToolTip(), stack, grade);
         if (grade.extraEnchantMax() > 0) {
             event.getToolTip().add(Component.translatable(
                     "tooltip.dimensional_mana.grade_trait." + grade.name().toLowerCase(Locale.ROOT))
@@ -927,6 +1047,42 @@ public final class EquipmentAffixSystem {
         appendAffixLine(event.getToolTip(), main, ChatFormatting.GOLD, true);
         ListTag subs = root.getList(SUBS, 10);
         for (int i = 0; i < subs.size(); i++) appendAffixLine(event.getToolTip(), subs.getCompound(i), ChatFormatting.GRAY, false);
+    }
+
+    /**
+     * Tooltip 里的「基础面板修正」一行：按装备类别说清楚这份修正体现在哪。
+     *
+     * <ul>
+     *   <li>武器：写出攻击伤害的前后对比。修正已经乘进物品自己的攻击伤害属性，
+     *       所以物品 Tooltip 上「主手持有：X 攻击伤害」显示的就是修正后的数值；</li>
+     *   <li>弓弩：弓没有攻击伤害属性，箭矢伤害在命中时按倍率结算，所以直接写箭矢伤害倍率；</li>
+     *   <li>护甲：写出护甲值的前后对比，穿上后属性面板与减伤都按修正后的值算。</li>
+     * </ul>
+     */
+    private static void appendGradePanelLine(List<Component> tooltip, ItemStack stack, Grade grade) {
+        if (grade.panelScale == 1.0D) return;
+        if (isBowLike(stack)) {
+            String scaleText = String.format(Locale.ROOT, "%.2f", grade.panelScale);
+            String percentText = (grade.panelScale >= 1.0D ? "+" : "")
+                    + Math.round((grade.panelScale - 1.0D) * 100.0D) + "%";
+            tooltip.add(Component.translatable("tooltip.dimensional_mana.grade_panel_arrow",
+                    scaleText, percentText).withStyle(ChatFormatting.AQUA));
+            return;
+        }
+        double attackBase = gradeBaseAmount(stack, Attributes.ATTACK_DAMAGE);
+        if (attackBase > 0.0D) {
+            // 玩家基础攻击力是 1，Tooltip 上的「攻击伤害」= 1 + 物品自己的攻击力修正。
+            tooltip.add(Component.translatable("tooltip.dimensional_mana.grade_panel_damage",
+                    format(1.0D + attackBase), format(1.0D + round2(attackBase * grade.panelScale)))
+                    .withStyle(ChatFormatting.AQUA));
+            return;
+        }
+        double armorBase = gradeBaseAmount(stack, Attributes.ARMOR);
+        if (armorBase > 0.0D) {
+            tooltip.add(Component.translatable("tooltip.dimensional_mana.grade_panel_armor",
+                    format(armorBase), format(round2(armorBase * grade.panelScale)))
+                    .withStyle(ChatFormatting.AQUA));
+        }
     }
 
     /**
@@ -1218,11 +1374,16 @@ public final class EquipmentAffixSystem {
     };
 
     /** 界面上的一条词条：只带渲染需要的东西，不暴露内部的 {@link Grade}/{@link School}。 */
-    public record AffixLine(String nameKey, boolean percent, double value, int level, boolean main,
+    public record AffixLine(String id, String nameKey, boolean percent, double value, int level, boolean main,
                             String element) {
         /** 普通词条可用的构造器：没有「哪一系元素」这个说法。 */
-        public AffixLine(String nameKey, boolean percent, double value, int level, boolean main) {
-            this(nameKey, percent, value, level, main, null);
+        public AffixLine(String id, String nameKey, boolean percent, double value, int level, boolean main) {
+            this(id, nameKey, percent, value, level, main, null);
+        }
+
+        /** 锁定比对用的键：普通词条是 id，元素附加要带上具体是哪一系。 */
+        public String lockKey() {
+            return element == null || element.isEmpty() ? id : id + "#" + element;
         }
 
         public Component name() {
@@ -1264,7 +1425,7 @@ public final class EquipmentAffixSystem {
         CompoundTag mainTag = root.getCompound(MAIN);
         Affix mainAffix = findAffix(mainTag.getString(ID));
         AffixLine mainLine = mainAffix == null ? null
-                : new AffixLine(mainAffix.name(), mainAffix.percent(), mainTag.getDouble(VALUE),
+                : new AffixLine(mainAffix.id(), mainAffix.name(), mainAffix.percent(), mainTag.getDouble(VALUE),
                 mainTag.getInt(LEVEL), true, mainTag.getString(ELEMENT));
         List<AffixLine> lines = new ArrayList<>();
         ListTag subs = root.getList(SUBS, 10);
@@ -1272,8 +1433,8 @@ public final class EquipmentAffixSystem {
             CompoundTag tag = subs.getCompound(i);
             Affix affix = findAffix(tag.getString(ID));
             if (affix == null) continue;
-            lines.add(new AffixLine(affix.name(), affix.percent(), tag.getDouble(VALUE), tag.getInt(LEVEL),
-                    false, tag.getString(ELEMENT)));
+            lines.add(new AffixLine(affix.id(), affix.name(), affix.percent(), tag.getDouble(VALUE),
+                    tag.getInt(LEVEL), false, tag.getString(ELEMENT)));
         }
         return new View(root.getString(GRADE), root.getString(SCHOOL), mainTag.getInt(LEVEL), mainLine, lines,
                 Math.max(0, root.getInt(REROLL)));
@@ -1283,6 +1444,241 @@ public final class EquipmentAffixSystem {
     public static int mainLevel(ItemStack stack) {
         CompoundTag root = affixRoot(stack);
         return root == null ? 0 : root.getCompound(MAIN).getInt(LEVEL);
+    }
+
+    // ------------------------------------------------------------------
+    // 武备加工台：目标词条锁定（防手滑）用的候选表与比对
+    // ------------------------------------------------------------------
+
+    /**
+     * 锁定面板里的一条候选词条。
+     *
+     * <p>{@code key} 是锁定与比对的唯一凭据（元素附加带具体是哪一系）；{@code schoolOk} 表示
+     * 它和这件装备当前的物理 / 魔法流派一致，{@code itemOk} 表示这件装备（剑 / 弓 / 盾 / 三叉戟）
+     * 允许出这条词条。两个都为真才允许勾选，否则界面上灰掉。</p>
+     */
+    public record AffixOption(String key, String id, String nameKey, String element, String schoolId,
+                              boolean schoolOk, boolean itemOk, boolean percent) {
+        /** 能不能勾选：流派对、且这件装备允许出。 */
+        public boolean selectable() { return schoolOk && itemOk; }
+
+        /** 类型标签：「百分比」还是「数值」。同名的一对词条（斗气 / 斗气%）就靠它区分。 */
+        public Component typeTag() { return EquipmentAffixSystem.typeTag(percent); }
+
+        public Component name() {
+            if (element == null || element.isEmpty()) return Component.translatable(nameKey);
+            return Component.translatable(nameKey, Component.translatable("gui.dimensional_mana.element." + element));
+        }
+    }
+
+    /** 词条类型标签的语言键。 */
+    public static final String TAG_PERCENT = "gui.dimensional_mana.weapon_workbench.tag_percent";
+    public static final String TAG_FLAT = "gui.dimensional_mana.weapon_workbench.tag_flat";
+
+    /**
+     * 「这条词条是百分比还是固定数值」的短标签。
+     *
+     * <p>同名的一对词条（斗气 +3.5% / 斗气 +12）光看名字是一样的，界面里必须标出来。</p>
+     */
+    public static Component typeTag(boolean percent) {
+        return Component.translatable(percent ? TAG_PERCENT : TAG_FLAT);
+    }
+
+    /** 这件装备当前记在物品数据里的流派 id（{@code magic} / {@code physical}）；拿不准就按物品类型兜底。 */
+    public static String schoolIdOf(ItemStack stack) {
+        CompoundTag root = affixRoot(stack);
+        if (root == null) return "";
+        return schoolOf(root, stack).name().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * 主词条候选表（锁定面板左栏）：列出全部能做主词条的词条，元素附加按 12 系分别列出。
+     *
+     * <p>不从 {@link #mainPool} 取，因为池子已经过滤掉流派和装备类型了；面板要「灰掉」而不是
+     * 「看不见」，玩家才知道为什么勾不上。可以勾的排在前面，稳定排序保持客户端与服务端一致。</p>
+     */
+    public static List<AffixOption> mainOptions(ItemStack stack) {
+        return options(stack, true);
+    }
+
+    /** 副词条候选表（锁定面板右栏），规则与 {@link #mainOptions} 相同。 */
+    public static List<AffixOption> subOptions(ItemStack stack) {
+        return options(stack, false);
+    }
+
+    private static List<AffixOption> options(ItemStack stack, boolean main) {
+        String school = schoolIdOf(stack);
+        List<AffixOption> list = new ArrayList<>();
+        for (Affix affix : AFFIXES) {
+            if (main ? !affix.hasMain() : !affix.hasSub()) continue;
+            String affixSchool = affix.school().name().toLowerCase(Locale.ROOT);
+            boolean schoolOk = school.isEmpty() || affixSchool.equals(school);
+            boolean itemOk = allowedOn(affix, stack);
+            if (affix.elemental()) {
+                // 元素附加：12 系各占一条，勾哪一系就只认哪一系。
+                for (String element : ELEMENT_IDS) {
+                    list.add(new AffixOption(affix.id() + "#" + element, affix.id(), affix.name(), element,
+                            affixSchool, schoolOk, itemOk, affix.percent()));
+                }
+            } else {
+                list.add(new AffixOption(affix.id(), affix.id(), affix.name(), "", affixSchool, schoolOk, itemOk,
+                        affix.percent()));
+            }
+        }
+        // 能勾的排前面；同档保持定义顺序（List.sort 是稳定排序）。
+        list.sort((a, b) -> Boolean.compare(b.selectable(), a.selectable()));
+        return list;
+    }
+
+    /**
+     * 词条 id → 拼音（按词分开写，中间用空格）。
+     *
+     * <p>面板上的词条名是中文，可「游戏窗口里能不能调出输入法」是系统和输入法说了算：
+     * 不少玩家在游戏里根本打不出中文。这里给每条词条备一份拼音，搜索框就能用全拼
+     * （{@code mosu}）、连写（{@code wulishanghai}）或首字母（{@code wlsh}）找到中文词条，
+     * 完全不依赖输入法。</p>
+     */
+    private static final Map<String, String> AFFIX_PINYIN = Map.ofEntries(
+            Map.entry("mana_percent", "mo su"),
+            Map.entry("mana_flat", "mo su"),
+            Map.entry("spell_power_percent", "mo su qiang du"),
+            Map.entry("spell_power_flat", "mo su qiang du"),
+            Map.entry("spell_crit_chance", "fa shu bao ji lv"),
+            Map.entry("spell_crit_damage", "fa shu bao ji shang hai"),
+            Map.entry("elemental_mastery", "yuan su jing tong"),
+            Map.entry("element_damage", "yuan su shang hai"),
+            Map.entry("mana_affinity", "mo su qin he"),
+            Map.entry("mana_efficiency", "mo fa xiao lv"),
+            Map.entry("mana_penetration", "mo li tong tou"),
+            Map.entry("battle_qi_percent", "dou qi"),
+            Map.entry("battle_qi_flat", "dou qi"),
+            Map.entry("physical_damage_flat", "wu li shang hai"),
+            Map.entry("physical_damage_percent", "wu li shang hai"),
+            Map.entry("physical_crit_chance", "wu li bao ji lv"),
+            Map.entry("physical_crit_damage", "wu li bao ji shang hai"),
+            Map.entry("attack_speed", "gong ji su du"),
+            Map.entry("max_health_flat", "zui da sheng ming zhi"),
+            Map.entry("max_health_percent", "zui da sheng ming zhi"),
+            Map.entry("element_fire", "huo yuan su shang hai"),
+            Map.entry("element_water", "shui yuan su shang hai"),
+            Map.entry("element_ice", "bing yuan su shang hai"),
+            Map.entry("element_lightning", "lei yuan su shang hai"),
+            Map.entry("element_wind", "feng yuan su shang hai"),
+            Map.entry("element_earth", "tu yuan su shang hai"),
+            Map.entry("element_nature", "mu yuan su shang hai"),
+            Map.entry("element_poison", "du yuan su shang hai"),
+            Map.entry("element_metal", "jin yuan su shang hai"),
+            Map.entry("element_light", "guang yuan su shang hai"),
+            Map.entry("element_sound", "yin yuan su shang hai"),
+            Map.entry("element_arcane", "ao shu yuan su shang hai"),
+            Map.entry("armor_penetration", "po jia"),
+            Map.entry("combo_damage", "lian ji shang hai"),
+            Map.entry("execute_damage", "chu jue shang hai"),
+            Map.entry("elemental_addition", "yuan su fu jia"),
+            Map.entry("parry_reflect", "tan fan"),
+            Map.entry("trident_thrust", "chuo ci"),
+            Map.entry("lifesteal", "wu li xi xue"),
+            Map.entry("battle_qi_regen", "dou qi hui fu"),
+            Map.entry("battle_qi_skill_power", "dou qi ji neng qiang du"),
+            Map.entry("mikiri_damage", "jian qie shang hai"),
+            Map.entry("parry_window", "zhao jia te hua"),
+            Map.entry("arrow_damage_flat", "jian shi shang hai"),
+            Map.entry("arrow_damage_percent", "jian shi shang hai"),
+            Map.entry("armor_value", "hu jia zhi"),
+            Map.entry("armor_toughness", "kui jia ren xing"));
+
+    /** 元素 id → 拼音，让「火」也能用 {@code huo} 搜到。 */
+    private static final Map<String, String> ELEMENT_PINYIN = Map.ofEntries(
+            Map.entry("fire", "huo"),
+            Map.entry("water", "shui"),
+            Map.entry("ice", "bing"),
+            Map.entry("lightning", "lei"),
+            Map.entry("wind", "feng"),
+            Map.entry("earth", "tu"),
+            Map.entry("nature", "mu"),
+            Map.entry("metal", "jin"),
+            Map.entry("light", "guang"),
+            Map.entry("poison", "du"),
+            Map.entry("sound", "yin"),
+            Map.entry("arcane", "ao shu"));
+
+    /**
+     * 一条词条在搜索框里能被匹配到的全部文字（已转小写）。
+     *
+     * <p>包含：界面上显示的名字、英文 id / 词条键（{@code mana_percent}、{@code element_damage#fire}）、
+     * 元素 id 与元素中文名、拼音。拼音同时给出「分开」和「连写」两种：连着打 {@code wulishanghai}
+     * 命中连写那一份，单独打 {@code shanghai} 也能命中；{@code wlsh} 这种首字母同样认。</p>
+     */
+    public static String searchText(AffixOption option) {
+        StringBuilder sb = new StringBuilder(96);
+        sb.append(option.name().getString().toLowerCase(Locale.ROOT)).append(' ');
+        sb.append(option.key().toLowerCase(Locale.ROOT)).append(' ');
+        sb.append(option.nameKey().toLowerCase(Locale.ROOT)).append(' ');
+        // 按类型搜：搜「百分比 / baifenbi / percent」只留下百分比词条，搜「数值 / shuzhi / flat」只留下固定值。
+        sb.append(typeTag(option.percent()).getString().toLowerCase(Locale.ROOT)).append(' ');
+        sb.append(option.percent() ? "percent baifenbi bfb" : "flat shuzhi sz").append(' ');
+        if (!option.element().isEmpty()) sb.append(option.element().toLowerCase(Locale.ROOT)).append(' ');
+        String pinyin = AFFIX_PINYIN.get(option.id());
+        if (pinyin != null) appendPinyin(sb, pinyin);
+        if (!option.element().isEmpty()) {
+            String elementPinyin = ELEMENT_PINYIN.get(option.element());
+            if (elementPinyin != null) appendPinyin(sb, elementPinyin);
+        }
+        return sb.toString();
+    }
+
+    /** 拼音的三种写法一起塞进去：带空格、连写、首字母。 */
+    private static void appendPinyin(StringBuilder sb, String pinyin) {
+        sb.append(pinyin).append(' ');
+        sb.append(pinyin.replace(" ", "")).append(' ');
+        String[] words = pinyin.split(" ");
+        for (String word : words) {
+            if (!word.isEmpty()) sb.append(word.charAt(0));
+        }
+        sb.append(' ');
+    }
+
+    /**
+     * 本次结果是否命中了玩家勾选的全部目标词条。
+     *
+     * <p>只有「一条不落地全中」才算命中：只出了物伤没出暴击、或者只中了两条副词条，
+     * 都不触发防手滑，玩家可以继续洗。</p>
+     *
+     * @param mainKey 勾选的主词条键（空串表示没勾主词条）
+     * @param subKeys 勾选的副词条键
+     * @return 勾了东西、且全部命中时返回 {@code true}
+     */
+    public static boolean matchesLocks(ItemStack stack, String mainKey, java.util.Collection<String> subKeys) {
+        boolean hasMainLock = mainKey != null && !mainKey.isEmpty();
+        boolean hasSubLock = subKeys != null && !subKeys.isEmpty();
+        if (!hasMainLock && !hasSubLock) return false;
+        View view = view(stack);
+        if (view.empty()) return false;
+        if (hasMainLock && !mainKey.equals(view.main().lockKey())) return false;
+        if (hasSubLock) {
+            for (String key : subKeys) {
+                boolean found = false;
+                for (AffixLine line : view.subs()) {
+                    if (key.equals(line.lockKey())) { found = true; break; }
+                }
+                if (!found) return false;
+            }
+        }
+        return true;
+    }
+
+    /** 这条锁定键是不是一个真实存在的词条（服务端收包时校验，客户端塞乱七八糟的 id 不会误判命中）。 */
+    public static boolean isKnownLockKey(String key) {
+        if (key == null || key.isEmpty()) return false;
+        int split = key.indexOf('#');
+        String id = split < 0 ? key : key.substring(0, split);
+        String element = split < 0 ? "" : key.substring(split + 1);
+        Affix affix = findAffix(id);
+        if (affix == null) return false;
+        if (element.isEmpty()) return true;
+        if (!affix.elemental()) return false;
+        for (String candidate : ELEMENT_IDS) if (candidate.equals(element)) return true;
+        return false;
     }
 
     /** 这件装备被超导魔晶洗练过几次。 */
@@ -1512,8 +1908,9 @@ public final class EquipmentAffixSystem {
     /** 抹掉装备上的整套词条数据（含词条前缀名与传说光效）。 */
     public static void stripAffixes(ItemStack stack) {
         if (!hasAffix(stack)) return;
-        // 先把评级给的耐久上限还原成原版，再抹数据。
+        // 先把评级给的耐久上限与基础攻击 / 护甲还原成原版，再抹数据。
         restoreBaseDurability(stack);
+        restoreBasePanel(stack);
         CustomData data = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
         CompoundTag tag = data == null ? new CompoundTag() : data.copyTag();
         tag.remove(ROOT);
@@ -1570,6 +1967,8 @@ public final class EquipmentAffixSystem {
         if (root == null) return;
         Grade grade = Grade.parse(root.getString(GRADE));
         applyGradeDurability(stack, grade);
+        // 老存档的装备在旧版本里只记了耐久修正，这一行按当前评级把基础攻击 / 护甲补正上。
+        applyGradePanel(stack, grade);
         applyGradeEnchantTrait(stack, grade, player);
     }
 
@@ -1669,6 +2068,26 @@ public final class EquipmentAffixSystem {
         return SpellAttributes.value(player, SpellAttributes.ARROW_DAMAGE_PERCENT, 0.0);
     }
 
+    /** 弹反百分比：成功格挡后把这一下被格挡伤害的这个百分比反弹给攻击者。 */
+    public static double parryReflectPercent(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.PARRY_REFLECT, 0.0);
+    }
+
+    /** 戳刺百分比：投掷 / 激流冲刺命中时的额外伤害，单位是百分数。 */
+    public static double tridentThrustPercent(Player player) {
+        return SpellAttributes.value(player, SpellAttributes.TRIDENT_THRUST, 0.0);
+    }
+
+    /**
+     * 直接读某一件物品自己的戳刺词条值。
+     *
+     * <p>投掷出去的三叉戟已经不在手上，属性汇总里读不到它，只能从
+     * {@code ThrownTrident#getWeaponItem()} 那一份物品数据里取。</p>
+     */
+    public static double tridentThrustPercentOf(ItemStack stack) {
+        return stack == null || stack.isEmpty() ? 0.0 : affixValue(stack, "trident_thrust");
+    }
+
     /**
      * 元素附加：某一件装备/整套装备附带的「哪一系、多少点」元素伤害。
      *
@@ -1729,11 +2148,9 @@ public final class EquipmentAffixSystem {
         clearModifier(player, Attributes.ATTACK_SPEED, ATTACK_SPEED_MOD);
         clearModifier(player, Attributes.MAX_HEALTH, MAX_HEALTH_MOD);
         clearModifier(player, Attributes.MAX_HEALTH, MAX_HEALTH_PERCENT_MOD);
-        // 护甲值 / 盔甲韧性 / 评级面板修正也必须先清，否则卸下装备后旧数值会一直挂着。
+        // 护甲值 / 盔甲韧性也必须先清，否则卸下装备后旧数值会一直挂着。
         clearModifier(player, Attributes.ARMOR, ARMOR_VALUE_MOD);
         clearModifier(player, Attributes.ARMOR_TOUGHNESS, ARMOR_TOUGHNESS_MOD);
-        clearModifier(player, Attributes.ATTACK_DAMAGE, GRADE_ATTACK_MOD);
-        clearModifier(player, Attributes.ARMOR, GRADE_ARMOR_MOD);
         // 词条专用的“可被外部面板读到”的属性：先清掉上一轮，再按当前装备重新写。
         clearModifier(player, SpellAttributes.MANA_MAX_PERCENT, AFFIX_MANA_PERCENT_MOD);
         clearModifier(player, SpellAttributes.MANA_MAX_FLAT, AFFIX_MANA_FLAT_MOD);
@@ -1753,6 +2170,8 @@ public final class EquipmentAffixSystem {
         clearModifier(player, SpellAttributes.PARRY_WINDOW, AFFIX_PARRY_WINDOW_MOD);
         clearModifier(player, SpellAttributes.ARROW_DAMAGE_FLAT, AFFIX_ARROW_FLAT_MOD);
         clearModifier(player, SpellAttributes.ARROW_DAMAGE_PERCENT, AFFIX_ARROW_PERCENT_MOD);
+        clearModifier(player, SpellAttributes.PARRY_REFLECT, AFFIX_PARRY_REFLECT_MOD);
+        clearModifier(player, SpellAttributes.TRIDENT_THRUST, AFFIX_TRIDENT_THRUST_MOD);
         for (String element : ELEMENT_IDS) {
             clearModifier(player, SpellAttributes.elementDamage(element), affixElementModifier(element));
             clearModifier(player, SpellAttributes.elementAddition(element), affixElementAdditionModifier(element));
@@ -1766,17 +2185,14 @@ public final class EquipmentAffixSystem {
         double armorPen = 0, lifesteal = 0, qiRegen = 0, qiSkillPower = 0;
         double comboDamage = 0, executeDamage = 0, mikiriDamage = 0, parryWindow = 0;
         double arrowFlat = 0, arrowPercent = 0, armorValue = 0, armorToughness = 0;
-        // 评级「基础面板修正」单独记一份：属性面板里能看出是评级给的，不和词条混在一起。
-        double gradeAttack = 0, gradeArmor = 0;
+        double parryReflect = 0, tridentThrust = 0;
         double[] elementValues = new double[ELEMENT_IDS.length];
         double[] elementAdditions = new double[ELEMENT_IDS.length];
         for (ItemStack stack : relevantEquipment(player)) {
             CompoundTag root = affixRoot(stack);
             if (root == null) continue;
-            // 评级的基础面板修正：只按物品自身的基础数值算，单独记一份，和词条加成区分开。
-            double[] panel = panelBonus(stack, Grade.parse(root.getString(GRADE)));
-            gradeAttack += panel[0];
-            gradeArmor += panel[1];
+            // 评级的基础面板修正不在这里：它写在物品自己的属性组件里（见 applyGradePanel），
+            // 拿在手上 / 穿在身上就自动生效，这里再加一遍会变成双倍。
             List<CompoundTag> all = new ArrayList<>();
             all.add(root.getCompound(MAIN));
             ListTag subs = root.getList(SUBS, 10);
@@ -1817,6 +2233,8 @@ public final class EquipmentAffixSystem {
                     case "parry_window" -> parryWindow += value;
                     case "arrow_damage_flat" -> arrowFlat += value;
                     case "arrow_damage_percent" -> arrowPercent += value;
+                    case "parry_reflect" -> parryReflect += value;
+                    case "trident_thrust" -> tridentThrust += value;
                     case "armor_value" -> armorValue += value;
                     case "armor_toughness" -> armorToughness += value;
                     case "elemental_addition" -> {
@@ -1861,11 +2279,11 @@ public final class EquipmentAffixSystem {
         addModifier(player.getAttribute(SpellAttributes.PARRY_WINDOW), AFFIX_PARRY_WINDOW_MOD, parryWindow, AttributeModifier.Operation.ADD_VALUE);
         addModifier(player.getAttribute(SpellAttributes.ARROW_DAMAGE_FLAT), AFFIX_ARROW_FLAT_MOD, arrowFlat, AttributeModifier.Operation.ADD_VALUE);
         addModifier(player.getAttribute(SpellAttributes.ARROW_DAMAGE_PERCENT), AFFIX_ARROW_PERCENT_MOD, arrowPercent, AttributeModifier.Operation.ADD_VALUE);
+        // 弹反 / 戳刺：同样写成真实属性，外部属性面板与检测模组都读得到。
+        addModifier(player.getAttribute(SpellAttributes.PARRY_REFLECT), AFFIX_PARRY_REFLECT_MOD, parryReflect, AttributeModifier.Operation.ADD_VALUE);
+        addModifier(player.getAttribute(SpellAttributes.TRIDENT_THRUST), AFFIX_TRIDENT_THRUST_MOD, tridentThrust, AttributeModifier.Operation.ADD_VALUE);
         // 护甲值与盔甲韧性直接写进原版属性：原版面板、其它模组都直接读得到，护甲减伤也真的按它算。
         addModifier(player.getAttribute(Attributes.ARMOR), ARMOR_VALUE_MOD, armorValue, AttributeModifier.Operation.ADD_VALUE);
-        // 评级基础面板修正：武器基础伤害 ×(评级倍率-1)、防具基础护甲 ×(评级倍率-1)，各自一条来源。
-        addModifier(player.getAttribute(Attributes.ATTACK_DAMAGE), GRADE_ATTACK_MOD, gradeAttack, AttributeModifier.Operation.ADD_VALUE);
-        addModifier(player.getAttribute(Attributes.ARMOR), GRADE_ARMOR_MOD, gradeArmor, AttributeModifier.Operation.ADD_VALUE);
         addModifier(player.getAttribute(Attributes.ARMOR_TOUGHNESS), ARMOR_TOUGHNESS_MOD, armorToughness, AttributeModifier.Operation.ADD_VALUE);
         for (int i = 0; i < ELEMENT_IDS.length; i++) {
             addModifier(player.getAttribute(SpellAttributes.elementDamage(ELEMENT_IDS[i])),
@@ -1942,7 +2360,8 @@ public final class EquipmentAffixSystem {
      * <table border="1">
      *   <caption>流派概率</caption>
      *   <tr><th>类别</th><th>物理</th><th>魔法</th></tr>
-     *   <tr><td>原版武器（剑、斧、三叉戟、弓、弩）</td><td>80%</td><td>20%（罕见的「魔剑士」极品）</td></tr>
+     *   <tr><td>原版武器（剑、斧、弓、弩）</td><td>80%</td><td>20%（罕见的「魔剑士」极品）</td></tr>
+     *   <tr><td>盾牌、三叉戟</td><td>100%</td><td>—（专属词条弹反 / 戳刺都在物理池里）</td></tr>
      *   <tr><td>原版防具（头盔、胸甲、护腿、靴子）</td><td>60%</td><td>40%</td></tr>
      *   <tr><td>原版工具（镐、锹、锄）</td><td>100%</td><td>—</td></tr>
      *   <tr><td>模组法杖、布甲系防具</td><td>—</td><td>100%</td></tr>
@@ -1955,6 +2374,9 @@ public final class EquipmentAffixSystem {
     private static School schoolFor(ItemStack stack, net.minecraft.util.RandomSource random) {
         Item item = stack.getItem();
         if (item instanceof MagicStaffItem) return School.MAGIC;
+        // 盾牌与三叉戟固定物理流派：弹反 / 戳刺都挂在物理词条池里，
+        // 不固定的话「洗了十次都没见过专属词条」——池子里本来就没有。
+        if (item instanceof ShieldItem || item instanceof TridentItem) return School.PHYSICAL;
         ResourceLocation registryId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item);
         boolean modded = registryId != null && registryId.getNamespace().equals(GeneratedMod.MOD_ID);
         String path = registryId == null ? "" : registryId.getPath();
@@ -1983,7 +2405,9 @@ public final class EquipmentAffixSystem {
     public static boolean isEquipment(ItemStack stack) {
         Item item = stack.getItem();
         return item instanceof ArmorItem || item instanceof TieredItem || item instanceof BowItem
-                || item instanceof CrossbowItem || item instanceof MagicStaffItem;
+                || item instanceof CrossbowItem || item instanceof MagicStaffItem
+                // 盾牌与三叉戟也能刷词条：弹反只出在盾牌上，戳刺只出在三叉戟上。
+                || item instanceof ShieldItem || item instanceof TridentItem;
     }
 
     /**
@@ -2010,9 +2434,34 @@ public final class EquipmentAffixSystem {
         boolean arrow = source.getDirectEntity() instanceof net.minecraft.world.entity.projectile.AbstractArrow;
         double arrowFlat = arrow ? arrowDamageFlat(shooter) : 0.0;
         double arrowPercent = arrow ? arrowDamagePercent(shooter) / 100.0 : 0.0;
-        if (bonusFlat <= 0.0 && bonusPercent <= 0.0 && arrowFlat <= 0.0 && arrowPercent <= 0.0) return;
+        // 弓弩的评级基础面板修正：弓没有攻击伤害属性，只能按「命中时的箭矢伤害 × 倍率」结算。
+        double bowScale = arrow ? heldBowGradeScale(shooter) : 1.0D;
+        // 三叉戟专属词条「戳刺」：投掷命中时单独一个乘区。激流冲刺的撞击不是弹射物，
+        // 由 ShieldTridentEffects#onIncomingDamage 单独结算。
+        // 投出去的三叉戟已经不在手上，所以除了装备汇总值，还要读它自己那一份词条数据。
+        double thrust = 0.0;
+        if (source.getDirectEntity() instanceof net.minecraft.world.entity.projectile.ThrownTrident thrown) {
+            thrust = (tridentThrustPercent(shooter) + tridentThrustPercentOf(thrown.getWeaponItem())) / 100.0;
+        }
+        if (bonusFlat <= 0.0 && bonusPercent <= 0.0 && arrowFlat <= 0.0 && arrowPercent <= 0.0
+                && bowScale == 1.0D && thrust <= 0.0) return;
         event.setAmount((float) ((event.getAmount() + bonusFlat + arrowFlat)
-                * (1.0 + bonusPercent) * (1.0 + arrowPercent)));
+                * (1.0 + bonusPercent) * (1.0 + arrowPercent) * bowScale * (1.0 + thrust)));
+    }
+
+    /**
+     * 射手手里那张弓 / 弩的评级基础面板倍率；没拿弓弩或弓弩没有词条时返回 1。
+     *
+     * <p>主手优先——蓄力射箭时弓一定在手里；副手再兜一层，兼容把弓放副手的情况。</p>
+     */
+    private static double heldBowGradeScale(Player shooter) {
+        for (ItemStack held : List.of(shooter.getMainHandItem(), shooter.getOffhandItem())) {
+            if (!isBowLike(held)) continue;
+            CompoundTag root = affixRoot(held);
+            if (root == null) continue;
+            return Grade.parse(root.getString(GRADE)).panelScale;
+        }
+        return 1.0D;
     }
 
     public static boolean hasAffix(ItemStack stack) { return affixRoot(stack) != null; }

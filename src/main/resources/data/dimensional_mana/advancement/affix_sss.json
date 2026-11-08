@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:weapon_workbench",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:affix_reforge_talisman"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.affix_sss.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.affix_sss.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

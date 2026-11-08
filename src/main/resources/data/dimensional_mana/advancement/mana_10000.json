@@ -1,7 +1,7 @@
 {
-  "parent": "dimensional_mana:mana_200",
+  "parent": "dimensional_mana:mana_5000",
   "display": {
-    "icon": {"id": "dimensional_mana:supreme_mana_crystal"},
+    "icon": {"id": "dimensional_mana:special_mana_crystal_cluster"},
     "title": {"translate": "advancement.dimensional_mana.mana_10000.title"},
     "description": {"translate": "advancement.dimensional_mana.mana_10000.description"},
     "frame": "challenge",

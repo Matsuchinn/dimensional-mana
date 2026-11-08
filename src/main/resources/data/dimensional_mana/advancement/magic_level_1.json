@@ -1,7 +1,7 @@
 {
-  "parent": "dimensional_mana:root",
+  "parent": "dimensional_mana:first_spell",
   "display": {
-    "icon": {"id": "dimensional_mana:lesser_mana_crystal"},
+    "icon": {"id": "dimensional_mana:blank_spell_scroll"},
     "title": {"translate": "advancement.dimensional_mana.magic_level_1.title"},
     "description": {"translate": "advancement.dimensional_mana.magic_level_1.description"},
     "frame": "task",

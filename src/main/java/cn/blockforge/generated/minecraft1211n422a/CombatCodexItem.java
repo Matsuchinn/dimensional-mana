@@ -35,6 +35,8 @@ public final class CombatCodexItem extends Item {
             level.playSound(null, player.blockPosition(), GeneratedMod.CODEX_PAGE_TURN.get(), SoundSource.PLAYERS,
                     0.8F, 0.82F + level.random.nextFloat() * 0.08F);
             PacketDistributor.sendToPlayer(serverPlayer, new OpenCombatCodexPayload(true));
+            // 进度「血与火的第一课」：第一次翻开战斗手册。
+            MagicProgression.awardAdvancement(serverPlayer, "combat_codex");
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }

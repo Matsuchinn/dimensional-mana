@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:crystal_processor",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:appraisal_orb"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.first_appraisal.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.first_appraisal.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

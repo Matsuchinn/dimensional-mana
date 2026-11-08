@@ -115,7 +115,13 @@ public final class ManaStoneSystem {
 
     private static void tickMob(ServerLevel level, Mob mob) {
         // 已经在生病的：病程由效果自己走，这里不再计时。
-        if (mob.hasEffect(GeneratedMod.MANA_STONE_DISEASE)) return;
+        if (mob.hasEffect(GeneratedMod.MANA_STONE_DISEASE)) {
+            // 进度「无法治愈之疾」：亲眼见到一只患病的生物就算数（玩家自己不会染上这个病）。
+            if (level.getNearestPlayer(mob, SCAN_RADIUS) instanceof ServerPlayer witness) {
+                MagicProgression.awardAdvancement(witness, "mana_stone_disease");
+            }
+            return;
+        }
 
         CompoundTag root = mob.getPersistentData();
         CompoundTag data = root.getCompound(DATA_KEY);
@@ -227,6 +233,8 @@ public final class ManaStoneSystem {
 
         held.consume(1, player);
         cure(target);
+        // 进度「金苹果的药力」：把一只患病生物治回来。
+        MagicProgression.awardAdvancement(player, "mana_stone_cured");
 
         if (target instanceof Villager villager) {
             // 走原版"治好僵尸村民"的同一条声望通道：玩家拿交易折扣。

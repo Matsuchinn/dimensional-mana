@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:magic_level_5",
+  "display": {
+    "icon": {
+      "id": "dimensional_mana:goblin_warrior_spawn_egg"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.goblin_first.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.goblin_first.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

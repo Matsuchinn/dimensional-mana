@@ -1,5 +1,5 @@
 {
-  "parent": "dimensional_mana:root",
+  "parent": "dimensional_mana:professional_forge",
   "display": {
     "icon": {
       "id": "minecraft:fermented_spider_eye"

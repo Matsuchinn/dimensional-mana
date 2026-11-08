@@ -1,0 +1,23 @@
+{
+  "parent": "dimensional_mana:circle_first_run",
+  "display": {
+    "icon": {
+      "id": "minecraft:target"
+    },
+    "title": {
+      "translate": "advancement.dimensional_mana.circle_blast.title"
+    },
+    "description": {
+      "translate": "advancement.dimensional_mana.circle_blast.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": true
+  },
+  "criteria": {
+    "done": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}
