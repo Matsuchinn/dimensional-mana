@@ -907,6 +907,13 @@ public final class ElementalSlime extends Slime {
         }
         // 同类永不互相攻击；雷史莱姆只是对其他生物更暴躁，不再把同类当目标。
         if (target instanceof ElementalSlime other && other.variant() == variant) return false;
+        // 蚀魔荒原是一个生态：魔素史莱姆和魔素变异体（晶化行尸、魔蚀骸骨、聚魔爆裂体……）
+        // 井水不犯河水，不会主动扑上去打，被它们的爆炸溅到也不反咬。
+        if (variant == ElementalSlimeVariant.MANA && CrystalClusterData.isManaMutant(target)) return false;
+        // 荒原另外两位住户（秽蚀蠹、秽蚀蜂）也同理：只在荒原里互相放过，别的地方照旧。
+        if (variant == ElementalSlimeVariant.MANA
+                && (target instanceof CorruptedSilverfishEntity || target instanceof CorruptedBeeEntity)
+                && CorruptedWastelandBiome.is(level().getBiome(blockPosition()))) return false;
         return !ownerUUID().filter(target.getUUID()::equals).isPresent();
     }
 

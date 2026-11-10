@@ -22,6 +22,7 @@ import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -229,6 +230,7 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
         if (ingredientId == null || stack.isEmpty()) return false;
         // 药水标记：#potion:elemental_mastery_2 —— 只认那一瓶，别的药水（含喷溅、滞留）都不算。
         if (ElementalMasteryPotions.isToken(ingredientId)) return ElementalMasteryPotions.matches(stack, ingredientId);
+        if ("#planks".equals(ingredientId)) return stack.is(ItemTags.PLANKS);
         if ("#magic_fragment".equals(ingredientId)) {
             ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
             String path = id.getPath();
@@ -682,7 +684,37 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
         addTalentScrollRecipes(recipes);
         addElementalMasteryRecipes(recipes);
         addMojiangSteelRecipes(recipes);
+        addCorruptedHiveRecipes(recipes);
         return List.copyOf(recipes);
+    }
+
+    /**
+     * 魔蚀蜂箱与魔蚀蜜脾衍生线（第 19 条需求）：四条配方都不消耗魔素、统一 4 秒（80 刻）。
+     *
+     * <ul>
+     *   <li>秽蚀蜂箱：6 任意木板 + 3 魔蚀蜜脾（与原版蜂箱用料一致，按数量匹配、随便摆）；</li>
+     *   <li>魔蚀蜂蜜块：4 瓶装魔蚀蜂蜜压成 1 块，四个玻璃瓶原样返还；</li>
+     *   <li>魔蚀蜜脾块：4 魔蚀蜜脾压成 1 块；</li>
+     *   <li>魔法蜡烛：1 魔蚀蛛丝 + 1 魔蚀蜜脾。</li>
+     * </ul>
+     */
+    private static void addCorruptedHiveRecipes(List<ProcessRecipe> recipes) {
+        recipes.add(new ProcessRecipe("corrupted_hive",
+                List.of(new IngredientStack("#planks", 6),
+                        new IngredientStack("corrupted_honeycomb", 3)), List.of(),
+                List.of(new OutputStack("corrupted_hive", 1)), 0, 80, "corrupted_hive"));
+        recipes.add(new ProcessRecipe("corrupted_honey_block",
+                List.of(new IngredientStack("corrupted_honey", 4)), List.of(),
+                List.of(new OutputStack("corrupted_honey_block", 1),
+                        new OutputStack("minecraft:glass_bottle", 4)),
+                0, 80, "corrupted_honey_block"));
+        recipes.add(new ProcessRecipe("corrupted_honeycomb_block",
+                List.of(new IngredientStack("corrupted_honeycomb", 4)), List.of(),
+                List.of(new OutputStack("corrupted_honeycomb_block", 1)), 0, 80, "corrupted_honeycomb_block"));
+        recipes.add(new ProcessRecipe("magic_candle",
+                List.of(new IngredientStack(GeneratedMod.CORRUPTED_SILK_ID, 1),
+                        new IngredientStack("corrupted_honeycomb", 1)), List.of(),
+                List.of(new OutputStack("magic_candle", 1)), 0, 80, "magic_candle"));
     }
 
     /**
@@ -1115,6 +1147,9 @@ public final class CrystalProcessorBlockEntity extends BlockEntity implements Co
         if (stack.is(GeneratedMod.MOD_ITEMS.get("advanced_mana_crystal_dust").get())) return 320;
         if (stack.is(GeneratedMod.MOD_ITEMS.get("supreme_mana_crystal_dust").get())) return 800;
         if (stack.is(GeneratedMod.MOD_ITEMS.get("special_mana_crystal_dust").get())) return 2_400;
+        // 魔蚀蜜脾块：一整块压实的魔蚀蜜，给加工台充 800 魔素（与极品魔晶粉同档）。
+        var combBlock = GeneratedMod.MOD_ITEMS.get("corrupted_honeycomb_block");
+        if (combBlock != null && stack.is(combBlock.get())) return 800;
         return 0;
     }
 

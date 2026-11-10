@@ -611,8 +611,12 @@ public final class BattleQiParry {
 
         // 返还 1.5 倍消耗：先扣后还，净赚一半；返还后超过上限的部分换成 2 秒速度 II。
         int refund = (int)Math.round(cost * 1.5);
+        // 主手带【斗气修补】时，本次返还直接烧成主手武器的耐久（1 点斗气 = 2 点耐久）；
+        // 修不下的零头照常回斗气条，武器满耐久或没这条附魔则全额返还。
+        int converted = ResourceMendingEnchantments.convertParryRefundToDurability(player, refund);
+        int returned = refund - converted;
         ManaData.Snapshot now = ManaData.get(player);
-        int target = now.battleQi() + refund;
+        int target = now.battleQi() + returned;
         ManaData.setBattleQi(player, Math.min(maxQi, target));
         if (target > maxQi && player.level() instanceof ServerLevel level) {
             player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, OVERFLOW_SPEED_TICKS, 1, false, true, true));

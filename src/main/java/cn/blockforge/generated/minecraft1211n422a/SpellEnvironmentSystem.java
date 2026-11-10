@@ -67,9 +67,23 @@ public final class SpellEnvironmentSystem {
 
     /** 瞬发冰法沿实际轨迹检查；只要碰到水就一定结冰。 */
     public static void freezeAlong(ServerLevel level, Vec3 start, Vec3 end) {
+        Vec3 reach = residue(start, end);
+        int steps = Math.max(1, (int)Math.ceil(reach.length() * 2.0));
+        for (int i = 0; i <= steps; i++) freezeWater(level, start.lerp(start.add(reach), i / (double)steps));
+    }
+
+    /**
+     * 元素残留只铺在射线最前面的 12 格。
+     *
+     * <p>基础投射法术的射程这轮抬到八个区块，若还沿整条射线铺火焰/霜冰，
+     * 一发火球会点着一条一百多格的火线，既烧坏地形也拖累服务器。
+     * 十二格和原来十格射程时的手感一致：打得远，但只在眼前留下痕迹。</p>
+     */
+    private static Vec3 residue(Vec3 start, Vec3 end) {
         Vec3 delta = end.subtract(start);
-        int steps = Math.max(1, (int)Math.ceil(delta.length() * 2.0));
-        for (int i = 0; i <= steps; i++) freezeWater(level, start.lerp(end, i / (double)steps));
+        double length = delta.length();
+        if (length < 0.01) return Vec3.ZERO;
+        return delta.scale(Math.min(length, 12.0) / length);
     }
 
     /** 持续冰法每秒将一格范围内的水变成冰，不再有几率判定。 */
@@ -168,14 +182,14 @@ public final class SpellEnvironmentSystem {
 
 
     public static void igniteAlong(LivingEntity caster, ServerLevel level, Vec3 start, Vec3 end) {
-        Vec3 delta = end.subtract(start);
-        double length = delta.length();
+        Vec3 reach = residue(start, end);
+        double length = reach.length();
         if (length < 0.01) return;
         // 跳过施法者周围 2.25 格，避免烈火/火球刚离手就在自己脚下放火。
         double safeDistance = 2.25;
         int steps = Math.max(1, (int)Math.ceil(length * 2.0));
         for (int i = 0; i <= steps; i++) {
-            Vec3 point = start.lerp(end, i / (double)steps);
+            Vec3 point = start.lerp(start.add(reach), i / (double)steps);
             if (point.distanceToSqr(caster.position()) >= safeDistance * safeDistance) igniteAt(level, point, caster);
         }
     }

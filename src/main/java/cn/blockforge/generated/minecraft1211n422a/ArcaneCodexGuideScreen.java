@@ -453,6 +453,7 @@ public final class ArcaneCodexGuideScreen extends Screen {
                 new Extra("corrupted_wither", 0xFF7E4FB8, "corrupted_wither_spawn_egg"),
                 new Extra("corrupted_skeleton", 0xFF93A0B6, "corrupted_skeleton_spawn_egg"),
                 new Extra("corrupted_weaver", 0xFF5F8A6E, "corrupted_weaver_spawn_egg"),
+                new Extra("corrupted_silverfish", 0xFF6E5A9E, "corrupted_silverfish_spawn_egg"),
                 new Extra("void_shade", 0xFF3A2E58, "void_shade_spawn_egg"),
                 new Extra("crystallized_zombie", 0xFF6FB2C9, "crystallized_zombie_spawn_egg"),
                 new Extra("mana_creeper", 0xFF4AC4A2, "mana_creeper_spawn_egg"),

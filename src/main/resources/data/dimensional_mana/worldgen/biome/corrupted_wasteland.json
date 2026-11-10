@@ -116,7 +116,14 @@
         "maxCount": 3
       }
     ],
-    "creature": [],
+    "creature": [
+      {
+        "type": "dimensional_mana:corrupted_silverfish",
+        "weight": 14,
+        "minCount": 1,
+        "maxCount": 3
+      }
+    ],
     "ambient": [
       {
         "type": "minecraft:bat",

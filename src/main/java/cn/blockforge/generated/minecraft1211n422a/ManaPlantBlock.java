@@ -88,6 +88,8 @@ public class ManaPlantBlock extends BushBlock {
     @Override
     protected void entityInside(BlockState state, Level level, BlockPos pos, Entity entity) {
         if (level.isClientSide || !(entity instanceof LivingEntity living) || !living.isAlive()) return;
+        // 秽蚀蜂的采蜜名单里有血纹花：魔蚀的皮蠹不认血吻的咬，照样进来采蜜不受伤害。
+        if (kind == ManaPlants.Kind.BLOOD_KISS && living instanceof CorruptedBeeEntity) return;
         switch (kind) {
             case LEVILIA -> leviliaTouch(level, living);
             case LUMELIA -> lumeliaTouch(level, living);

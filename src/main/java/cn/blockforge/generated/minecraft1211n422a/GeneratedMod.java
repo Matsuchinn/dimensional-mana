@@ -182,6 +182,9 @@ public final class GeneratedMod {
     /** 【敬而远之】：击杀哥布林营地首领后获得的 2 小时威压，哥布林见了你掉头就跑。 */
     public static final DeferredHolder<MobEffect, MobEffect> GOBLIN_DREAD = EFFECTS.register("goblin_dread",
             GoblinDreadEffect::new);
+    /** 【狂化】：魔蚀织网者的虫群意识叫来的节肢动物，10 秒内移速 +50%、受到伤害 −25%。 */
+    public static final DeferredHolder<MobEffect, MobEffect> HIVE_FRENZY = EFFECTS.register("hive_frenzy",
+            HiveFrenzyEffect::new);
     /** 强化补魔剂多回的那 15%：存在物品组件上，不需要为每一级补魔剂各开一个物品。 */
     public static final DeferredHolder<net.minecraft.core.component.DataComponentType<?>,
             net.minecraft.core.component.DataComponentType<Float>> POTION_BOOST = DATA_COMPONENTS.register("potion_boost",
@@ -427,11 +430,53 @@ public final class GeneratedMod {
     /** 毒牙噬咬。 */
     public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_WEAVER_BITE =
             corruptedWeaverSound("bite");
+    /** 虫群意识：一片极速的节肢摩擦声。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_WEAVER_HIVE =
+            corruptedWeaverSound("hive");
 
     private static DeferredHolder<SoundEvent, SoundEvent> corruptedWeaverSound(String id) {
         return SOUNDS.register("corrupted_weaver_" + id,
                 () -> SoundEvent.createVariableRangeEvent(
                         ResourceLocation.fromNamespaceAndPath(MOD_ID, "corrupted_weaver_" + id)));
+    }
+    /**
+     * 秽蚀蠹的六套音效：粘液撕裂 + 甲壳摩擦（两段自制音频，见 sounds/corrupted_silverfish/），
+     * 再叠上降调的原版蠹虫叫声。蜕皮、钻地各用一套，玩家分得清「它变小了」和「它从地里来了」。
+     */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_SILVERFISH_AMBIENT =
+            corruptedSilverfishSound("ambient");
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_SILVERFISH_HURT =
+            corruptedSilverfishSound("hurt");
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_SILVERFISH_DEATH =
+            corruptedSilverfishSound("death");
+    /** 死亡蜕皮：一层旧壳被撕下来的粘液声。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_SILVERFISH_MOLT =
+            corruptedSilverfishSound("molt");
+    /** 咬合 / 啃食植物。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_SILVERFISH_BITE =
+            corruptedSilverfishSound("bite");
+    /** 钻地、破土而出。 */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_SILVERFISH_BURROW =
+            corruptedSilverfishSound("burrow");
+
+    private static DeferredHolder<SoundEvent, SoundEvent> corruptedSilverfishSound(String id) {
+        return SOUNDS.register("corrupted_silverfish_" + id,
+                () -> SoundEvent.createVariableRangeEvent(
+                        ResourceLocation.fromNamespaceAndPath(MOD_ID, "corrupted_silverfish_" + id)));
+    }
+
+    /**
+     * 秽蚀蜂的三套音效：循环嗡鸣（链锯低频抖 + 黑板刮高频刺）、受击短啸、死亡坠鸣。
+     * 见 sounds/corrupted_bee/ 下的自制 ogg；循环那套由 CorruptedBeeHumInstance 常驻播放。
+     */
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_BEE_HUM = corruptedBeeSound("hum");
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_BEE_HURT = corruptedBeeSound("hurt");
+    public static final DeferredHolder<SoundEvent, SoundEvent> CORRUPTED_BEE_DEATH = corruptedBeeSound("death");
+
+    private static DeferredHolder<SoundEvent, SoundEvent> corruptedBeeSound(String id) {
+        return SOUNDS.register("corrupted_bee_" + id,
+                () -> SoundEvent.createVariableRangeEvent(
+                        ResourceLocation.fromNamespaceAndPath(MOD_ID, "corrupted_bee_" + id)));
     }
     /**
      * 虚空蚀影的五套音效：比原版末影人更低更黏的呼吸、受伤、死亡，蓄力时的虚空啸叫，
@@ -508,6 +553,14 @@ public final class GeneratedMod {
      */
     public static final DeferredHolder<Feature<?>, Feature<NoneFeatureConfiguration>> EROSION_TREE_FEATURE = FEATURES.register(
             "erosion_tree", ErosionTreeFeature::new);
+    /** r91：树装饰器注册表——蚀纹木挂秽蚀蜂巢用的（原版橡树的 BeehiveDecorator 同款机制）。 */
+    public static final DeferredRegister<net.minecraft.world.level.levelgen.feature.treedecorators.TreeDecoratorType<?>> TREE_DECORATORS =
+            DeferredRegister.create(net.minecraft.core.registries.Registries.TREE_DECORATOR_TYPE, MOD_ID);
+    public static final DeferredHolder<net.minecraft.world.level.levelgen.feature.treedecorators.TreeDecoratorType<?>,
+            net.minecraft.world.level.levelgen.feature.treedecorators.TreeDecoratorType<CorruptedNestTreeDecorator>>
+            CORRUPTED_NEST_TREE_DECORATOR = TREE_DECORATORS.register("corrupted_nest",
+            () -> new net.minecraft.world.level.levelgen.feature.treedecorators.TreeDecoratorType<>(
+                    CorruptedNestTreeDecorator.CODEC));
     /** r271：粒子注册表（荒原落叶 erosion_leaf）。 */
     public static final DeferredRegister<net.minecraft.core.particles.ParticleType<?>> PARTICLE_TYPES =
             DeferredRegister.create(net.minecraft.core.registries.Registries.PARTICLE_TYPE, MOD_ID);
@@ -580,6 +633,22 @@ public final class GeneratedMod {
     public static final DeferredHolder<EntityType<?>, EntityType<WebProjectileEntity>> WEB_PROJECTILE = ENTITY_TYPES.register(
             "web_projectile", () -> EntityType.Builder.<WebProjectileEntity>of(WebProjectileEntity::new, MobCategory.MISC)
                     .sized(0.35F, 0.35F).clientTrackingRange(8).updateInterval(1).build(MOD_ID + ":web_projectile"));
+    /**
+     * 秽蚀蠹：四阶蜕皮的蠹虫，生成在末地传送门遗迹 / 高魔素魔晶矿 / 蚀魔荒原地表。
+     *
+     * <p>它被登记成动物类（Creature），所以走的是原版「生物」那套刷怪上限与白天生成，
+     * 不跟满地的怪物抢名额。碰撞箱沿用原版蠹虫的 0.4×0.3；每蜕一层皮只是渲染缩小，
+     * 判定框不动，免得打着打着突然打不着。</p>
+     */
+    public static final DeferredHolder<EntityType<?>, EntityType<CorruptedSilverfishEntity>> CORRUPTED_SILVERFISH =
+            ENTITY_TYPES.register("corrupted_silverfish", () -> EntityType.Builder
+                    .<CorruptedSilverfishEntity>of(CorruptedSilverfishEntity::new, MobCategory.CREATURE)
+                    .sized(0.4F, 0.3F).clientTrackingRange(10).build(MOD_ID + ":corrupted_silverfish"));
+    /** 秽蚀蜂：住秽蚀蜂巢的变异蜜蜂，尺寸沿用原版蜜蜂，20 点生命在属性里加。 */
+    public static final DeferredHolder<EntityType<?>, EntityType<CorruptedBeeEntity>> CORRUPTED_BEE =
+            ENTITY_TYPES.register("corrupted_bee", () -> EntityType.Builder
+                    .<CorruptedBeeEntity>of(CorruptedBeeEntity::new, MobCategory.CREATURE)
+                    .sized(0.7F, 0.6F).clientTrackingRange(10).build(MOD_ID + ":corrupted_bee"));
     /** 虚空蚀影：高魔素区块里顶替原版末影人的精英变异体，尺寸沿用原版末影人。 */
     public static final DeferredHolder<EntityType<?>, EntityType<VoidShadeEntity>> VOID_SHADE = ENTITY_TYPES.register(
             "void_shade", () -> EntityType.Builder.<VoidShadeEntity>of(VoidShadeEntity::new, MobCategory.MONSTER)
@@ -926,6 +995,8 @@ public final class GeneratedMod {
         registerManaCreeper();
         registerCorruptedSkeleton();
         registerCorruptedWeaver();
+        registerCorruptedSilverfish();
+        registerCorruptedBee();
         registerSwordmaster();
         registerVoidShade();
         registerCorruptedWither();
@@ -1111,6 +1182,29 @@ public final class GeneratedMod {
         NATURAL_ITEM_IDS.add(CorruptedWebBlock.BLOCK_ID);
         NATURAL_ITEM_IDS.add(CORRUPTED_SILK_ID);
         NATURAL_ITEM_IDS.add(CORRUPTED_SPIDER_EYE_ID);
+    }
+
+    /**
+     * 秽蚀蠹：只要一枚刷怪蛋，放进「次元物语：自然」的刷怪蛋区（和织网者的蛋排在一起）。
+     *
+     * <p>掉落物（各级魔晶粉、魂火残渣）都是现成物品，由
+     * {@link CorruptedSilverfishEntity} 在蜕皮 / 死亡时直接吐出来，不额外注册东西。</p>
+     */
+    private static void registerCorruptedSilverfish() {
+        naturalEgg("corrupted_silverfish_spawn_egg", ITEMS.register("corrupted_silverfish_spawn_egg", () ->
+                new DeferredSpawnEggItem(CORRUPTED_SILVERFISH, 0x241A38, 0x5FD7FF,
+                        new Item.Properties().rarity(Rarity.RARE))));
+    }
+
+    /**
+     * 秽蚀蜂系列（第 19 条需求）：蜂巢方块 / 物品 / POI / feature 在 CorruptedBeeContent 里声明，
+     * 这里只挂刷怪蛋、把蜂巢并进自然创造页，并把蜂巢塞进原版 BEEHIVE 方块实体合法集合。
+     */
+    private static void registerCorruptedBee() {
+        CorruptedBeeContent.register();
+        naturalEgg("corrupted_bee_spawn_egg", ITEMS.register("corrupted_bee_spawn_egg", () ->
+                new DeferredSpawnEggItem(CORRUPTED_BEE, 0x241A38, 0x8A4FBF,
+                        new Item.Properties().rarity(Rarity.RARE))));
     }
 
     /**
@@ -1439,6 +1533,13 @@ public final class GeneratedMod {
         LOOT_CONDITIONS.register(modBus);
         CREATIVE_TABS.register(modBus);
         FEATURES.register(modBus);
+        // r91：树装饰器（蚀纹木挂巢）。
+        TREE_DECORATORS.register(modBus);
+        // 蜂巢 POI：让蜜蜂把秽蚀蜂巢认成可入住的家（配套 #minecraft:bee_home 标签）。
+        CorruptedBeeContent.POI_TYPES.register(modBus);
+        // 通用初始化时把蜂巢方块并进原版 BEEHIVE 方块实体的合法方块集合，区块重载才不丢蜂。
+        modBus.addListener((net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent event) ->
+                event.enqueueWork(CorruptedBeeContent::extendBeehiveBlockEntityType));
         PARTICLE_TYPES.register(modBus);
         ENTITY_TYPES.register(modBus);
         STRUCTURE_TYPES.register(modBus);
@@ -1447,6 +1548,8 @@ public final class GeneratedMod {
         SpellAttributes.ATTRIBUTES.register(modBus);
         // r271：变异生物白天也能自然刷出（SpawnPlacements 用「不看光照」的怪物规则）。
         modBus.addListener(ErosionWastelandSpawning::registerSpawnPlacements);
+        // 秽蚀蠹：荒原地表的动物类生成（踩实心地面、不看光照）。
+        modBus.addListener(CorruptedSilverfishEvents::registerSpawnPlacements);
         modBus.addListener(this::createEntityAttributes);
         modBus.addListener((net.neoforged.fml.event.config.ModConfigEvent.Reloading event) -> MobProfile.invalidate());
         modBus.addListener((net.neoforged.fml.event.config.ModConfigEvent.Loading event) -> MobProfile.invalidate());
@@ -1487,6 +1590,8 @@ public final class GeneratedMod {
         modBus.addListener(MagicCircleCodeResultPayload::register);
         modBus.addListener(CorruptedWitherFxPayload::register);
         modBus.addListener(CorruptedWitherBurstPayload::register);
+        // r370 深渊侵蚀阶层：魔蚀层数单独同步给带着状态的玩家自己（只用于悬停说明）。
+        modBus.addListener(ErosionDepthPayload::register);
         // r317：魔精钢装备摆进原版战斗 / 工具 / 材料创造页。
         modBus.addListener(GeneratedMod::addVanillaTabItems);
         if (FMLEnvironment.dist == Dist.CLIENT) ClientModEvents.register(modBus);
@@ -1553,8 +1658,24 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(events::onClone);
         NeoForge.EVENT_BUS.addListener(events::onVanillaExperience);
         NeoForge.EVENT_BUS.addListener(events::onWake);
+        // 资源修补：魔法修补 / 斗气修补的每 10 刻结算、附魔台 1% 命中、图书管理员交易与宝箱书。
+        NeoForge.EVENT_BUS.addListener(ResourceMendingEnchantments::onPlayerTick);
+        NeoForge.EVENT_BUS.addListener(ResourceMendingEnchantments::onPlayerEnchantItem);
+        NeoForge.EVENT_BUS.addListener(ResourceMendingEnchantments::onVillagerTrades);
+        NeoForge.EVENT_BUS.addListener(ResourceMendingEnchantments::onLootTableLoad);
         NeoForge.EVENT_BUS.addListener(CriticalSystem::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(events::onIncomingDamage);
+        // r378 魔蚀蜂蜜块：身体接触蜜砖时受到的法术类伤害 −45%（独立乘区，见 ManaEvents.onIncomingDamage）。
+        // 接线点就在 events::onIncomingDamage 内部，这里不再单独注册监听。
+        // r378 魔法蜡烛：熔炉燃料——魔蚀蜜脾块一份烧 80 秒（与加工台 800 魔素同一档材料）。
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.furnace.FurnaceFuelBurnTimeEvent fuelEvent) -> {
+            if (fuelEvent.getItemStack().is(CorruptedBeeContent.CORRUPTED_HONEYCOMB_BLOCK_ITEM.get())) {
+                fuelEvent.setBurnTime(1600);
+            }
+        });
+        // r378 魔法蜡烛：蜡烛光环缓存按服务器实例组织，关服清一次，避免跨存档残留。
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStoppingEvent stopEvent) ->
+                MagicCandleAura.clear());
         // r332 物理词条扩充：受击阶段记下破甲 / 连击 / 处决 / 见切加成（要排在斗气减伤之后、
         // 护甲结算之前，破甲才反推得准）。
         NeoForge.EVENT_BUS.addListener(PhysicalAffixEffects::onIncomingDamage);
@@ -1575,6 +1696,20 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(CorruptedWeaverEvents::onLivingDeath);
         NeoForge.EVENT_BUS.addListener(CorruptedWeaverEvents::onFinalizeSpawn);
         NeoForge.EVENT_BUS.addListener(CorruptedWeaverEvents::onLeftClickBlock);
+        // 虫群意识：狂化减伤 + 每 5 刻重按一次仇恨锁（被叫来的蜘蛛被谁碰一下也不会掉头）。
+        NeoForge.EVENT_BUS.addListener(HiveMind::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(HiveMind::onLevelTick);
+        // 秽蚀蠹：前三次致命伤蜕皮保命、末地传送门遗迹（刷怪笼 + 自己爬出来）、挖魔晶矿钻出。
+        NeoForge.EVENT_BUS.addListener(CorruptedSilverfishEvents::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(CorruptedSilverfishEvents::onFinalizeSpawn);
+        NeoForge.EVENT_BUS.addListener(CorruptedSilverfishEvents::onBlockBreak);
+        NeoForge.EVENT_BUS.addListener(CorruptedSilverfishEvents::tickLevel);
+        // 深渊侵蚀阶层：任何途径施加魔蚀都记一层（药水 / 指令 / 别的模组也算），
+        // 到期不清零、只在没魔蚀的时候慢慢退；上线 / 重生各补一份层数给客户端。
+        NeoForge.EVENT_BUS.addListener(MagicErosionEffect::onEffectApplied);
+        NeoForge.EVENT_BUS.addListener(MagicErosionEffect::onExpired);
+        NeoForge.EVENT_BUS.addListener(ErosionDepthPayload::onLogin);
+        NeoForge.EVENT_BUS.addListener(ErosionDepthPayload::onClone);
         // 虚空蚀影：受击分身、眼睛反击、幻影自爆回血、本体死亡清理召唤物。
         NeoForge.EVENT_BUS.addListener(VoidShadeEvents::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(VoidShadeEvents::onDamagePost);
@@ -1774,6 +1909,10 @@ public final class GeneratedMod {
         event.put(CORRUPTED_SKELETON.get(), CorruptedSkeleton.createAttributes().build());
         // 魔蚀织网者：80 生命、原版蜘蛛 1.5 倍移速（0.45）、跳跃高度 3 倍、5000 魔素。
         event.put(CORRUPTED_WEAVER.get(), CorruptedWeaverEntity.createAttributes().build());
+        // 秽蚀蠹：一阶 24 生命、原版蠹虫 1.15 倍移速（0.2875），蜕皮后由实体自己换属性。
+        event.put(CORRUPTED_SILVERFISH.get(), CorruptedSilverfishEntity.createAttributes().build());
+        // 秽蚀蜂：原版蜜蜂属性 + 20 点生命上限（飞行速度沿用原版 FLY_SPEED 0.3）。
+        event.put(CORRUPTED_BEE.get(), CorruptedBeeEntity.createAttributes().build());
         // 流浪剑士：150 生命、20 护甲、走速 0.3 / 追击 0.45、1000 魔素 / 6000 斗气。
         event.put(WANDERING_SWORDMASTER.get(), WanderingSwordmaster.createAttributes().build());
         // r265 虚空蚀影：200 生命、0.375 移速（原版末影人 1.25 倍）、8 物理 + 36 奥术近战、10000 魔素 / 2000 斗气。

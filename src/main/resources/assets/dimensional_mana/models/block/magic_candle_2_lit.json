@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/template_two_candles",
+  "textures": {
+    "all": "dimensional_mana:block/corrupted_candle_lit",
+    "particle": "dimensional_mana:block/corrupted_candle_lit"
+  }
+}

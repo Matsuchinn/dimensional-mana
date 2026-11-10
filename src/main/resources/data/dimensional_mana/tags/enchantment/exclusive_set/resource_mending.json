@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:mending",
+    "dimensional_mana:magic_mending",
+    "dimensional_mana:battle_qi_mending"
+  ]
+}

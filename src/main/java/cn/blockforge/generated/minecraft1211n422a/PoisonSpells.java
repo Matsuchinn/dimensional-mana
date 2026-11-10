@@ -56,12 +56,14 @@ import java.util.UUID;
 public final class PoisonSpells {
     // ───────────────────────── 猛毒攻心 ─────────────────────────
     private static final int HEART_DASH_BLOCKS = 2;
-    private static final double NEEDLE_RANGE = 70.0;
-    /** 70 格 / 秒 → 每刻 3.5 格。 */
-    private static final double NEEDLE_SPEED = 70.0 / 20.0;
+    /** 射程与中级投射一致，不少于五个区块。 */
+    private static final double NEEDLE_RANGE = SpellRange.INTERMEDIATE;
+    /** 每秒 44 格 → 每刻 2.2 格；八十格飞 36 刻，比原来慢了一半多。 */
+    private static final double NEEDLE_SPEED = 2.2;
     private static final int NEEDLE_PIERCE = 7;
     private static final float NEEDLE_DAMAGE = 14.0F;
-    private static final int NEEDLE_MAX_AGE = 40;
+    /** 八十格按 2.2 格/刻要 37 刻，留出余量到 60 刻。 */
+    private static final int NEEDLE_MAX_AGE = 60;
     private static final double NEEDLE_HIT_RADIUS = 0.55;
     /** 猛毒持续 18 秒。 */
     private static final int FIERCE_TICKS = 360;

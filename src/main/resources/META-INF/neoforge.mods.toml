@@ -10,16 +10,10 @@ logoFile="assets/dimensional_mana/textures/gui/mod_logo.png"
 authors="TakisueYuu, AutoMods"
 issueTrackerURL="https://github.com/Matsuchinn/dimensional-mana/issues"
 displayURL="https://github.com/Matsuchinn/dimensional-mana"
-description='''次元物语：魔素（Dimensional Mana）是一套为 Minecraft 1.21.1 打造的深度魔法、硬核战斗与图形化法术编程的综合 NeoForge 模组。
+description='''次元物语：魔素（Dimensional Mana）是一套为 Minecraft 1.21.1 打造的架空世界观魔法体系模组。
 
-【核心玩法】
-⚔️ 武备与词条：引入 C~SSS 级随机词条系统与史诗级“魔精钢”套装，配合武备加工台，体验暗黑类刷宝与打铁强化的极致乐趣。
-🔮 魔导科技：强大的“魔法阵编程系统”，通过绘制法阵、连接节点、编译词缀，搭建全自动魔法陷阱与逻辑电路。
-🛡️ 双轨资源：掌握魔素（施法蓝条）与斗气（减伤护盾），体验硬核的完美招架与弹反机制。
-🌪️ 元素与生态：12 种元素属性、17 种元素反应；面对 12 种元素史莱姆、哥布林阵营以及拥有恐怖机制的“魔蚀凋零”与“虚无魔龙”等强力 Boss。
-📖 指引与成就：游戏内自带《万法知识之书》与《战斗手册》，更有 120 个庞大且连贯的成就节点指引你的冒险。
+它加入魔素与斗气两种资源、十二种元素属性、七十多个可学习与修炼的法术，以及元素附着、元素反应、法杖与饰品、魔晶加工与炼制机器、更多魔法自然动植物、会交易的冒险者和完整成就进度。目前还更新了十分强力的魔法编程系统。
 
-【基础信息】
 游戏版本：Minecraft 1.21.1
 加载器：NeoForge 21.1+
 当前版本：${mod_version}
@@ -56,7 +50,7 @@ side="CLIENT"
 
 [[dependencies.dimensional_mana]]
 modId="geckolib"
-type="required"
+mandatory=true
 versionRange="[4.9.3,)" 
 ordering="AFTER"
 side="BOTH"

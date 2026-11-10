@@ -1,0 +1,10 @@
+{
+  "parent": "minecraft:block/orientable_with_bottom",
+  "textures": {
+    "bottom": "dimensional_mana:block/corrupted_nest_end",
+    "front": "dimensional_mana:block/corrupted_nest_front",
+    "particle": "dimensional_mana:block/corrupted_nest_side",
+    "side": "dimensional_mana:block/corrupted_nest_side",
+    "top": "dimensional_mana:block/corrupted_nest_end"
+  }
+}

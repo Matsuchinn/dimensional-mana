@@ -49,6 +49,8 @@ public final class BlazingSun extends Entity {
      * 服务器会明显卡顿；这里把真正炸掉的体积限制在 12 格内，超出的部分只结算伤害。
      */
     private static final double MAX_DESTRUCTION_RADIUS = 12.0;
+    /** 仅用于本地蓄力太阳的视线避让，伤害归属仍使用持久化UUID。 */
+    private static final EntityDataAccessor<Integer> CASTER = SynchedEntityData.defineId(BlazingSun.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> CHARGE = SynchedEntityData.defineId(BlazingSun.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> RELEASED = SynchedEntityData.defineId(BlazingSun.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Float> DIR_X = SynchedEntityData.defineId(BlazingSun.class, EntityDataSerializers.FLOAT);
@@ -66,6 +68,7 @@ public final class BlazingSun extends Entity {
     public BlazingSun(EntityType<? extends BlazingSun> type, Level level) { super(type, level); noPhysics = true; }
 
     @Override protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(CASTER, -1);
         builder.define(CHARGE, 0);
         builder.define(RELEASED, false);
         builder.define(DIR_X, 0.0F);
@@ -75,12 +78,14 @@ public final class BlazingSun extends Entity {
 
     public void configure(ServerPlayer owner, Vec3 at, Vec3 direction) {
         ownerId = owner.getUUID();
+        entityData.set(CASTER, owner.getId());
         setPos(at);
         setDirection(direction);
         entityData.set(CHARGE, 0);
         entityData.set(RELEASED, false);
     }
 
+    public int casterId() { return entityData.get(CASTER); }
     public int charge() { return entityData.get(CHARGE); }
     public boolean isReleased() { return entityData.get(RELEASED); }
     public double radius() { return BASE_RADIUS + 0.20 * charge(); }
@@ -118,17 +123,12 @@ public final class BlazingSun extends Entity {
         entityData.set(RELEASED, true);
         NewSpellSystem.forgetSun(ownerId, this);
         if (level() instanceof ServerLevel serverLevel) {
-            Vec3 dir = direction();
             serverLevel.playSound(null, getX(), getY(), getZ(), SoundEvents.BLAZE_SHOOT,
                     SoundSource.PLAYERS, 1.2F, 0.82F);
-            serverLevel.sendParticles(ParticleTypes.FLAME, getX(), getY(), getZ(), 32,
+            // 发射瞬间只在原点爆一团火；航迹由客户端逐帧粒子绘制，
+            // 不再沿射线补一列重复的火焰粒子。
+            serverLevel.sendParticles(ParticleTypes.FLAME, getX(), getY(), getZ(), 26,
                     radius() * 0.7, radius() * 0.7, radius() * 0.7, 0.12);
-            for (int i = 0; i < 12; i++) {
-                double f = i / 12.0;
-                serverLevel.sendParticles(ParticleTypes.FLAME,
-                        getX() + dir.x * f * 4.0, getY() + dir.y * f * 4.0, getZ() + dir.z * f * 4.0,
-                        2, 0.1, 0.1, 0.1, 0.01);
-            }
         }
     }
 
@@ -140,6 +140,7 @@ public final class BlazingSun extends Entity {
         if (age > 20 * 60 * 3) { discard(); return; }
         LivingEntity owner = owner();
         if (owner == null || !owner.isAlive() || owner.level() != serverLevel) { discard(); return; }
+        if (entityData.get(CASTER) != owner.getId()) entityData.set(CASTER, owner.getId());
         if (!isReleased()) {
             if (++chargingTicks > AUTO_RELEASE_TICKS) {
                 release();
@@ -153,6 +154,11 @@ public final class BlazingSun extends Entity {
                 if (distance < 3.9) at = eye.add(dir.scale(Math.max(0.6, distance - 0.35)));
                 setPos(at);
                 if (age % 5 == 0) refreshLight(serverLevel);
+                // 蓄力期间持续的低沉燃烧声：每 16 刻一次，层数越高越响、越尖。
+                if (age % 16 == 0) {
+                    serverLevel.playSound(null, getX(), getY(), getZ(), SoundEvents.BLAZE_BURN,
+                            SoundSource.PLAYERS, 0.55F + charge() * 0.045F, 1.05F + charge() * 0.006F);
+                }
                 if (age % 10 == 0 && owner instanceof ServerPlayer player) SpellSyncPayload.send(player);
                 return;
             }
@@ -180,6 +186,16 @@ public final class BlazingSun extends Entity {
             if (traveled >= range()) { explode(serverLevel, next); return; }
         }
         if (age % 5 == 0) refreshLight(serverLevel);
+        // 飞行中的轰鸣：每 8 刻随火球位置播一次短促的噼啪声，
+        // 再用 24 刻一次的环境火焰声补一层低频，听感上是连续的，不是发射后就哑了。
+        if (age % 8 == 0) {
+            serverLevel.playSound(null, getX(), getY(), getZ(), SoundEvents.BLAZE_BURN,
+                    SoundSource.PLAYERS, 1.05F + charge() * 0.02F, 0.55F + (age % 24) * 0.008F);
+        }
+        if (age % 24 == 0) {
+            serverLevel.playSound(null, getX(), getY(), getZ(), SoundEvents.FIRE_AMBIENT,
+                    SoundSource.PLAYERS, 1.30F, 0.78F);
+        }
         if (age % 10 == 0 && owner instanceof ServerPlayer player) SpellSyncPayload.send(player);
     }
 

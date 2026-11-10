@@ -1440,6 +1440,146 @@
       }
     ]
   },
+  "corrupted_weaver_hive": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_weaver.hive",
+    "sounds": [
+      {
+        "name": "minecraft:entity.spider.step",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.55
+      },
+      {
+        "name": "minecraft:entity.silverfish.step",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.7
+      },
+      {
+        "name": "minecraft:block.cobweb.break",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 1.6
+      },
+      {
+        "name": "minecraft:entity.vex.charge",
+        "type": "event",
+        "volume": 0.5,
+        "pitch": 1.9
+      },
+      {
+        "name": "minecraft:block.sculk_sensor.clicking",
+        "type": "event",
+        "volume": 0.7,
+        "pitch": 1.4
+      }
+    ]
+  },
+  "corrupted_silverfish_ambient": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_silverfish",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_silverfish/chitin",
+        "volume": 0.6,
+        "pitch": 0.95
+      },
+      {
+        "name": "minecraft:entity.silverfish.ambient",
+        "type": "event",
+        "volume": 0.7,
+        "pitch": 0.62
+      },
+      {
+        "name": "dimensional_mana:corrupted_silverfish/chitin",
+        "volume": 0.45,
+        "pitch": 1.25
+      }
+    ]
+  },
+  "corrupted_silverfish_hurt": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_silverfish.hurt",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_silverfish/tear",
+        "volume": 0.75,
+        "pitch": 1.35
+      },
+      {
+        "name": "minecraft:entity.silverfish.hurt",
+        "type": "event",
+        "volume": 0.8,
+        "pitch": 0.66
+      }
+    ]
+  },
+  "corrupted_silverfish_death": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_silverfish.death",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_silverfish/tear",
+        "volume": 1.0,
+        "pitch": 0.85
+      },
+      {
+        "name": "minecraft:entity.silverfish.death",
+        "type": "event",
+        "volume": 0.9,
+        "pitch": 0.55
+      }
+    ]
+  },
+  "corrupted_silverfish_molt": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_silverfish.molt",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_silverfish/tear",
+        "volume": 1.15,
+        "pitch": 1.0
+      },
+      {
+        "name": "dimensional_mana:corrupted_silverfish/tear",
+        "volume": 0.9,
+        "pitch": 0.72
+      },
+      {
+        "name": "minecraft:entity.silverfish.hurt",
+        "type": "event",
+        "volume": 0.6,
+        "pitch": 0.5
+      }
+    ]
+  },
+  "corrupted_silverfish_bite": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_silverfish.bite",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_silverfish/chitin",
+        "volume": 0.85,
+        "pitch": 1.3
+      },
+      {
+        "name": "dimensional_mana:corrupted_silverfish/tear",
+        "volume": 0.55,
+        "pitch": 1.6
+      }
+    ]
+  },
+  "corrupted_silverfish_burrow": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_silverfish.burrow",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_silverfish/chitin",
+        "volume": 1.0,
+        "pitch": 0.7
+      },
+      {
+        "name": "minecraft:block.gravel.break",
+        "type": "event",
+        "volume": 1.0,
+        "pitch": 0.6
+      }
+    ]
+  },
   "void_shade_ambient": {
     "subtitle": "subtitles.dimensional_mana.void_shade",
     "sounds": [
@@ -1721,6 +1861,31 @@
         "volume": 1.0,
         "pitch": 1.0,
         "attenuation_distance": 24
+      }
+    ]
+  },
+  "corrupted_bee_hum": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_bee.hum",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_bee/hum",
+        "volume": 0.65
+      }
+    ]
+  },
+  "corrupted_bee_hurt": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_bee",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_bee/hurt"
+      }
+    ]
+  },
+  "corrupted_bee_death": {
+    "subtitle": "subtitles.dimensional_mana.corrupted_bee",
+    "sounds": [
+      {
+        "name": "dimensional_mana:corrupted_bee/death"
       }
     ]
   }

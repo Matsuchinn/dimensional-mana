@@ -64,6 +64,9 @@ public final class ManaConcentration {
         if (CrystalClusterData.isEmpowered(level, pos)) value += CrystalClusterData.AURA_BONUS;
         // r301：被【虚无凋零射线】的扭曲光环扫过的区域，浓度在 10 分钟内只剩一半。
         value *= CorruptedZoneData.get(level).factorAt(pos, level.getGameTime());
+        // r378：魔法蜡烛光环——点燃 +0.15/根、未点燃 −0.15/根，作用在蜡烛周围 5×5×5 内；
+        // 增减先互相抵消再结算，正加成封顶 +16.0，负加成由下面的 0 下限兜底。
+        value += MagicCandleAura.bonusAt(level, pos);
         return Math.max(0.0, value);
     }
 

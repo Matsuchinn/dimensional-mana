@@ -52,6 +52,13 @@ public final class ManaCommands {
                                         .executes(context -> showReduction(context.getSource(),
                                                 FloatArgumentType.getFloat(context, "damage"))))))
                 .then(mobCommand())
+                // 魔蚀层数 / 深渊阶层：对着生物用看那只生物，空着用看自己。
+                // 生物身上没有状态说明可看，想知道「它到底叠了几层、每跳掉几点」只能靠这一条。
+                .then(Commands.literal("erosion")
+                        .executes(context -> showErosion(context.getSource()))
+                        .then(Commands.argument("target", EntityArgument.entity())
+                                .executes(context -> showErosion(context.getSource(),
+                                        EntityArgument.getEntity(context, "target")))))
                 .then(Commands.literal("mana")
                         .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
                         .then(Commands.argument("player", EntityArgument.player())
@@ -460,6 +467,8 @@ public final class ManaCommands {
                 .withStyle(ChatFormatting.GOLD), false);
         source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.combat")
                 .withStyle(ChatFormatting.GOLD), false);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.usage.erosion")
+                .withStyle(ChatFormatting.DARK_PURPLE), false);
         source.sendSuccess(() -> Component.literal("/dimensional_mana mob list|show|set|remove|reset|refresh")
                 .withStyle(ChatFormatting.YELLOW), false);
         source.sendSuccess(() -> Component.translatable("command.dimensional_mana.help.admin")
@@ -1160,6 +1169,64 @@ public final class ManaCommands {
 
     @FunctionalInterface
     private interface DebugAction { int run(CommandSourceStack source, ServerPlayer player); }
+
+    /**
+     * /dimensional_mana erosion：不带参数时看自己，看着生物时看那只生物。
+     *
+     * <p>为什么要这条命令：魔蚀的悬停说明只有玩家本人看得到，生物身上叠了多少层
+     * 在游戏里没有任何界面能读，想验证「叠层真的加伤害了」就只能把它打出来。</p>
+     */
+    private static int showErosion(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.translatable("command.dimensional_mana.erosion.no_target"));
+            return 0;
+        }
+        net.minecraft.world.phys.HitResult hit = net.minecraft.world.entity.projectile.ProjectileUtil
+                .getHitResultOnViewVector(player, entity -> entity instanceof LivingEntity, 12.0);
+        if (hit instanceof net.minecraft.world.phys.EntityHitResult entityHit
+                && entityHit.getEntity() instanceof LivingEntity living) {
+            return showErosion(source, living);
+        }
+        return showErosion(source, player);
+    }
+
+    private static int showErosion(CommandSourceStack source, net.minecraft.world.entity.Entity entity) {
+        if (entity instanceof LivingEntity living) return showErosion(source, living);
+        source.sendFailure(Component.translatable("command.dimensional_mana.erosion.no_target"));
+        return 0;
+    }
+
+    private static int showErosion(CommandSourceStack source, LivingEntity target) {
+        int layers = MagicErosionEffect.layersOf(target);
+        int tier = MagicErosionEffect.tierOf(layers);
+        float damage = MagicErosionEffect.damageOf(layers);
+        boolean active = target.hasEffect(GeneratedMod.MAGIC_EROSION);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.erosion.header",
+                target.getDisplayName(), group(layers), group(MagicErosionEffect.MAX_LAYERS), group(tier))
+                .withStyle(ChatFormatting.DARK_PURPLE), false);
+        source.sendSuccess(() -> Component.translatable("command.dimensional_mana.erosion.damage",
+                MagicErosionEffect.damageText(damage)).withStyle(ChatFormatting.LIGHT_PURPLE), false);
+        int toNext = MagicErosionEffect.layersToNextTier(layers);
+        if (toNext <= 0) {
+            source.sendSuccess(() -> Component.translatable("effect.dimensional_mana.magic_erosion.max")
+                    .withStyle(ChatFormatting.DARK_GRAY), false);
+        } else {
+            final int need = toNext;
+            final String nextDamage = MagicErosionEffect.damageText(MagicErosionEffect.damageOf(layers + need));
+            source.sendSuccess(() -> Component.translatable("command.dimensional_mana.erosion.next",
+                    group(need), nextDamage).withStyle(ChatFormatting.GRAY), false);
+        }
+        source.sendSuccess(() -> Component.translatable(active
+                ? "command.dimensional_mana.erosion.active"
+                : "command.dimensional_mana.erosion.decaying").withStyle(ChatFormatting.GRAY), false);
+        return 1;
+    }
+
+    /** 千分位：层数动辄六位数，不加逗号看不出量级。 */
+    private static String group(int value) {
+        return String.format(java.util.Locale.ROOT, "%,d", value);
+    }
 
     private static String format(double value) {
         return value == Math.rint(value) ? String.format("%.0f", value) : String.format("%.2f", value);

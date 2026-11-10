@@ -451,7 +451,7 @@ public final class NewSpellSystem {
         entity.configure(player, spell, at, direction, index);
         player.serverLevel().addFreshEntity(entity);
         if (spell != SpellDefinition.ROCK_ORBS && spell != SpellDefinition.GALE_SLASHES)
-            visual(player, spell, at, at, -1, 6);
+            SpellVisualPayload.send(player, spell, SpellVisualPayload.PROJECTILE_LAUNCH, -1, at, at, 6);
     }
 
     public static void beginBarrierField(ServerPlayer player) {
@@ -2063,7 +2063,9 @@ public final class NewSpellSystem {
         List<LivingEntity> result = new ArrayList<>(caster.level().getEntitiesOfClass(LivingEntity.class,
                 new AABB(start, end).inflate(width + 1), e -> enemy(caster, e)
                         && (e.getBoundingBox().inflate(width).contains(start) || e.getBoundingBox().inflate(width).clip(start, end).isPresent())));
-        result.sort(Comparator.comparingDouble(e -> e.distanceToSqr(start)));
+        // 以沿线首次接触点排序，而非实体脚部距离；大型生物和高低差不应抢错命中顺序。
+        result.sort(Comparator.comparingDouble(e -> e.getBoundingBox().inflate(width).contains(start) ? 0
+                : e.getBoundingBox().inflate(width).clip(start, end).map(start::distanceToSqr).orElse(Double.MAX_VALUE)));
         return result;
     }
     public static void pathDamage(LivingEntity player, Vec3 start, Vec3 end, double width, float amount,

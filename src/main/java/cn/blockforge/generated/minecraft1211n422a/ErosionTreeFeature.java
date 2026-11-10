@@ -74,6 +74,10 @@ public final class ErosionTreeFeature extends Feature<NoneFeatureConfiguration> 
     /**
      * 原版金合欢那套树形，参数换成蚀纹木的方块：
      * 分叉树干 + 顶部平铺的树冠，基础高度抬到 7 格，最高能到 12 格。
+     *
+     * <p>装饰器（r91）：8% 的树在树干侧面挂一个秽蚀蜂巢（内住 2～3 只蜂）。
+     * 树苗种出来的树和世界生成的树共用这份配置，所以「人工种树也随缘出巢」
+     * 自动成立——和原版橡树 oak_bees_005 一个机制。</p>
      */
     private static TreeConfiguration configuration() {
         if (configuration == null) {
@@ -86,6 +90,8 @@ public final class ErosionTreeFeature extends Feature<NoneFeatureConfiguration> 
                     new AcaciaFoliagePlacer(ConstantInt.of(2), ConstantInt.of(0)),
                     new TwoLayersFeatureSize(1, 0, 2))
                     .dirt(BlockStateProvider.simple(ErosionWasteland.EROSION_DIRT.get().defaultBlockState()))
+                    // r92：8% → 3%。树种得密的时候 8% 等于「一片林子一片窝」，蜂自然爆炸。
+                    .decorators(java.util.List.of(new CorruptedNestTreeDecorator(0.03F)))
                     .ignoreVines()
                     .build();
         }

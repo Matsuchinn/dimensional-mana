@@ -1,0 +1,94 @@
+{
+  "variants": {
+    "facing=north,honey_level=0": {
+      "model": "dimensional_mana:block/corrupted_nest"
+    },
+    "facing=north,honey_level=1": {
+      "model": "dimensional_mana:block/corrupted_nest"
+    },
+    "facing=north,honey_level=2": {
+      "model": "dimensional_mana:block/corrupted_nest"
+    },
+    "facing=north,honey_level=3": {
+      "model": "dimensional_mana:block/corrupted_nest"
+    },
+    "facing=north,honey_level=4": {
+      "model": "dimensional_mana:block/corrupted_nest"
+    },
+    "facing=north,honey_level=5": {
+      "model": "dimensional_mana:block/corrupted_nest_honey"
+    },
+    "facing=east,honey_level=0": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 90
+    },
+    "facing=east,honey_level=1": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 90
+    },
+    "facing=east,honey_level=2": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 90
+    },
+    "facing=east,honey_level=3": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 90
+    },
+    "facing=east,honey_level=4": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 90
+    },
+    "facing=east,honey_level=5": {
+      "model": "dimensional_mana:block/corrupted_nest_honey",
+      "y": 90
+    },
+    "facing=south,honey_level=0": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 180
+    },
+    "facing=south,honey_level=1": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 180
+    },
+    "facing=south,honey_level=2": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 180
+    },
+    "facing=south,honey_level=3": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 180
+    },
+    "facing=south,honey_level=4": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 180
+    },
+    "facing=south,honey_level=5": {
+      "model": "dimensional_mana:block/corrupted_nest_honey",
+      "y": 180
+    },
+    "facing=west,honey_level=0": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 270
+    },
+    "facing=west,honey_level=1": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 270
+    },
+    "facing=west,honey_level=2": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 270
+    },
+    "facing=west,honey_level=3": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 270
+    },
+    "facing=west,honey_level=4": {
+      "model": "dimensional_mana:block/corrupted_nest",
+      "y": 270
+    },
+    "facing=west,honey_level=5": {
+      "model": "dimensional_mana:block/corrupted_nest_honey",
+      "y": 270
+    }
+  }
+}

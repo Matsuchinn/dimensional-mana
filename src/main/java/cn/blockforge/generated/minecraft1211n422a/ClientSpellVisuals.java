@@ -26,6 +26,34 @@ public final class ClientSpellVisuals {
     private static final List<Visual> ACTIVE = new ArrayList<>();
     private static final List<SoundCue> SOUND_CUES = new ArrayList<>();
     private static ClientLevel currentLevel;
+    private static RenderBuffers renderBuffers;
+
+    /** 固定批次跨帧复用，避免每次绘制重新申请和释放数兆原生内存。 */
+    private static final class RenderBuffers implements AutoCloseable {
+        final ByteBufferBuilder shared = new ByteBufferBuilder(65536);
+        final LinkedHashMap<RenderType, ByteBufferBuilder> fixed = new LinkedHashMap<>();
+        final MultiBufferSource.BufferSource source;
+        RenderBuffers() {
+            for (SpellRenderTypes.Surface surface : SpellRenderTypes.Surface.values())
+                fixed.put(surface.type, new ByteBufferBuilder(65536));
+            for (SpellRenderTypes.Material material : SpellRenderTypes.Material.values())
+                fixed.put(material.type, new ByteBufferBuilder(65536));
+            for (SpellRenderTypes.SpriteAtlas atlas : SpellRenderTypes.SpriteAtlas.values()) {
+                if (atlas == SpellRenderTypes.SpriteAtlas.FRAMES || atlas == SpellRenderTypes.SpriteAtlas.PARTICLES) continue;
+                fixed.put(atlas.type, new ByteBufferBuilder(
+                        atlas == SpellRenderTypes.SpriteAtlas.GLOW || atlas == SpellRenderTypes.SpriteAtlas.MOTION ? 262144 : 65536));
+                if (atlas.compatType != atlas.type) fixed.put(atlas.compatType, new ByteBufferBuilder(262144));
+            }
+            fixed.put(SpellRenderTypes.GLOW, new ByteBufferBuilder(262144));
+            fixed.put(SpellRenderTypes.GLOW_COMPAT, new ByteBufferBuilder(262144));
+            source = MultiBufferSource.immediateWithBuffers(fixed, shared);
+        }
+        @Override public void close() {
+            source.endBatch();
+            fixed.values().forEach(ByteBufferBuilder::close);
+            shared.close();
+        }
+    }
     /** 飞剑风声的节流时间戳，避免一轮十六把剑把音效叠成噪音。 */
     private static long swordSoundAt;
     /** 结界射线每波射击只响一发的节流时间戳。 */
@@ -42,12 +70,13 @@ public final class ClientSpellVisuals {
         final SpellDefinition spell;
         /** 边界类视觉每次刷新都会重新起算动画，因此出生时间不是 final。 */
         long born;
+        final long createdAt;
         final Vec3 floor;
         long updatedAt;
         /** 上一包与最新包的起止点；渲染时按时间在两包之间插值。 */
         Vec3 fromStart, fromEnd, toStart, toEnd;
         Visual(SpellVisualPayload data, SpellDefinition spell, long born, Vec3 floor) {
-            this.data = data; this.spell = spell; this.born = born; this.floor = floor; this.updatedAt = born;
+            this.data = data; this.spell = spell; this.born = born; this.createdAt = born; this.floor = floor; this.updatedAt = born;
             this.fromStart = data.start(); this.fromEnd = data.end();
             this.toStart = data.start(); this.toEnd = data.end();
         }
@@ -69,8 +98,11 @@ public final class ClientSpellVisuals {
         resetLevel(mc.level);
         SpellDefinition spell = SpellDefinition.byId(data.spellId());
         if (mc.level == null || spell == null || data.duration() < 1 || data.duration() > 1200) return;
-        // 飞剑从天空裂缝一路射到地面，起止点可能相距两三百格，单独放宽这个上限。
-        double lengthLimit = data.phase() == SpellVisualPayload.FLYING_SWORD ? 512.0 * 512.0 : 4096.0;
+        // 飞剑从天空裂缝一路射到地面、基础投射现在能打八个区块（128 格），
+        // 起止点相距远是正常的。这里只拦真正异常的坐标，不能拿旧射程当上限，
+        // 否则远距离射出去的那一包会被整条丢掉——画面里就是一发法术凭空消失。
+        double lengthLimit = data.phase() == SpellVisualPayload.FLYING_SWORD ? 512.0 * 512.0
+                : SpellRange.MAX_VISUAL_SPAN * SpellRange.MAX_VISUAL_SPAN;
         if (!finite(data.start()) || !finite(data.end()) || data.start().distanceToSqr(data.end()) > lengthLimit) return;
         if (data.phase() < SpellVisualPayload.CHARGE || data.phase() > SpellVisualPayload.MAX_PHASE) return;
         if (data.phase() == SpellVisualPayload.END_ATTACHED) {
@@ -116,6 +148,10 @@ public final class ClientSpellVisuals {
             for (Visual v : ACTIVE) {
                 if (v.spell == spell && v.data.owner() == data.owner()
                         && v.data.phase() == SpellVisualPayload.VENOM_MIST) {
+                    double t = Math.clamp((mc.level.getGameTime() - v.updatedAt) / 20.0, 0, 1);
+                    v.fromStart = v.fromStart.lerp(v.toStart, t);
+                    v.fromEnd = v.fromEnd.lerp(v.toEnd, t);
+                    v.toStart = data.start(); v.toEnd = data.end();
                     v.data = data;
                     v.updatedAt = mc.level.getGameTime();
                     v.born = mc.level.getGameTime() - 2;
@@ -265,7 +301,8 @@ public final class ClientSpellVisuals {
             addVisual(data, spell, mc.level);
             return;
         }
-        if (data.phase() != SpellVisualPayload.CHARGE) ACTIVE.removeIf(v ->
+        if (data.phase() != SpellVisualPayload.CHARGE && data.phase() != SpellVisualPayload.PROJECTILE_IMPACT)
+            ACTIVE.removeIf(v ->
                 v.data.owner() == data.owner() && (v.data.phase() == SpellVisualPayload.CHARGE
                         || v.data.phase() == SpellVisualPayload.RADIANT_CHARGE));
         if (data.phase() == SpellVisualPayload.CANCEL) return;
@@ -357,12 +394,20 @@ public final class ClientSpellVisuals {
             addVisual(data, spell, mc.level);
             return;
         }
+        if (data.phase() == SpellVisualPayload.PROJECTILE_LAUNCH
+                || data.phase() == SpellVisualPayload.PROJECTILE_IMPACT) {
+            boolean impact = data.phase() == SpellVisualPayload.PROJECTILE_IMPACT;
+            play(mc.level, impact ? "spell_impact_" + spell.medium() : "spell_" + spell.visualBase().id(),
+                    data.start(), impact ? impactVolume(spell) : 0.64F, impact ? impactPitch(spell) : 1.0F);
+            addVisual(data, spell, mc.level);
+            return;
+        }
         String sound = data.phase() == SpellVisualPayload.CHARGE ? "spell_charge"
                 : data.phase() == SpellVisualPayload.SHATTER ? "spell_shatter" : "spell_" + spell.visualBase().id();
         // 发射声从施法者位置起音；命中声按画面抵达时间延迟到真实终点。
         play(mc.level, sound, data.start(), data.phase() == SpellVisualPayload.CHARGE ? 0.25F : 0.72F, 1.0F);
         if (data.phase() == SpellVisualPayload.RELEASE) {
-            int delay = impactDelay(spell);
+            int delay = impactDelay(spell, data.start(), data.end());
             SOUND_CUES.add(new SoundCue(mc.level.getGameTime() + delay, "spell_impact_" + spell.medium(),
                     data.end(), impactVolume(spell), impactPitch(spell)));
         }
@@ -379,6 +424,7 @@ public final class ClientSpellVisuals {
         resetLevel(mc.level);
         if (mc.level == null) return;
         long time = mc.level.getGameTime();
+        ClientSpellTrails.tick(mc.level);
         ACTIVE.removeIf(v -> time - v.born >= v.data.duration()
                 || (v.data.phase() == SpellVisualPayload.CHARGE && !alive(mc.level.getEntity(v.data.owner())))
                 // 水柱一旦超过 2 秒没有刷新（施法者断线、分包丢失），视觉自行收起。
@@ -431,9 +477,17 @@ public final class ClientSpellVisuals {
         Vec3 at = caster != null ? caster.position() : data.end();
         play(level, "spell_flying_sword", at, 1.35F, 0.90F + level.random.nextFloat() * 0.25F);
     }
-    private static int impactDelay(SpellDefinition spell) {
-        return spell == SpellDefinition.ROCKFALL ? 7 : switch (spell) {
-            case FIREBALL, WATER_BOLT, ICE_SPIKE, WIND_BLADE, SHARP_EDGE, LIGHT_BOLT, POISON_BOLT -> 4;
+    /**
+     * 命中声要等弹头飞到终点再响。
+     *
+     * <p>以前固定第四刻响，射程一拉长声音就提前几秒在空气里炸开；
+     * 现在和画面共用 {@link SpellRange#flightTicks} 算延迟，远距离的命中声才落在命中那一刻。</p>
+     */
+    private static int impactDelay(SpellDefinition spell, Vec3 start, Vec3 end) {
+        if (spell == SpellDefinition.ROCKFALL) return 7;
+        return switch (spell) {
+            case FIREBALL, WATER_BOLT, ICE_SPIKE, WIND_BLADE, SHARP_EDGE, LIGHT_BOLT, POISON_BOLT ->
+                    SpellRange.flightTicks(start.distanceTo(end));
             default -> 0;
         };
     }
@@ -446,8 +500,11 @@ public final class ClientSpellVisuals {
     private static boolean alive(Entity entity) { return entity != null && entity.isAlive(); }
     private static boolean finite(Vec3 v) { return Double.isFinite(v.x) && Double.isFinite(v.y) && Double.isFinite(v.z); }
     private static void resetLevel(ClientLevel level) {
-        if (currentLevel != level) { ACTIVE.clear(); SOUND_CUES.clear(); swordSoundAt = 0;
-            barrierShotAt = Long.MIN_VALUE; currentLevel = level; }
+        if (currentLevel != level) {
+            ACTIVE.clear(); SOUND_CUES.clear(); swordSoundAt = 0;
+            barrierShotAt = Long.MIN_VALUE; currentLevel = level; ClientSpellTrails.clear();
+            if (renderBuffers != null) { renderBuffers.close(); renderBuffers = null; }
+        }
     }
 
     public static void render(RenderLevelStageEvent event) {
@@ -465,55 +522,74 @@ public final class ClientSpellVisuals {
             else if (entity instanceof LivingEntity living && living.hasEffect(NewSpellContent.VOLT_STATE))
                 volts.add(living);
         }
-        if (ACTIVE.isEmpty() && projectiles.isEmpty() && suns.isEmpty() && volts.isEmpty()) return;
+        if (ACTIVE.isEmpty() && projectiles.isEmpty() && suns.isEmpty() && volts.isEmpty()
+                && !ClientSpellTrails.hasPoints()) return;
         float partial = event.getPartialTick().getGameTimeDeltaPartialTick(false);
         Vec3 camera = event.getCamera().getPosition();
         Matrix4f matrix = new Matrix4f(event.getPoseStack().last().pose());
         // 每种材质有独立固定缓冲，切换贴图不会让先前的 VertexConsumer 失效。
-        LinkedHashMap<RenderType, ByteBufferBuilder> buffers = new LinkedHashMap<>();
-        try (ByteBufferBuilder memory = new ByteBufferBuilder(65536)) {
-            for (SpellRenderTypes.Material material : SpellRenderTypes.Material.values())
-                buffers.put(material.type, new ByteBufferBuilder(65536));
-            for (SpellRenderTypes.SpriteAtlas atlas : SpellRenderTypes.SpriteAtlas.values())
-                buffers.put(atlas.type, new ByteBufferBuilder(65536));
-            buffers.put(SpellRenderTypes.GLOW, new ByteBufferBuilder(262144));
-            MultiBufferSource.BufferSource source = MultiBufferSource.immediateWithBuffers(buffers, memory);
-            Mesh mesh = new Mesh(source.getBuffer(SpellRenderTypes.GLOW), matrix, camera);
-            ClientSpellSprites sprites = new ClientSpellSprites(source, matrix, event.getCamera());
+        if (renderBuffers == null) renderBuffers = new RenderBuffers();
+        MultiBufferSource.BufferSource source = renderBuffers.source;
+        try {
+            ClientSpellView view = new ClientSpellView(event.getCamera());
+            Mesh mesh = new Mesh(source.getBuffer(SpellRenderTypes.glow()), matrix, camera, view);
+            ClientSpellSprites sprites = new ClientSpellSprites(source, matrix, event.getCamera(), view);
+            sprites.detail(ACTIVE.size() + projectiles.size() < 36);
             ClientSpellMaterials materials = new ClientSpellMaterials(source, matrix, camera, sprites);
             List<Visual> ordered = new ArrayList<>(ACTIVE);
             ordered.sort((a, b) -> Double.compare(b.data.end().distanceToSqr(camera), a.data.end().distanceToSqr(camera)));
             for (Visual v : ordered) {
                 // 天空裂缝开在世界高度上限、飞剑从天上落下，两者的可视距离要单独放宽。
+                // 普通视觉的默认值按基础投射的八个区块放宽：以前是七十二格，射程拉长以后
+                // 远处那一发还没飞到就被剔掉了，看起来就像「对着远处发射，特效消失了」。
                 double cull = v.data.phase() == SpellVisualPayload.SKY_RIFT ? 768.0
                         : v.data.phase() == SpellVisualPayload.FLYING_SWORD ? 512.0
                         : v.data.phase() == SpellVisualPayload.RADIANT_BURST ? 220.0
-                        : v.data.phase() == SpellVisualPayload.VENOM_MIST ? 160.0 : 72.0;
-                if (v.data.start().distanceToSqr(camera) > cull * cull) continue;
+                        : v.data.phase() == SpellVisualPayload.VENOM_MIST ? 160.0 : 192.0;
+                // 起点或终点任意一端在可视范围内就继续画，远处命中点不会因为起点近就被留下空壳。
+                if (v.data.start().distanceToSqr(camera) > cull * cull
+                        && v.data.end().distanceToSqr(camera) > cull * cull) continue;
                 double age = mc.level.getGameTime() - v.born + partial;
                 if (age < 0 || age >= v.data.duration()) continue;
+                // 只为自己的前摇/贴身领域开口，射出去的弹体、目标处的命中动画不挖空。
+                boolean nearCaster = switch (v.data.phase()) {
+                    case SpellVisualPayload.CHARGE, SpellVisualPayload.RADIANT_CHARGE,
+                         SpellVisualPayload.DOMAIN_FIELD, SpellVisualPayload.BANKAI_FIELD,
+                         SpellVisualPayload.VENOM_MIST, SpellVisualPayload.TEMPEST_BALL,
+                         SpellVisualPayload.SONIC_ORB, SpellVisualPayload.BEAM -> true;
+                    default -> false;
+                };
+                sprites.scope(nearCaster ? v.data.owner() : -1, v.data.anchor());
                 draw(mesh, materials, sprites, v, age, mc.level, partial);
             }
             for (SpellProjectile projectile : projectiles) {
-                if (projectile.distanceToSqr(camera) > 72 * 72) continue;
+                // 中级弹体最远能飞到五个区块，渲染半径跟着放宽，远处飞行中的弹头才不会消失。
+                if (projectile.distanceToSqr(camera) > 192 * 192) continue;
+                sprites.scope(-1, -1);
                 materials.lighting(mc.level, projectile.position());
                 sprites.lighting(mc.level, projectile.position());
                 materials.drawProjectile(projectile, partial);
             }
+            sprites.scope(-1, -1);
             for (BlazingSun sun : suns) {
                 if (sun.distanceToSqr(camera) > 96 * 96) continue;
+                sprites.scope(sun.isReleased() ? -1 : sun.casterId(), -1);
                 materials.lighting(mc.level, sun.position());
                 sprites.lighting(mc.level, sun.position());
                 drawBlazingSun(mesh, materials, sprites, sun, partial, mc.level);
             }
             for (LivingEntity volt : volts) {
                 if (volt.distanceToSqr(camera) > 48 * 48) continue;
+                sprites.scope(volt.getId(), volt.getId());
                 drawVoltBody(mesh, volt, mc.level, partial);
+                sprites.lighting(mc.level, volt.position());
+                sprites.fieldMotes(SpellDefinition.VOLT_STATE, volt.getPosition(partial),
+                        Math.max(0.65, volt.getBbWidth()), volt.tickCount + partial, 0.8);
             }
-            // 材质先画，光效最后合成；不触碰游戏其他渲染队列。
-            source.endBatch();
+            ClientSpellTrails.render(sprites, mc.level, camera, partial);
         } finally {
-            buffers.values().forEach(ByteBufferBuilder::close);
+            // 材质先画，光效最后合成；固定缓冲留给下一帧，只清空本帧批次。
+            source.endBatch();
         }
     }
 
@@ -544,6 +620,18 @@ public final class ClientSpellVisuals {
             Vec3 floor = ClientSpellMaterials.ground(level, center);
             m.ring(floor, X, Z, 2.6, 0.030, age * 0.010, 0xFF7A2E, 0.45);
             m.ring(floor, X, Z, 1.9, 0.018, -age * 0.016, 0xFFD36A, 0.40);
+            // 悬停的火球本身就是一团太阳：外圈橙光、内圈近白的核，再叠一圈转动的火焰纹。
+            double breathe = 0.9 + 0.1 * Math.sin(age * 0.09);
+            sprites.glow(ClientSpellSprites.GLOW_SOFT, center, 4.6 * radius * breathe,
+                    0.0, 0xFF7A2E, 0.62);
+            sprites.glow(ClientSpellSprites.GLOW_SOFT, center, 2.5 * radius * breathe,
+                    0.0, 0xFFE08A, 0.55);
+            sprites.glow(ClientSpellSprites.GLOW_SUN, center, 3.2 * radius, age * 0.02, 0xFFFFE0, 0.42);
+            sprites.fieldMotes(SpellDefinition.BLAZING_SUN, center.add(0, -radius * 0.4, 0),
+                    radius * 1.3, age, 0.88);
+            // 法阵那一侧的流光也跟着火球一起呼吸。
+            sprites.glowPlane(ClientSpellSprites.GLOW_RING, sigil, axisU, axisV,
+                    3.6, 3.6, age * 0.012, 0xFFC65A, 0.34);
         }
         materials.drawSun(sun, partial);
     }
@@ -567,7 +655,7 @@ public final class ClientSpellVisuals {
             sprites.lighting(level, hand);
             double chargeFade = Math.min(1, (age + 1) / 3.0)
                     * Math.min(1, (d.duration() - age) / Math.min(3.0, d.duration()));
-            // 天雷滚滚：头顶堆多重光圈与法阵，雷球随读条一点点长成型。
+            // 天雷滚滚：头顶堆多重光圈与法阵，手边仍然叠一份元素聚能。
             if (v.spell == SpellDefinition.THUNDER_TEMPEST)
                 tempestCharge(m, sprites, owner, partial, age, d.duration(), chargeFade);
             sprites.charge(v.spell, hand, feet, direction, age, d.duration(), chargeFade);
@@ -583,6 +671,25 @@ public final class ClientSpellVisuals {
             double alpha = Math.min(1.0, (age + 1) / 3.0) * Math.min(1.0, (d.duration() - age) / 8.0);
             sprites.lighting(level, owner.position());
             radiantCharge(m, sprites, owner, partial, age, chargeLayers(d), alpha);
+            return;
+        }
+        if (d.phase() == SpellVisualPayload.PROJECTILE_LAUNCH) {
+            sprites.glow(ClientSpellSprites.GLOW_SOFT, start, 0.52 + age * 0.06, 0,
+                    color, 0.32 * Math.max(0, 1 - age / d.duration()));
+            return;
+        }
+        if (d.phase() == SpellVisualPayload.PROJECTILE_IMPACT) {
+            sprites.lighting(level, start);
+            materials.lighting(level, start);
+            double impactFade = Math.max(0, 1 - age / d.duration());
+            sprites.impactGlow(v.spell, start, age, d.duration(), impactFade);
+            if (v.spell == SpellDefinition.PYROBLAST) {
+                materials.drawNew(v.spell, start, start, start, v.floor, age, d.duration(), impactFade, false, d.phase());
+                sprites.burstMotes(v.spell, start, 4, age, d.duration(), impactFade);
+            } else {
+                // 跳过旧演出的四刻飞行段，接触当刻立即出碎屑、水花、冰屑或缠绕。
+                materials.draw(v.spell, start, start, start, v.floor, age + 4, d.duration() + 4, impactFade);
+            }
             return;
         }
         if (d.phase() == SpellVisualPayload.SHATTER) {
@@ -611,14 +718,28 @@ public final class ClientSpellVisuals {
             if (alive(entity)) {
                 anchor = entity.getPosition(partial).add(0, entity.getBbHeight() * 0.5, 0);
                 floor = entity.getPosition(partial).add(0, 0.025, 0);
-                Minecraft mc = Minecraft.getInstance();
-                // 第一人称自己的护甲只保留淡轮廓，不把屏幕封在石头/钢板里面。
-                if (entity == mc.getCameraEntity() && mc.options.getCameraType().isFirstPerson()) bodyAlpha *= 0.16;
+                // 不再整件护甲/光晕压暗；近景准星开口在共享视角策略里逐区域处理。
             }
+        }
+        // 按元素和学派分配动画碎片；有专属造型的阶段只加少量点缀。
+        // 第一人称靠局部视线开口避让，不再把前摇或护罩整体降到很低透明度。
+        double auraAlpha = age < impactDelay(v.spell, start, end) ? 0 : Math.min(fade, bodyAlpha);
+        double ambientClock = d.duration() > 40 ? (double)level.getGameTime() + partial + v.spell.ordinal() * 1.7 : age;
+        switch (glowLevel(d.phase())) {
+            case 2 -> {
+                sprites.lighting(level, anchor);
+                sprites.spellAura(v.spell, anchor, floor, ambientClock, auraAlpha, true);
+            }
+            case 1 -> {
+                sprites.lighting(level, anchor);
+                sprites.coreGlow(v.spell, anchor, ambientClock, auraAlpha);
+            }
+            default -> { }
         }
         // 藤条与卍解是纯几何视觉，不需要材质贴图与发射残影，直接按各自形状绘制。
         if (d.phase() == SpellVisualPayload.VINE) {
             thornVine(m, start, end, age, fade);
+            sprites.vineMotes(start, end, age, fade);
             return;
         }
         if (d.phase() == SpellVisualPayload.VINE_LASH) {
@@ -627,11 +748,13 @@ public final class ClientSpellVisuals {
             return;
         }
         if (d.phase() == SpellVisualPayload.BANKAI_WAVE) {
-            bankaiWave(m, start, Math.max(1.0, end.y - start.y), age, d.duration(), fade);
+            bankaiWave(m, sprites, start, Math.max(1.0, end.y - start.y), age, d.duration(), fade);
             return;
         }
         if (d.phase() == SpellVisualPayload.BANKAI_FIELD) {
-            bankaiField(m, start, Math.max(1.0, end.y - start.y), level.getGameTime(), fade);
+            materials.lighting(level, start);
+            materials.livingRoots(start, Math.max(1.0, end.y - start.y), (double)level.getGameTime() + partial, fade);
+            bankaiField(m, sprites, start, Math.max(1.0, end.y - start.y), (double)level.getGameTime() + partial, fade);
             return;
         }
         // 毒系新术也是纯几何视觉：飞行中的毒刺与持续扩散的毒雾。
@@ -640,12 +763,16 @@ public final class ClientSpellVisuals {
             return;
         }
         if (d.phase() == SpellVisualPayload.VENOM_MIST) {
-            venomMist(m, start, Math.max(1.0, end.y - start.y), level.getGameTime(), fade);
+            double t = SpellVfxProfile.smooth((level.getGameTime() - v.updatedAt + partial) / 20.0);
+            Vec3 center = v.fromStart.lerp(v.toStart, t), extent = v.fromEnd.lerp(v.toEnd, t);
+            double form = SpellVfxProfile.smooth((level.getGameTime() - v.createdAt + partial) / 16.0);
+            venomMist(m, sprites, center, Math.max(0.1, (extent.y - center.y) * form),
+                    (double)level.getGameTime() + partial, fade);
             return;
         }
         // 万剑归一与金钟罩同样是纯几何视觉：高空裂缝、落下的飞剑与罩住施法者的金钟。
         if (d.phase() == SpellVisualPayload.SKY_RIFT) {
-            skyRift(m, sprites, start, end, level.getGameTime());
+            skyRift(m, sprites, start, end, (double)level.getGameTime() + partial);
             return;
         }
         if (d.phase() == SpellVisualPayload.FLYING_SWORD) {
@@ -653,16 +780,19 @@ public final class ClientSpellVisuals {
             return;
         }
         if (d.phase() == SpellVisualPayload.GOLDEN_BELL) {
-            goldenBell(m, anchor, level.getGameTime(), bodyAlpha);
+            goldenBell(m, anchor, (double)level.getGameTime() + partial, bodyAlpha);
+            // 钟身外面再包一层柔光：整口钟从内部亮起来，轮廓之外还有一圈淡金。
+            sprites.coreGlow(v.spell, anchor, (double)level.getGameTime() + partial, bodyAlpha * 1.4);
+            sprites.fieldMotes(v.spell, anchor.subtract(0, 1.05, 0), 1.15, (double)level.getGameTime() + partial, bodyAlpha);
             return;
         }
         // 光系新术同样是纯几何视觉：庇护光环与光球爆裂。
         if (d.phase() == SpellVisualPayload.LIGHT_SHELTER) {
-            lightShelter(m, anchor, level.getGameTime(), bodyAlpha);
+            lightShelter(m, sprites, anchor, (double)level.getGameTime() + partial, bodyAlpha);
             return;
         }
         if (d.phase() == SpellVisualPayload.RADIANT_BURST) {
-            radiantBurst(m, start, Math.max(1.0, end.y - start.y), age, d.duration(), fade);
+            radiantBurst(m, sprites, start, Math.max(1.0, end.y - start.y), age, d.duration(), fade);
             return;
         }
         // 音系新术同样是纯几何视觉：环绕的鸣球、穿透声波、反射波与触碰爆震。
@@ -672,11 +802,11 @@ public final class ClientSpellVisuals {
                     ? caster.getPosition(partial).add(0, caster.getBbHeight() * 0.65, 0)
                     : start;
             int orbs = (int)Math.round(Math.max(1.0, end.y - start.y));
-            sonicOrbs(m, center, orbs, level.getGameTime(), Math.min(1.0, fade + 0.25));
+            sonicOrbs(m, sprites, center, orbs, (double)level.getGameTime() + partial, Math.min(1.0, fade + 0.25));
             return;
         }
         if (d.phase() == SpellVisualPayload.SONIC_WAVE) {
-            sonicWave(m, start, Math.max(1.0, end.y - start.y), age, d.duration(), fade);
+            sonicWave(m, sprites, start, Math.max(1.0, end.y - start.y), age, d.duration(), fade);
             return;
         }
         if (d.phase() == SpellVisualPayload.SONIC_REFLECT) {
@@ -695,6 +825,10 @@ public final class ClientSpellVisuals {
         if (materials.draw(v.spell, start, end, anchor, floor, age, d.duration(), bodyAlpha)) return;
         Vec3 direction = end.subtract(start).normalize();
         if (direction.lengthSqr() < 0.01) direction = Z;
+        // 飞行投掷类的共用时间轴：和材质、尾迹、命中声用同一个速度。
+        double flight = ClientSpellSprites.flightTicks(start, end);
+        double hitAge = Math.max(0, age - flight);
+        Vec3 head = start.lerp(end, Math.min(1, age / flight));
         Vec3 side = side(direction), vertical = direction.cross(side).normalize();
         switch (v.spell) {
             case ARCANE_RAY -> {
@@ -702,6 +836,8 @@ public final class ClientSpellVisuals {
                 m.beam(start, end, 0.026, 0xF9E8FF, fade);
                 helix(m, start, end, 0.18, age * 0.3, color, fade, 2);
                 impact(m, end, side, vertical, age, color, fade, 1.1);
+                // 沿光束滚过的能量丝：光柱因此是「流」的，而不是一根静止的亮条。
+                sprites.beamMotes(v.spell, start, end, age, fade);
             }
             case ARCANE_WARD -> {
                 shield(m, anchor, 6, 0.85, age, color, bodyAlpha);
@@ -728,6 +864,7 @@ public final class ClientSpellVisuals {
                 m.beam(start, end, 0.11 * fade, 0xFFFFFF, fade);
                 helix(m, start, end, 0.35, age * 0.1, 0xFFF2A0, fade, 3);
                 impact(m, end, side, vertical, age, color, fade, 1.2);
+                sprites.beamMotes(v.spell, start, end, age, fade);
             }
             case SHATTERING_SOUND -> {
                 for (int j = 0; j < 4; j++) {
@@ -763,6 +900,9 @@ public final class ClientSpellVisuals {
                         m.ring(start.add(0, 0.15 + i * 0.55, 0), X, Z, 2.2 - i * 0.45, 0.02,
                                 (i % 2 == 0 ? 1 : -1) * age * 0.10, 0xE4FFF4, fade * (0.5 - i * 0.09));
                     helix(m, start, start.add(0, 3.0, 0), 1.6, age * 0.13, 0xC9FFE9, fade * 0.38, 2);
+                    // 风暴场不是三圈空环：整根风柱里都在卷着风丝与落叶。
+                    sprites.domainMotes(SpellDefinition.WIND_BURIAL_CORRIDOR, start, 2.4, 3.4,
+                            age, fade * 0.85, 0.65);
                 } else {
                     // 风十字斩：一横一竖两片薄刃沿射程展开，末端收窄。
                     for (int i = 0; i <= 14; i++) {
@@ -797,14 +937,23 @@ public final class ClientSpellVisuals {
                 }
             }
             case LIGHT_BOLT -> {
-                double life = fade * Math.max(0, 1 - age / 12);
-                m.beam(start, end, 0.035, 0xFFFFFF, life);
-                m.beam(start, end, 0.13, 0xFFE587, life * 0.35);
-                if (age < 4) m.crystal(start.lerp(end, age / 4), direction, 0.17, 0.75, 0xFFFFD7, life);
-                for (int i = 0; i < 4; i++) {
-                    double a = i * Math.PI / 2;
-                    m.beam(end, end.add(side.scale(Math.cos(a) * 0.65)).add(vertical.scale(Math.sin(a) * 0.65)),
-                            0.035, 0xFFF4B0, life);
+                // 光矢不是一道瞬间贯穿的光束：它和别的投射一样按 SpellRange 的速度飞过去，
+                // 命中后只在终点留一圈四芒。射程八个区块时，远距离的飞行过程才看得见。
+                double life = fade * Math.max(0, 1 - hitAge / 12);
+                if (age < flight) {
+                    Vec3 tail = head.subtract(direction.scale(Math.min(2.4, 0.5 + age * 0.08)));
+                    m.beam(tail, head, 0.030, 0xFFFFFF, fade * 0.85);
+                    m.beam(tail, head, 0.085, 0xFFE587, fade * 0.30);
+                    m.crystal(head, direction, 0.17, 0.75, 0xFFFFD7, fade);
+                    sprites.projectileCore(v.spell, head, direction, 0.30, age, fade);
+                } else {
+                    for (int i = 0; i < 4; i++) {
+                        double a = i * Math.PI / 2;
+                        m.beam(end, end.add(side.scale(Math.cos(a) * 0.65)).add(vertical.scale(Math.sin(a) * 0.65)),
+                                0.035, 0xFFF4B0, life);
+                    }
+                    sprites.glow(ClientSpellSprites.GLOW_STAR, end, 1.6 * (1 - Math.min(1, hitAge / 12)), 0.0,
+                            0xFFF0A8, life * 0.6);
                 }
             }
             case PURIFYING_LIGHT -> {
@@ -855,6 +1004,7 @@ public final class ClientSpellVisuals {
                         m.beam(start, end, 0.10 * fade, color, fade * 0.50);
                         m.beam(start, end, 0.032, 0xFBEEFF, fade);
                         helix(m, start, end, 0.17, age * 0.45, color, fade * 0.85, 2);
+                        sprites.beamMotes(v.spell, start, end, age, fade);
                     }
                     impact(m, connected ? end : start, X, Z, age, color, fade, 1.5);
                 } else {
@@ -872,8 +1022,10 @@ public final class ClientSpellVisuals {
                     double a = i * Math.PI * 2.0 / 20.0 + spin;
                     Vec3 base = end.add(Math.cos(a) * radius, 0.0, Math.sin(a) * radius);
                     double size = 0.50 + 0.06 * Math.sin(age * 0.16 + i);
-                    sprites.flame(base, size, age + i * 3.0, fade * 0.95);
-                    sprites.flame(base.add(0, 1.18, 0), size * 0.74, age + i * 5.0, fade * 0.70);
+                    // 火柱的种子按柱子序号固定，二十根柱子不会每帧互换外形。
+                    sprites.flame(base, size, age + i * 3.0, fade * 0.95, Math.floorMod(17 + i * 43, 997));
+                    sprites.flame(base.add(0, 1.18, 0), size * 0.74, age + i * 5.0, fade * 0.70,
+                            Math.floorMod(23 + i * 47, 997));
                     m.beam(base, base.add(0, 2.35, 0), 0.020, 0xFFB347, fade * 0.32);
                 }
                 m.ring(end, X, Z, radius, 0.045, age * 0.020, 0xFF8A34, fade * 0.55);
@@ -895,7 +1047,11 @@ public final class ClientSpellVisuals {
                 }
             }
             case ABYSS_DRAGON_STRIKE -> {
-                if (d.phase() == SpellVisualPayload.BEAM) dragonBeam(m, start, end, age, fade);
+                if (d.phase() == SpellVisualPayload.BEAM) {
+                    dragonBeam(m, start, end, age, fade);
+                    sprites.beamMotes(v.spell, start, end, age, fade);
+                    sprites.projectileCore(v.spell, end, direction, 0.6, age, fade * 0.8);
+                }
             }
             case SUBZERO_DOMAIN -> {
                 if (d.phase() == SpellVisualPayload.DOMAIN_FIELD) {
@@ -904,7 +1060,9 @@ public final class ClientSpellVisuals {
                     int layers = (int)Math.round(Math.max(0.0, end.y - start.y));
                     domainField(m, sprites, base, layers, age, fade);
                 } else if (d.phase() == SpellVisualPayload.DOMAIN_BURST) {
-                    domainBurst(m, start, Math.max(1.0, end.y - start.y), age, d.duration(), fade);
+                    // 爆发半径和领域半径一致：12 + 2×层数，冲击波才真的推到领域边界。
+                    double burstRadius = 12.0 + 2.0 * Math.max(1.0, end.y - start.y);
+                    domainBurst(m, sprites, start, burstRadius, age, d.duration(), fade);
                 }
             }
             case THUNDER_TEMPEST -> {
@@ -931,7 +1089,7 @@ public final class ClientSpellVisuals {
                 } else if (d.phase() == SpellVisualPayload.TEMPEST_PULL) {
                     tempestPull(m, start, age, fade);
                 } else if (d.phase() == SpellVisualPayload.TEMPEST_BLAST) {
-                    tempestBlast(m, start, Math.max(1.0, end.y - start.y), age, d.duration(), fade);
+                    tempestBlast(m, sprites, start, Math.max(1.0, end.y - start.y), age, d.duration(), fade);
                 }
             }
             default -> { /* 非能量系已由材质动画绘制。 */ }
@@ -1023,11 +1181,14 @@ public final class ClientSpellVisuals {
     }
 
     /** 卍之波：贴地的扩散环加一圈竖直光墙，半径按 6.6 格/秒线性推进。 */
-    private static void bankaiWave(Mesh m, Vec3 center, double maxRadius, double age, int duration, double fade) {
+    private static void bankaiWave(Mesh m, ClientSpellSprites sprites, Vec3 center, double maxRadius,
+                                  double age, int duration, double fade) {
         double progress = Math.clamp(age / Math.max(1.0, duration), 0.0, 1.0);
         double radius = maxRadius * progress;
         if (radius < 0.25) return;
         double alpha = fade * Math.min(1.0, (1.0 - progress) * 2.4 + 0.30);
+        // 卍解冲击波：一圈外扩的绿叶、花瓣与孢子，不只是三道绿环。
+        sprites.burstMotes(SpellDefinition.ENDLESS_BANKAI, center, maxRadius, age, duration, fade * 1.2);
         m.ring(center, X, Z, radius, 0.11, 0, 0x63B93F, alpha * 0.78);
         m.ring(center, X, Z, radius * 0.982, 0.045, 0, 0xE8FFC4, alpha * 0.62);
         for (int i = 0; i < 30; i++) {
@@ -1038,14 +1199,16 @@ public final class ClientSpellVisuals {
     }
 
     /** 生命之树领域：远处也能看见的边界环、边界光柱与缓慢旋转的四臂卍纹。 */
-    private static void bankaiField(Mesh m, Vec3 center, double radius, double clock, double fade) {
+    private static void bankaiField(Mesh m, ClientSpellSprites sprites, Vec3 center, double radius,
+                                   double clock, double fade) {
         m.ring(center, X, Z, radius, 0.075, 0, 0x59B03A, fade * 0.45);
         m.ring(center, X, Z, radius * 0.985, 0.026, -clock * 0.0012, 0xC8F39A, fade * 0.34);
-        for (int i = 0; i < 24; i++) {
-            double a = i * Math.PI * 2.0 / 24.0 + clock * 0.0008;
-            Vec3 base = center.add(Math.cos(a) * radius, 0.0, Math.sin(a) * radius);
-            m.beam(base, base.add(0, 3.4, 0), 0.038, 0x6FBF44, fade * 0.20);
-        }
+        // 地面范围之内整片绿光：边界一圈流光慢慢向外渗，领域才像"长在地上"。
+        sprites.fieldMotes(SpellDefinition.ENDLESS_BANKAI, center, radius, clock, fade);
+        // 树冠落叶与少量花粉，边界由实体根须支撑，不再画一圈竖直光柱。
+        sprites.domainMotes(SpellDefinition.ENDLESS_BANKAI, center, radius, 6.4, clock, fade * 0.80, 0.85);
+        sprites.orbitArcs(center.add(0, 0.04, 0), X, Z, radius * 0.98,
+                clock * 0.003, 0x8FDC5E, fade * 0.30, 3);
         for (int i = 0; i < 4; i++) {
             double a = i * Math.PI / 2.0 + clock * 0.0035;
             Vec3 p0 = center.add(Math.cos(a) * 2.0, 0.06, Math.sin(a) * 2.0);
@@ -1072,6 +1235,17 @@ public final class ClientSpellVisuals {
         double halfWidth = Math.max(1.0, end.y - center.y);
         // 贴图本体：8 帧循环，裂口自己在缓慢扩张、扭动。
         sprites.skyRift(center, dir, side, halfLength, halfWidth, clock, 0.95);
+        // 沿裂口滚过的青色能量流：让这道口子"活着"，而不是一张挂在天上的静止贴图。
+        sprites.beamMotes(SpellDefinition.TEN_THOUSAND_SWORDS,
+                center.subtract(dir.scale(halfLength)), center.add(dir.scale(halfLength)), clock, 0.9);
+        // 裂缝正中的几团柔光：从地面仰视时整道裂口自带体积感。
+        for (int i = 0; i < 5; i++) {
+            double t = (i + 0.5) / 5.0;
+            double taper = Math.sqrt(Math.max(0.0, 1.0 - Math.pow((t - 0.5) * 2.0, 2)));
+            sprites.glow(ClientSpellSprites.GLOW_SOFT,
+                    center.add(dir.scale((t - 0.5) * 2.0 * halfLength)),
+                    halfWidth * 2.4 * taper + 0.4, 0.0, 0xC8ECFF, 0.30 * taper);
+        }
         // 破口两侧的炽白辉光，让贴图边缘再多一层亮边。
         for (int i = 0; i < 24; i++) {
             double t = i / 24.0;
@@ -1185,7 +1359,7 @@ public final class ClientSpellVisuals {
         Vec3 look = owner.getViewVector(partial);
         // 先判长度再归一化：归一化零向量会得到 NaN，把整块几何画飞。
         look = look.lengthSqr() < 0.01 ? Z : look.normalize();
-        Vec3 orb = owner.getEyePosition(partial).add(look.scale(2.0));
+        Vec3 orb = sprites.chargeOrb(owner.getEyePosition(partial).add(look.scale(2.0)));
         double height = Math.max(1.0, owner.getBbHeight());
         double pulse = 0.5 + 0.5 * Math.sin(age * 0.12);
         // 光球：三个正交光环 + 光刺 + 一条竖向光带，方块大小的球体在远处也看得见。
@@ -1202,6 +1376,14 @@ public final class ClientSpellVisuals {
         }
         m.beam(orb.add(0, -0.55, 0), orb.add(0, 0.55, 0), 0.72, 0xFFEBA8, fade * 0.16);
         m.beam(orb.add(0, -0.42, 0), orb.add(0, 0.42, 0), 0.20, 0xFFFFFF, fade * 0.55);
+        // 蓄力光球体内的柔光：层数越高球越大越亮，能看出"越蓄越强"。
+        double swell = 0.85 + layers * 0.10;
+        sprites.glow(ClientSpellSprites.GLOW_SOFT, orb, 1.85 * swell, 0.0, 0xFFE9A0, fade * 0.62);
+        sprites.glow(ClientSpellSprites.GLOW_SOFT, orb, 0.95 * swell, 0.0, 0xFFFFFF, fade * 0.55);
+        sprites.glow(ClientSpellSprites.GLOW_STAR, orb, 2.4 * swell, age * 0.03, 0xFFF6D2, fade * 0.30);
+        // 光球外面绕一圈被吸进去的能量丝，读条时一直在往球心收。
+        sprites.projectileCore(SpellDefinition.RADIANT_RIFT, orb, look, 0.60 * swell, age, fade);
+        sprites.orbitArcs(orb, X, UP, 0.70 * swell, age * 0.037, 0xFFF0B8, fade * 0.85, 3);
         // 光球与施法者之间的引光带。
         Vec3 chest = owner.getEyePosition(partial).add(0, -0.35, 0);
         m.beam(chest, orb, 0.10, 0xFFF6D2, fade * 0.45);
@@ -1242,11 +1424,18 @@ public final class ClientSpellVisuals {
     }
 
     /** 光的庇护：脚下暖白环、八束上升光带与头顶光环，罩住被庇护的生物。 */
-    private static void lightShelter(Mesh m, Vec3 anchor, double clock, double alpha) {
+    private static void lightShelter(Mesh m, ClientSpellSprites sprites, Vec3 anchor,
+                                     double clock, double alpha) {
         double body = Math.min(1.0, alpha);
         if (body <= 0.01) return;
         Vec3 base = anchor.subtract(0, 0.85, 0);
         double pulse = 0.5 + 0.5 * Math.sin(clock * 0.10);
+        // 庇护所内部的暖光：罩子里是亮的，边缘柔柔地散出去。
+        sprites.glow(ClientSpellSprites.GLOW_SOFT, anchor.add(0, 0.4, 0), 2.6 + pulse * 0.25,
+                0.0, 0xFFF3B0, body * 0.40);
+        sprites.glow(ClientSpellSprites.GLOW_RING, base.add(0, 0.10, 0), 2.4,
+                clock * 0.010, 0xFFF8D8, body * 0.34);
+        sprites.fieldMotes(SpellDefinition.LIGHT_SHELTER, base, 0.92, clock, body);
         m.ring(base.add(0, 0.06, 0), X, Z, 0.92 + pulse * 0.06, 0.035, clock * 0.012, 0xFFF3B0, body * 0.85);
         m.ring(base.add(0, 0.06, 0), X, Z, 0.72, 0.020, -clock * 0.018, 0xFFFFFF, body * 0.60);
         for (int i = 0; i < 8; i++) {
@@ -1259,12 +1448,20 @@ public final class ClientSpellVisuals {
     }
 
     /** 光球爆裂：向外扩散的光环、边缘光刺与冲天光柱。 */
-    private static void radiantBurst(Mesh m, Vec3 center, double radius, double age, int duration, double fade) {
+    private static void radiantBurst(Mesh m, ClientSpellSprites sprites, Vec3 center, double radius,
+                                    double age, int duration, double fade) {
         double t = Math.clamp(age / Math.max(1.0, duration), 0.0, 1.0);
         double wave = radius * (0.25 + 0.75 * t);
         m.ring(center, X, Z, wave, 0.35 * (1.0 - t) + 0.08, age * 0.06, 0xFFF3A8, fade * 0.85);
         m.ring(center, X, Z, wave * 0.72, 0.18, -age * 0.05, 0xFFFFFF, fade * 0.62);
         m.ring(center, X, Z, radius * 0.98, 0.10, 0, 0xFFF7D0, fade * 0.28);
+        // 爆心的强光与向外滚的流光：爆炸的第一帧应该"晃眼"，之后才散去。
+        double flash = Math.max(0.0, 1.0 - t * 3.0);
+        sprites.glow(ClientSpellSprites.GLOW_SOFT, center, radius * 1.4, 0.0, 0xFFFFFF,
+                fade * (0.55 + flash * 0.45));
+        sprites.glow(ClientSpellSprites.GLOW_SUN, center, radius * 0.85, age * 0.02, 0xFFF3A8,
+                fade * 0.62);
+        sprites.fieldMotes(SpellDefinition.RADIANT_RIFT, center, wave, age * 1.8, fade * (1 - t));
         for (int i = 0; i < 24; i++) {
             double a = i * Math.PI / 12.0 + age * 0.02;
             Vec3 p = center.add(Math.cos(a) * wave, 0, Math.sin(a) * wave);
@@ -1273,6 +1470,9 @@ public final class ClientSpellVisuals {
         double column = 2.0 + 12.0 * (1.0 - t);
         m.beam(center, center.add(0, column, 0), 0.90, 0xFFE9A0, fade * 0.34);
         m.beam(center, center.add(0, column, 0), 0.30, 0xFFFFFF, fade * 0.52);
+        // 光柱里也在流：一条向上的流光带，让冲天柱不是一根静止的亮条。
+        sprites.beamMotes(SpellDefinition.RADIANT_RIFT, center, center.add(0, column, 0), age, fade * (1 - t));
+        sprites.burstMotes(SpellDefinition.RADIANT_RIFT, center, radius, age, duration, fade * 1.05);
     }
 
     private static void triggerRadiantFlash(long now) {
@@ -1293,9 +1493,23 @@ public final class ClientSpellVisuals {
     }
 
     /** 震荡鸣球：能量核外裹三层正交光环，隔一小会儿向外推一圈声纹，整体绕施法者缓慢公转。 */
-    private static void sonicOrbs(Mesh m, Vec3 center, int orbs, double clock, double alpha) {
+    private static void sonicOrbs(Mesh m, ClientSpellSprites sprites, Vec3 center, int orbs,
+                                  double clock, double alpha) {
         if (alpha <= 0.01) return;
         double direction = clock * 0.021;
+        // 每颗鸣球外面裹一团紫色柔光：音波本身看不见，靠这层"声压发光"来表现。
+        for (int i = 0; i < orbs; i++) {
+            double angle = direction + i * (Math.PI * 2.0 / 3.0);
+            double bob = Math.sin(clock * 0.035 + i * 1.4) * 0.18;
+            Vec3 pos = center.add(Math.cos(angle) * 2.3, bob, Math.sin(angle) * 2.3);
+            double pulse = 0.75 + 0.25 * Math.sin(clock * 0.14 + i * 2.1);
+            sprites.glow(ClientSpellSprites.GLOW_SOFT, pos, 0.95 * pulse, 0.0, 0xE997FF, alpha * 0.55);
+            sprites.glow(ClientSpellSprites.GLOW_RING, pos, 1.35 * pulse, clock * 0.04,
+                    0xF3C6FF, alpha * 0.30);
+        }
+        // 施法者脚下一圈缓慢呼吸的声压环。
+        sprites.glow(ClientSpellSprites.GLOW_RING, center.subtract(0, 1.05, 0),
+                5.2, -clock * 0.008, 0xC9A0FF, alpha * 0.22);
         for (int i = 0; i < orbs; i++) {
             double angle = direction + i * (Math.PI * 2.0 / 3.0);
             double bob = Math.sin(clock * 0.035 + i * 1.4) * 0.18;
@@ -1314,12 +1528,17 @@ public final class ClientSpellVisuals {
             m.beam(center, pos, 0.012, 0xE997FF, alpha * 0.22);
         }
         m.ring(center, X, Z, 2.3, 0.012, -clock * 0.02, 0xC9A0FF, alpha * 0.20);
+        sprites.domainMotes(SpellDefinition.SOUL_CHORD, center.subtract(0, 1.0, 0), 3.4, 2.6,
+                clock, alpha * 0.85, 1.3);
     }
 
     /** 高频声波：水平圆环与两个竖直椭圆环一起外扩，表现穿透方块的一整片声压。 */
-    private static void sonicWave(Mesh m, Vec3 center, double radius, double age, int duration, double fade) {
+    private static void sonicWave(Mesh m, ClientSpellSprites sprites, Vec3 center, double radius,
+                                  double age, int duration, double fade) {
         double t = Math.clamp(age / Math.max(1.0, duration), 0.0, 1.0);
         double wave = radius * (0.18 + 0.82 * t);
+        // 声波炸开：整片声压里先炸出一圈音色粒子，再叠几何波纹。
+        sprites.burstMotes(SpellDefinition.SOUL_CHORD, center, radius, age, duration, fade * 1.1);
         m.ring(center, X, Z, wave, 0.10 * (1.0 - t) + 0.02, age * 0.05, 0xF3C6FF, fade * 0.80);
         m.ring(center, X, Z, wave * 0.80, 0.06 * (1.0 - t) + 0.01, -age * 0.06, 0xFFFFFF, fade * 0.55);
         m.ring(center, X, UP.scale(1.5), wave * 0.90, 0.045, age * 0.04, 0xE997FF, fade * 0.48);
@@ -1360,6 +1579,36 @@ public final class ClientSpellVisuals {
     }
 
     private static Vec3 side(Vec3 dir) { return dir.cross(Math.abs(dir.y) > 0.9 ? X : UP).normalize(); }
+
+    /**
+     * 通用光晕的强度档位：
+     * <ul>
+     *   <li>{@code 2} 学派轨道 + 元素动画碎片；</li>
+     *   <li>{@code 1} 小底光 + 三颗元素细节——给已有专属造型的阶段；</li>
+     *   <li>{@code 0} 完全不叠——几十把飞剑、铺满天空的裂缝，叠上去只是白烧性能。</li>
+     * </ul>
+     */
+    private static int glowLevel(int phase) {
+        // 下面这些阶段已经在自己函数里叠了贴合造型的柔光/流光，或者本身画量就大
+        // （飞剑一次几十把、天空裂缝铺满半天、金钟罩与雷球是整块体积光），
+        // 再叠通用光球只会白烧性能或互相糊住。
+        return switch (phase) {
+            case SpellVisualPayload.FLYING_SWORD, SpellVisualPayload.SKY_RIFT,
+                 SpellVisualPayload.GOLDEN_BELL, SpellVisualPayload.LIGHT_SHELTER,
+                 SpellVisualPayload.RADIANT_BURST, SpellVisualPayload.BANKAI_FIELD,
+                 SpellVisualPayload.VENOM_MIST, SpellVisualPayload.SONIC_ORB,
+                 SpellVisualPayload.TEMPEST_BALL -> 0;
+            case SpellVisualPayload.VINE, SpellVisualPayload.VINE_LASH,
+                 SpellVisualPayload.BANKAI_WAVE,
+                 SpellVisualPayload.SONIC_WAVE, SpellVisualPayload.SONIC_REFLECT,
+                 SpellVisualPayload.SONIC_TOUCH,
+                 SpellVisualPayload.VENOM_NEEDLE,
+                 SpellVisualPayload.TEMPEST_STRIKE, SpellVisualPayload.TEMPEST_PULL,
+                 SpellVisualPayload.TEMPEST_BLAST,
+                 SpellVisualPayload.DOMAIN_FIELD, SpellVisualPayload.DOMAIN_BURST -> 1;
+            default -> 2;
+        };
+    }
     private static void sigil(Mesh m, Vec3 p, double radius, double phase, int color, double alpha) {
         m.ring(p, X, Z, radius, 0.024, phase, color, alpha);
         m.ring(p.add(0, 0.012, 0), X, Z, radius * 0.76, 0.017, -phase, color, alpha * 0.7);
@@ -1450,43 +1699,65 @@ public final class ClientSpellVisuals {
      * 层与层之间用斜向光束连成塔身，顶端收一枚冰晶，堆到家就是一座高阶仪式塔。
      */
     private static void domainField(Mesh m, ClientSpellSprites sprites, Vec3 base, int layers, double age, double fade) {
-        // 底层：大阵正转、内阵反转，再压两圈实体光环把贴图的轮廓勾出来。
-        sprites.frostSigil(0, base.add(0, 0.012, 0), UP, 2.05, age * 0.010, fade * 0.60);
-        sprites.frostSigil(1, base.add(0, 0.022, 0), UP, 1.34, -age * 0.016, fade * 0.68);
-        m.ring(base, X, Z, 1.72, 0.020, age * 0.014, 0x8FE8FF, fade * 0.55);
-        m.ring(base, X, Z, 2.16, 0.012, -age * 0.008, 0xEAFBFF, fade * 0.34);
-        // 呼吸的寒气柱：把法阵和施法者连成一体。
-        double column = 1.9 + 0.14 * Math.sin(age * 0.08);
+        // 服务端的领域半径是 12 + 2×层数，而这里以前只画了 2.4 格的塔：
+        // 判定范围十几格，画面只有脚下一小圈，所以「领域没有存在感」。
+        // 现在整个法阵、边界环、寒气柱和粒子都按真实半径铺开，层数越高领域越大。
+        double radius = 12.0 + 2.0 * layers;
+        double height = 2.8 + layers * 0.62;
+        // 中心仪式阵保持精细：64 像素阵纹放大五倍会变成马赛克，只铺中心三格。
+        sprites.frostSigil(0, base.add(0, 0.012, 0), UP, 2.6, age * 0.010, fade * 0.60);
+        sprites.frostSigil(1, base.add(0, 0.022, 0), UP, 1.7, -age * 0.016, fade * 0.66);
+        // 领域边界：两圈实体光环 + 一圈冰柱，远看能看出领域到底有多大。
+        m.ring(base, X, Z, radius * 0.90, 0.050, age * 0.008, 0x8FE8FF, fade * 0.55);
+        m.ring(base, X, Z, radius, 0.030, -age * 0.005, 0xEAFBFF, fade * 0.38);
+        for (int i = 0; i < 36; i++) {
+            double a = i * Math.PI / 18.0 + age * 0.002;
+            double r = radius * 0.985;
+            Vec3 p = base.add(Math.cos(a) * r, 0.05, Math.sin(a) * r);
+            double h = 1.1 + 0.55 * Math.sin(age * 0.05 + i * 1.7);
+            m.beam(p, p.add(0, h, 0), 0.020, 0xBFEFFF, fade * 0.30);
+            m.crystal(p.add(0, h, 0), UP, 0.045, 0.14, 0xEAFBFF, fade * 0.45);
+        }
+        // 地面寒气与三层领域粒子：边界、半空、贴地都铺到真实半径上。
+        sprites.fieldMotes(SpellDefinition.SUBZERO_DOMAIN, base, radius * 0.9, age, fade);
+        sprites.domainMotes(SpellDefinition.SUBZERO_DOMAIN, base, radius, height, age, fade * 0.85, 0.75);
+        sprites.glowPlane(ClientSpellSprites.GLOW_RING, base.add(0, 0.03, 0), X, Z,
+                radius * 2, radius * 2, age * 0.004, 0xBFF0FF, fade * 0.12);
+        // 呼吸的寒气柱：把法阵和施法者连成一体，从远处也能看到领域中心。
+        double column = height * 0.86 + 0.16 * Math.sin(age * 0.08);
         m.beam(base, base.add(0, column, 0), 0.46, 0x4FA8FF, fade * 0.14);
         m.beam(base, base.add(0, column, 0), 0.13, 0xF0FBFF, fade * 0.30);
-        // 十二枚雪晶绕着底层法阵公转，叠层越多转得越快。
+        // 十二枚雪晶沿领域外圈公转，叠层越多转得越快。
         double orbit = age * (0.018 + layers * 0.0025);
         for (int i = 0; i < 12; i++) {
             double a = orbit + i * Math.PI / 6.0;
-            double r = 1.78 + 0.07 * Math.sin(age * 0.09 + i);
+            double r = radius * (0.94 + 0.03 * Math.sin(age * 0.09 + i));
             Vec3 p = base.add(Math.cos(a) * r, 0.10 + 0.10 * Math.sin(age * 0.07 + i * 1.7), Math.sin(a) * r);
-            m.crystal(p, UP, 0.055, 0.22, 0xF2FDFF, fade * 0.62);
+            m.crystal(p, UP, 0.065, 0.26, 0xF2FDFF, fade * 0.62);
         }
-        // 每一层：冰霜阵环 + 六根符钉 + 与下一层交错的斜撑，堆成旋转的塔身。
+        // 塔身：层数越多塔越高，每层都比下一层收一点，形成一座冰塔。
+        double layerHeight = height / Math.max(1, layers);
         for (int i = 0; i < layers; i++) {
-            double y = 0.26 + i * 0.28;
-            double radius = 1.46 - i * 0.040;
+            double y = 0.26 + i * layerHeight;
+            // 冰塔是领域中心的仪式塔，保持三格以内，不跟着领域半径一起吹大。
+            double layerRadius = Math.max(1.7, 2.9 - 0.08 * i);
             double layerSpin = (i % 2 == 0 ? 1 : -1) * age * (0.018 + i * 0.0025);
-            sprites.frostSigil(i % 2 == 0 ? 0 : 1, base.add(0, y, 0), UP, radius * 0.96, layerSpin, fade * 0.52);
-            m.ring(base.add(0, y, 0), X, Z, radius, 0.012, layerSpin, 0xBFF0FF, fade * 0.52);
+            sprites.frostSigil(i % 2 == 0 ? 0 : 1, base.add(0, y, 0), UP, layerRadius * 0.96,
+                    layerSpin, fade * 0.48);
+            m.ring(base.add(0, y, 0), X, Z, layerRadius, 0.012, layerSpin, 0xBFF0FF, fade * 0.52);
             for (int k = 0; k < 6; k++) {
                 double a = layerSpin + k * Math.PI / 3.0;
-                Vec3 p = base.add(Math.cos(a) * radius, y, Math.sin(a) * radius);
+                Vec3 p = base.add(Math.cos(a) * layerRadius, y, Math.sin(a) * layerRadius);
                 m.crystal(p, UP, 0.040 + 0.004 * i, 0.16, 0xEAFBFF, fade * 0.55);
                 if (i + 1 >= layers) continue;
-                double next = radius - 0.040, nextY = y + 0.28;
+                double next = layerRadius * 0.93, nextY = y + layerHeight;
                 Vec3 q = base.add(Math.cos(a + 0.42) * next, nextY, Math.sin(a + 0.42) * next);
                 m.beam(p, q, 0.010, 0x9FE8FF, fade * 0.34);
             }
         }
         // 塔尖：最后一层上方收一枚悬停冰晶与一圈亮环。
         if (layers > 0) {
-            Vec3 crown = base.add(0, 0.26 + layers * 0.28, 0);
+            Vec3 crown = base.add(0, 0.26 + layers * layerHeight, 0);
             m.ring(crown, X, Z, 0.86, 0.010, -age * 0.030, 0xFFFFFF, fade * 0.45);
             m.crystal(crown, UP, 0.15, 0.52, 0xEAFBFF, fade * 0.68);
             m.crystal(crown.add(0, -0.18, 0), UP, 0.07, 0.30, 0xFFFFFF, fade * 0.45);
@@ -1494,9 +1765,12 @@ public final class ClientSpellVisuals {
     }
 
     /** 零下领域爆发：向外扩散的极寒冲击波、边缘冰墙与中心寒气柱。 */
-    private static void domainBurst(Mesh m, Vec3 center, double radius, double age, int duration, double fade) {
+    private static void domainBurst(Mesh m, ClientSpellSprites sprites, Vec3 center, double radius,
+                                   double age, int duration, double fade) {
         double t = Math.clamp(age / Math.max(1.0, duration), 0.0, 1.0);
         double wave = radius * (0.15 + 0.85 * t);
+        // 爆开的一瞬间先炸出一大团冰屑，之后才轮到几何冲击环，爆发才有「分量」。
+        sprites.burstMotes(SpellDefinition.SUBZERO_DOMAIN, center, radius, age, duration, fade * 1.15);
         m.ring(center, X, Z, wave, 0.09 * (1 - t) + 0.02, age * 0.05, 0xBFF1FF, fade * 0.75);
         m.ring(center.add(0, 0.05, 0), X, Z, wave * 0.75, 0.05, -age * 0.04, 0xFFFFFF, fade * 0.55);
         for (int i = 0; i < 16; i++) {
@@ -1515,7 +1789,7 @@ public final class ClientSpellVisuals {
     /** 伏特状态：脚下电网、缠绕全身的折线电弧与上升电火花。 */
     private static void drawVoltBody(Mesh m, LivingEntity entity, ClientLevel level, float partial) {
         double age = entity.tickCount + partial;
-        Vec3 base = entity.position();
+        Vec3 base = entity.getPosition(partial);
         double height = Math.max(0.9, entity.getBbHeight());
         double width = Math.max(0.28, entity.getBbWidth() * 0.55);
         // 脚下电网：两圈反向旋转的电环，跑动时整体跟着身体走。
@@ -1553,9 +1827,9 @@ public final class ClientSpellVisuals {
             double radius = (1.55 - i * 0.27) * reveal;
             double spin = (i % 2 == 0 ? 1 : -1) * age * 0.024;
             Vec3 ring = base.add(0, y, 0);
-            sprites.energySigil(2, ring, UP, radius, spin, fade * 0.52);
-            m.ring(ring, X, Z, radius * 1.05, 0.014, -spin * 1.4, 0xFFE45B, fade * 0.42);
-            m.ring(ring, X, Z, radius * 0.72, 0.010, spin * 1.8, 0xFFF7C0, fade * 0.34);
+            double stage = SpellVfxProfile.smooth((progress - i * 0.22) / 0.30);
+            sprites.energySigil(2, ring, UP, radius, spin * 0.45, fade * stage * 0.45);
+            m.ring(ring, X, Z, radius * 1.05, 0.014, -spin * 0.5, 0xFFE45B, fade * stage * 0.28);
         }
         Vec3 ball = base.add(0, height + 2.15, 0);
         tempestBall(m, sprites, ball, ClientSpellState.tempestExtras(), 0.42 + 0.73 * progress, age, fade * reveal);
@@ -1565,15 +1839,22 @@ public final class ClientSpellVisuals {
     private static void tempestBall(Mesh m, ClientSpellSprites sprites, Vec3 center, int extras,
                                     double radius, double age, double fade) {
         if (fade <= 0.01 || radius <= 0.02) return;
-        m.crystal(center, UP, radius * 0.62, radius * 0.92, 0xFFF4B0, fade * 0.55);
-        m.crystal(center, X, radius * 0.55, radius * 0.86, 0xFFFFFF, fade * 0.45);
-        m.crystal(center, Z, radius * 0.48, radius * 0.78, 0xFFE45B, fade * 0.35);
-        m.ring(center, X, Z, radius, 0.055, age * 0.55, 0xFFE45B, fade * 0.78);
-        m.ring(center, X, UP, radius * 0.92, 0.036, -age * 0.72, 0xFFF7C0, fade * 0.62);
-        m.ring(center, Z, UP, radius * 0.84, 0.028, age * 0.90, 0xBFE9FF, fade * 0.52);
-        // 向外甩出的电弧：球越转越快，电弧也跟着翻。
-        for (int i = 0; i < 10; i++) {
-            double a = i * Math.PI / 5.0 + age * 0.22;
+        // 球的体积感主要靠这几层柔光：外圈一大团淡金、内圈一枚近白的核，
+        // 光晕在球体外面洇开，中间的电弧才有"从光里长出来"的感觉。
+        sprites.glow(ClientSpellSprites.GLOW_SOFT, center, radius * 5.2, 0.0, 0xFFE45B, fade * 0.42);
+        sprites.glow(ClientSpellSprites.GLOW_SOFT, center, radius * 2.9, 0.0, 0xFFF7C0, fade * 0.40);
+        sprites.glow(ClientSpellSprites.GLOW_STAR, center, radius * 4.2, age * 0.03, 0xFFFFFF, fade * 0.24);
+        // 竖向流光：雷球一直在往内吸电，丝是向上滚的。
+        sprites.projectileCore(SpellDefinition.THUNDER_TEMPEST, center, UP, radius * 0.8, age, fade * 0.85);
+        sprites.fieldMotes(SpellDefinition.THUNDER_TEMPEST, center.subtract(0, radius, 0), radius * 1.3, age, fade);
+        m.crystal(center, UP, radius * 0.48, radius * 0.72, 0xFFF4B0, fade * 0.38);
+        m.ring(center, X, Z, radius, 0.032, age * 0.045, 0xFFE45B, fade * 0.52);
+        m.ring(center, X, UP, radius * 0.92, 0.018, -age * 0.035, 0xFFF7C0, fade * 0.34);
+        // 外弧分批放电，保留雷的骤发感，不让十根电弧一直同时爆闪。
+        for (int i = 0; i < 6; i++) {
+            double pulse = (age + i * 7) % 30;
+            if (pulse > 10) continue;
+            double a = i * Math.PI / 3.0 + age * 0.035;
             double b = a * 1.7 + i;
             Vec3 out = center.add(Math.cos(a) * radius * 1.45, Math.sin(b) * radius * 1.2,
                     Math.sin(a) * radius * 1.45);
@@ -1627,9 +1908,12 @@ public final class ClientSpellVisuals {
     }
 
     /** 电磁爆炸：向外扩散的电环、放射电弧与冲天雷柱。 */
-    private static void tempestBlast(Mesh m, Vec3 center, double radius, double age, int duration, double fade) {
+    private static void tempestBlast(Mesh m, ClientSpellSprites sprites, Vec3 center, double radius,
+                                     double age, int duration, double fade) {
         double t = Math.clamp(age / Math.max(1.0, duration), 0.0, 1.0);
         double wave = radius * (0.15 + 0.85 * t);
+        // 雷暴炸裂：球面电弧粒子先铺满，再叠冲击环与地裂。
+        sprites.burstMotes(SpellDefinition.THUNDER_TEMPEST, center, radius, age, duration, fade * 1.2);
         m.ring(center, X, Z, wave, 0.10 * (1 - t) + 0.02, age * 0.06, 0xFFF19A, fade * 0.75);
         m.ring(center.add(0, 0.08, 0), X, Z, wave * 0.72, 0.05, -age * 0.05, 0xFFFFFF, fade * 0.55);
         for (int i = 0; i < 18; i++) {
@@ -1660,39 +1944,22 @@ public final class ClientSpellVisuals {
         }
     }
 
-    /** 毒雾：地面反向旋转的气环，叠一座由下往上收拢的半透明毒穹。 */
-    private static void venomMist(Mesh m, Vec3 center, double radius, double clock, double fade) {
+    /** 鸩羽千夜：封顶的一层流动薄膜，低处疏雾，内部留出战斗视野。 */
+    private static void venomMist(Mesh m, ClientSpellSprites sprites, Vec3 center, double radius,
+                                  double clock, double fade) {
         double base = Math.min(1.0, fade) * Math.min(1.0, radius / 6.0);
         if (base <= 0.01) return;
-        for (int i = 0; i < 3; i++) {
-            double r = radius * (1.0 - i * 0.15);
-            m.ring(center.add(0, 0.05 + i * 0.035, 0), X, Z, r, 0.055 - i * 0.014,
-                    clock * (0.006 + i * 0.004) * (i % 2 == 0 ? 1 : -1), 0x9ACD45,
-                    base * (0.42 - i * 0.10));
-        }
-        double height = Math.min(radius * 0.78, 16.0);
-        Vec3[] last = new Vec3[12];
-        for (int layer = 0; layer <= 5; layer++) {
-            double h = layer / 5.0;
-            Vec3 ring = center.add(0, height * h, 0);
-            double r = radius * Math.sqrt(Math.max(0.0, 1.0 - h * h));
-            double alpha = base * (0.22 - h * 0.13);
-            m.ring(ring, X, Z, r, 0.040, clock * 0.010 * (layer % 2 == 0 ? 1 : -1), 0xB9E06A, alpha);
-            for (int spoke = 0; spoke < 12; spoke++) {
-                double a = spoke * Math.PI / 6.0 + clock * 0.004;
-                Vec3 p = ring.add(Math.cos(a) * r, 0.0, Math.sin(a) * r);
-                if (layer > 0 && last[spoke] != null)
-                    m.beam(last[spoke], p, 0.020, 0x8FBF3A, base * 0.09);
-                last[spoke] = p;
-            }
-        }
-        // 雾里上下翻的孢子晶，让毒雾有厚度。
-        for (int i = 0; i < 8; i++) {
-            double a = i * 0.7854 + clock * 0.006;
-            double rise = ((clock * 0.35 + i * 1.7) % Math.max(1.0, height));
-            double r = radius * (0.25 + 0.6 * Math.sqrt((i + 1) / 8.0));
-            Vec3 p = center.add(Math.cos(a) * r, 0.25 + rise, Math.sin(a) * r);
-            m.crystal(p, UP, 0.060, 0.20, 0xD7F28A, base * 0.50);
+        // 毒雾服务端是球形范围，膜顶高度也必须等于半径，不能把有效区域露在罩外。
+        double height = radius;
+        sprites.venomMembrane(center, radius, height, clock, base);
+        sprites.fieldMotes(SpellDefinition.VENOM_NIGHT, center, radius * 0.9, clock, base * 0.6);
+        sprites.domainMotes(SpellDefinition.VENOM_NIGHT, center, radius, height, clock, base * 0.65, 0.55);
+        // 接地边缘用宽而淡的雾，不再画经纬线、辐条和多层圆环。
+        int count = sprites.minimal() ? 6 : 12;
+        for (int i = 0; i < count; i++) {
+            double a = i * Math.PI * 2 / count + clock * 0.002;
+            Vec3 p = center.add(Math.cos(a) * radius * 0.83, 0.20, Math.sin(a) * radius * 0.83);
+            sprites.smokeMotion(p, Math.min(1.6, radius * 0.12), 0x829C5D, base * 0.14, 419 + i);
         }
     }
 
@@ -1727,13 +1994,29 @@ public final class ClientSpellVisuals {
         private final VertexConsumer out;
         private final Matrix4f matrix;
         private final Vec3 camera;
-        Mesh(VertexConsumer out, Matrix4f matrix, Vec3 camera) { this.out = out; this.matrix = matrix; this.camera = camera; }
+        private final ClientSpellView view;
+        Mesh(VertexConsumer out, Matrix4f matrix, Vec3 camera, ClientSpellView view) {
+            this.out = out; this.matrix = matrix; this.camera = camera; this.view = view;
+        }
         void vertex(Vec3 p, int rgb, double alpha) {
             Vec3 relative = p.subtract(camera);
             out.addVertex(matrix, (float)relative.x, (float)relative.y, (float)relative.z)
-                    .setColor((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255, (int)(Math.clamp(alpha, 0, 1) * 255));
+                    .setColor((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255, (int)(Math.clamp(alpha * view.visibility(p), 0, 1) * 255));
         }
         void quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, double alpha) {
+            if (view.ownEffect && a.distanceToSqr(camera) < 36
+                    && (a.distanceToSqr(b) > 0.36 || a.distanceToSqr(d) > 0.36)) {
+                int n = 4;
+                for (int j = 0; j < n; j++) for (int i = 0; i < n; i++) {
+                    double u0 = i / (double)n, u1 = (i + 1) / (double)n;
+                    double v0 = j / (double)n, v1 = (j + 1) / (double)n;
+                    vertex(a.lerp(b, u0).lerp(d.lerp(c, u0), v0), color, alpha);
+                    vertex(a.lerp(b, u1).lerp(d.lerp(c, u1), v0), color, alpha);
+                    vertex(a.lerp(b, u1).lerp(d.lerp(c, u1), v1), color, alpha);
+                    vertex(a.lerp(b, u0).lerp(d.lerp(c, u0), v1), color, alpha);
+                }
+                return;
+            }
             vertex(a, color, alpha); vertex(b, color, alpha); vertex(c, color, alpha); vertex(d, color, alpha);
         }
         void beam(Vec3 a, Vec3 b, double width, int color, double alpha) {

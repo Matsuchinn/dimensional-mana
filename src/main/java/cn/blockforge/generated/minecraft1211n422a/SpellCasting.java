@@ -39,6 +39,14 @@ public final class SpellCasting {
     private static final Map<UUID, Map<SpellDefinition, Long>> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, TargetState> TARGETING = new HashMap<>();
     private static final int TARGETING_TIMEOUT_TICKS = 20 * 15;
+    /**
+     * 投射类基础法术的最大射程：八个区块（128 格）。
+     *
+     * <p>基础投射法术是瞬发的射线判定，射程就写在 {@code castLine} 的第三个参数上；
+     * 高级法术各有自己的手写数值，不走这个常量。射线仍然逐格被方块挡住，
+     * 所以这里的数字是「最远能打多远」，不是穿墙。</p>
+     */
+    static final double BASIC_PROJECTILE_RANGE = 8 * 16;
     private static final Map<UUID, Long> STUNNED = new HashMap<>();
     private static final Map<UUID, Long> NO_FALL = new HashMap<>();
     private static final Map<UUID, FlameBlessingState> FLAME_BLESSED = new HashMap<>();
@@ -541,23 +549,19 @@ public final class SpellCasting {
             return;
         }
         switch (spell) {
-            case ARCANE_RAY -> castLine(player, spell, 12, 16, 3, null);
+            case ARCANE_RAY -> castLine(player, spell, BASIC_PROJECTILE_RANGE, 16, 3, null);
             case ARCANE_WARD -> castAbsorption(player, spell, 300, 2, 0xD9B2FF);
             case ARCANE_SURGE -> castSurge(player);
-            case FIREBALL -> castLine(player, spell, 10, 8, 1, hit -> {
-                hit.setRemainingFireTicks(60);
-                queueSecondaryDamage(player, hit, 20);
-            });
+            case FIREBALL -> castBallistic(player, spell);
             case FLAME_BLESSING -> {
                 FLAME_BLESSED.put(player.getUUID(),
                         new FlameBlessingState(target.getUUID(), player.level().getGameTime() + 400,
                                 MagicStaffItem.heldStats(player).spellDamage(), true));
                 ElementReactionSystem.apply(player, player, ElementType.FIRE);
             }
-            case WATER_BOLT -> castLine(player, spell, 9, 6, 1, hit -> knockAway(player, hit, 2.0));
+            case WATER_BOLT -> castBallistic(player, spell);
             case MOISTURE -> castMoisture(player, target == null ? player : target);
-            case ICE_SPIKE -> castLine(player, spell, 10, 7, 1,
-                    hit -> hit.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 60, 2)));
+            case ICE_SPIKE -> castBallistic(player, spell);
             case ICE_SHIELD -> castAbsorption(player, spell, 240, 1, 0xA8ECFF);
             case ELECTRIC_SHOCK -> castElectric(player);
             case STATIC_FIELD -> {
@@ -565,22 +569,17 @@ public final class SpellCasting {
                 stun(enemy, 44);
                 if (enemy != null) ElementReactionSystem.apply(player, enemy, ElementType.LIGHTNING);
             }
-            case WIND_BLADE -> castLine(player, spell, 8, 5, 3, null);
+            case WIND_BLADE -> castBallistic(player, spell);
             case GALE_DASH -> castDash(player);
             case ROCKFALL -> castRockfall(player, target);
             case STONE_ARMOR -> applyArmor(player, STONE_ARMOR, 10, STONE_TOUGHNESS, 2, STONE_SLOW, -0.10, 400);
-            case THORNS -> castLine(player, spell, 9, 6, 1, hit -> THORNED.put(hit.getUUID(),
-                    new ThornState(player.getUUID(), hit.level().getGameTime() + 100,
-                            MagicStaffItem.heldStats(player).spellDamage(), true)));
+            case THORNS -> castBallistic(player, spell);
             case REJUVENATION -> castRejuvenation(player);
             case SHARP_EDGE -> castSharpEdge(player);
             case IRON_WALL -> applyArmor(player, IRON_ARMOR, 12, null, 0, IRON_SLOW, -0.15, 300);
-            case LIGHT_BOLT -> castLine(player, spell, 10, 7, 1, null);
+            case LIGHT_BOLT -> castBallistic(player, spell);
             case PURIFYING_LIGHT -> castPurifyingLight(player);
-            case POISON_BOLT -> castLine(player, spell, 9, 4, 1, hit -> {
-                hit.addEffect(new MobEffectInstance(MobEffects.POISON, 120, 0));
-                queueSecondaryDamage(player, hit, 25);
-            });
+            case POISON_BOLT -> castBallistic(player, spell);
             case CORROSION -> {
                 LivingEntity enemy = validEnemyTarget(player, target);
                 castCorrosion(player, enemy);
@@ -612,6 +611,55 @@ public final class SpellCasting {
 
     private static LivingEntity validEnemyTarget(ServerPlayer player, LivingEntity target) {
         return target != null && target != player && target.isAlive() && target.distanceToSqr(player) <= 144 ? target : null;
+    }
+
+    /**
+     * 发射一枚真正飞行的基础投射弹体。
+     *
+     * <p>以前这些法术走 {@link #castLine}：施法瞬间就把射线上的伤害全算完，再播一段飞行动画。
+     * 现在弹体沿准心自己飞，撞到生物或方块才由 {@link #ballisticHit} 结算，
+     * 所以「瞄准远处抬手就掉血」的情况不会再出现。</p>
+     */
+    private static void castBallistic(ServerPlayer player, SpellDefinition spell) {
+        NewSpellSystem.projectile(player, spell, player.getEyePosition(), player.getLookAngle(), 0);
+    }
+
+    /** 一枚基础投射弹体真正碰到生物时结算；数值与附加效果和原来的射线判定一致。 */
+    static void ballisticHit(ServerPlayer player, LivingEntity target, SpellDefinition spell) {
+        if (spell == SpellDefinition.SHARP_EDGE) { sharpEdgeHit(player, target); return; }
+        float damage = switch (spell) {
+            case FIREBALL -> 8;
+            case WATER_BOLT -> 6;
+            case ICE_SPIKE -> 7;
+            case WIND_BLADE -> 5;
+            case THORNS -> 6;
+            case LIGHT_BOLT -> 7;
+            case POISON_BOLT -> 4;
+            default -> 0;
+        };
+        if (damage <= 0) return;
+        magicDamage(player, target, damage, spell.element());
+        switch (spell) {
+            case FIREBALL -> {
+                target.setRemainingFireTicks(60);
+                queueSecondaryDamage(player, target, 20);
+            }
+            case WATER_BOLT -> knockAway(player, target, 2.0);
+            case ICE_SPIKE -> target.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 60, 2));
+            case THORNS -> THORNED.put(target.getUUID(), new ThornState(player.getUUID(),
+                    target.level().getGameTime() + 100, MagicStaffItem.heldStats(player).spellDamage(), true));
+            case POISON_BOLT -> {
+                target.addEffect(new MobEffectInstance(MobEffects.POISON, 120, 0));
+                queueSecondaryDamage(player, target, 25);
+            }
+            default -> { }
+        }
+    }
+
+    /** 弹体命中方块、命中目标或飞到射程尽头：在该点放一小段余韵（含命中音与元素痕迹）。 */
+    static void ballisticImpact(ServerPlayer player, SpellDefinition spell, Vec3 at) {
+        if (spell == SpellDefinition.FIREBALL) SpellEnvironmentSystem.igniteAt(player.serverLevel(), at, player);
+        SpellVisualPayload.send(player, spell, SpellVisualPayload.PROJECTILE_IMPACT, -1, at, at, 16);
     }
 
     private static void castLine(ServerPlayer player, SpellDefinition spell, double range, float damage,
@@ -647,13 +695,20 @@ public final class SpellCasting {
         }
         if (spell.element() == ElementType.FIRE) SpellEnvironmentSystem.igniteAlong(player, level, start, end);
         else if (spell.element() == ElementType.ICE) SpellEnvironmentSystem.freezeAlong(level, start, end);
-        visual(player, spell, start, end, visualAnchor, spell == SpellDefinition.THORNS ? 40 : 24);
+        // 奥术射线和电击是瞬间光束，按原来的短演出播放；
+        // 会飞出去的投射类必须按航程补时长，否则八个区块外的那一发会在半路被客户端清掉。
+        int ticks = switch (spell) {
+            case ARCANE_RAY, ELECTRIC_SHOCK -> 24;
+            case THORNS -> 40;
+            default -> SpellRange.visualTicks(length);
+        };
+        visual(player, spell, start, end, visualAnchor, ticks);
     }
 
     private static void castElectric(ServerPlayer player) {
-        LivingEntity first = firstTarget(player, 11);
+        LivingEntity first = firstTarget(player, BASIC_PROJECTILE_RANGE);
         if (first == null) {
-            castLine(player, SpellDefinition.ELECTRIC_SHOCK, 11, 10, 1, null);
+            castLine(player, SpellDefinition.ELECTRIC_SHOCK, BASIC_PROJECTILE_RANGE, 10, 1, null);
             return;
         }
         magicDamage(player, first, 10, ElementType.LIGHTNING);
@@ -741,8 +796,10 @@ public final class SpellCasting {
     }
 
     private static void castSharpEdge(ServerPlayer player) {
-        LivingEntity target = firstTarget(player, 10);
-        if (target == null) { castLine(player, SpellDefinition.SHARP_EDGE, 10, 9, 1, null); return; }
+        castBallistic(player, SpellDefinition.SHARP_EDGE);
+    }
+
+    private static void sharpEdgeHit(ServerPlayer player, LivingEntity target) {
         // 约三分之一使用绕甲魔法伤害；元素反应倍率同时作用于两部分。
         float armored = SpellAttributes.calculateSpellDamage(player, target, 6.0F);
         float combined = ElementReactionSystem.elementalDamage(player, target, ElementType.METAL, 3.0F + armored);
@@ -751,7 +808,6 @@ public final class SpellCasting {
         SpellDamage.hitSplitElement(player.serverLevel(), player, target, ElementType.METAL.id(),
                 3.0F * multiplier, player.serverLevel().damageSources().playerAttack(player),
                 armored * multiplier);
-        visual(player, SpellDefinition.SHARP_EDGE, player.getEyePosition(), target.getBoundingBox().getCenter(), -1, 22);
     }
 
     private static void castCorrosion(ServerPlayer caster, LivingEntity target) {

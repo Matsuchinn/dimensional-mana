@@ -1,0 +1,59 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "bonus_rolls": 0.0,
+      "entries": [
+        {
+          "type": "minecraft:alternatives",
+          "children": [
+            {
+              "type": "minecraft:item",
+              "conditions": [
+                {
+                  "condition": "minecraft:match_tool",
+                  "predicate": {
+                    "predicates": {
+                      "minecraft:enchantments": [
+                        {
+                          "enchantments": "minecraft:silk_touch",
+                          "levels": {
+                            "min": 1
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "functions": [
+                {
+                  "function": "minecraft:copy_components",
+                  "include": [
+                    "minecraft:bees"
+                  ],
+                  "source": "block_entity"
+                },
+                {
+                  "block": "dimensional_mana:corrupted_hive",
+                  "function": "minecraft:copy_state",
+                  "properties": [
+                    "facing",
+                    "honey_level"
+                  ]
+                }
+              ],
+              "name": "dimensional_mana:corrupted_hive"
+            },
+            {
+              "type": "minecraft:item",
+              "name": "dimensional_mana:corrupted_hive"
+            }
+          ]
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "dimensional_mana:blocks/corrupted_hive"
+}

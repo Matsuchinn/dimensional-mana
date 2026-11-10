@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "particle": "dimensional_mana:block/corrupted_honey_block_side",
+    "bottom": "dimensional_mana:block/corrupted_honey_block_side",
+    "side": "dimensional_mana:block/corrupted_honey_block_side",
+    "top": "dimensional_mana:block/corrupted_honey_block_top"
+  }
+}

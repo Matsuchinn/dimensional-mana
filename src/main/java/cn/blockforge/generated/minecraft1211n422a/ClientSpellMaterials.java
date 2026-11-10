@@ -33,6 +33,11 @@ final class ClientSpellMaterials {
                 ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, CollisionContext.empty()));
         return hit.getType() == HitResult.Type.MISS ? at : hit.getLocation().add(0, 0.025, 0);
     }
+    /** 元素色；奥术没有元素媒介，用统一的紫。 */
+    private static int spellColor(SpellDefinition spell) {
+        var element = spell.element();
+        return element == null ? 0xAE69FF : element.color() & 0xFFFFFF;
+    }
     boolean draw(SpellDefinition spell, Vec3 start, Vec3 end, Vec3 anchor, Vec3 floor,
                  double age, double duration, double alpha) {
         Vec3 dir = end.subtract(start).normalize();
@@ -41,17 +46,17 @@ final class ClientSpellMaterials {
         // 释放后四刻内完成飞行，命中后主体消失，避免弹体悬停在命中点。
         double travel = Math.min(1, age / 4.0), hitAge = Math.max(0, age - 4);
         Vec3 head = start.lerp(end, travel);
+        // 材质弹体（岩石、冰锥、毒液、钢刃……）本身不发光，补一层贴着材料的柔光，
+        // 让它们在夜里、洞穴里也能被看见，同时给实体一点"魔力感"。
+        if (age < 4 && alpha > 0.05) {
+            sprites.glow(ClientSpellSprites.GLOW_SOFT, head, 1.15, 0.0, spellColor(spell), alpha * 0.55);
+            sprites.glow(ClientSpellSprites.GLOW_SPARK, head, 0.65, age * 0.08,
+                    ClientSpellSprites.mix(spellColor(spell), 0xFFFFFF, 0.6), alpha * 0.45);
+        }
         switch (spell) {
             case FIREBALL -> {
                 if (age < 4) {
-                    // 一枚逐帧火焰核心，尾迹混用三种已有火星和烟雾，不再复制五枚同图火焰。
-                    flame(head, 0.58, age, alpha);
-                    for (int i = 1; i <= 7; i++) {
-                        double back = i * 0.12;
-                        Vec3 p = head.subtract(dir.scale(back)).add(right.scale(Math.sin(i * 2.15) * 0.045));
-                        sprites.fireParticle(p, i, 0.08 + (i % 3) * 0.022, alpha * (0.78 - i * 0.075));
-                        if (i % 2 == 0) puff(p.add(0, 0.02, 0), 0.08 + i * 0.018, 0x8C837E, alpha * 0.20);
-                    }
+                    sprites.projectileCore(spell, head, dir, 0.58, age, alpha);
                 } else {
                     double spread = Math.min(1, hitAge / 5);
                     for (int i = 0; i < 11; i++) {
@@ -76,9 +81,8 @@ final class ClientSpellMaterials {
                 boolean poison = spell == SpellDefinition.POISON_BOLT;
                 int tint = poison ? 0x9AC245 : 0xB4EBFF;
                 if (age < 4) {
-                    blob(head, 0.23, 0.30, age, tint, alpha * 0.9);
-                    for (int i = 1; i < 5; i++) blob(head.subtract(dir.scale(i * 0.16)), 0.13 - i * 0.018,
-                            0.14, age + i, tint, alpha * 0.7);
+                    blob(head, 0.14, 0.18, age, tint, alpha * 0.65);
+                    sprites.projectileCore(spell, head, dir, 0.38, age, alpha);
                 } else {
                     droplets(end, hitAge, 10, tint, alpha, 0.09);
                     if (poison) {
@@ -233,6 +237,23 @@ final class ClientSpellMaterials {
         return true;
     }
 
+    void livingRoots(Vec3 center, double radius, double age, double alpha) {
+        int clusters = sprites.minimal() ? 8 : 16;
+        for (int i = 0; i < clusters; i++) {
+            double angle = i * Math.PI * 2 / clusters + Math.sin(i * 2.4) * 0.06;
+            Vec3 radial = new Vec3(Math.cos(angle), 0, Math.sin(angle));
+            Vec3 tangent = new Vec3(-radial.z, 0, radial.x);
+            Vec3 base = center.add(radial.scale(radius * (0.94 + 0.04 * Math.sin(i * 1.7))));
+            Vec3 tip = base.add(radial.scale(0.46)).add(0, 0.12, 0);
+            stem(base.subtract(radial.scale(0.85)), base.add(0, 0.11, 0), 0.055, alpha * 0.85);
+            stem(base.add(0, 0.11, 0), tip, 0.032, alpha * 0.85);
+            for (int leaf = 0; leaf < 3; leaf++) {
+                Vec3 p = base.add(tangent.scale((leaf - 1) * 0.17)).add(0, 0.18 + leaf * 0.06, 0);
+                leaf(p, 0.18 + (i % 3) * 0.02, angle + leaf * 1.5 + Math.sin(age * 0.025 + i) * 0.12, alpha);
+            }
+        }
+    }
+
     private void droplets(Vec3 at, double age, int count, int color, double alpha, double size) {
         for (int i = 0; i < count; i++) {
             double a = i * 2.399, speed = 0.045 + (i % 3) * 0.015;
@@ -280,15 +301,7 @@ final class ClientSpellMaterials {
             sprites.fireParticle(p, i, 0.075 + radius * 0.042, 0.82);
             if (i % 3 == 0) puff(p, 0.14 + radius * 0.035, 0x7A4030, 0.20);
         }
-        if (sun.isReleased()) {
-            // 飞行拖尾：火舌逐节变小，烟在后方散开。
-            for (int i = 1; i <= 7; i++) {
-                Vec3 p = at.subtract(dir.scale(i * 0.36)).add(
-                        side(dir).scale(Math.sin(age * 0.22 + i) * 0.06));
-                sprites.fireParticle(p, i + 3, 0.11 + radius * 0.040, Math.max(0.14, 0.72 - i * 0.075));
-                if (i % 2 == 0) puff(p.add(0, 0.10, 0), 0.16 + i * 0.025, 0x6E4A3C, 0.24);
-            }
-        }
+        // 释放后的烟火轨迹由 ClientSpellTrails 保存在世界坐标，命中后也会自然消散。
     }
 
     void drawProjectile(SpellProjectile entity, float partial) {
@@ -296,16 +309,14 @@ final class ClientSpellMaterials {
         Vec3 dir = entity.getDeltaMovement().normalize();
         if (dir.lengthSqr() < 0.01) dir = entity.getLookAngle();
         double age = entity.tickCount + partial;
+        // 保留材质专属造型；火弹自身已有底光，其他弹体才额外衬光。
+        if (entity.spell() != SpellDefinition.PYROBLAST) sprites.headGlow(entity.spell(), at, dir, age, 1.0);
         switch (entity.spell()) {
             case ROCK_ORBS -> box(STONE, at, 0.5, 0.5, 0.5, age * 0.10, age * 0.075, 0xFFFFFF, 1);
-            case PYROBLAST -> {
-                flame(at, 0.85, age, 1);
-                for (int i = 1; i <= 9; i++) {
-                    Vec3 p = at.subtract(dir.scale(i * 0.19)).add(side(dir).scale(Math.sin(age * 0.24 + i * 2.1) * 0.07));
-                    sprites.fireParticle(p, i, 0.10 + i % 3 * 0.035, Math.max(0.16, 0.92 - i * 0.08));
-                    if (i % 3 == 0) puff(p, 0.12 + i * 0.015, 0x665A57, 0.28);
-                }
-            }
+            case PYROBLAST -> sprites.projectileCore(entity.spell(), at, dir, 0.85, age + entity.getId() * 0.73, 1);
+            // 基础投射现在是真的在飞：本体按 r386 的元素动画核心播放。
+            case FIREBALL, WATER_BOLT, ICE_SPIKE, WIND_BLADE, THORNS, LIGHT_BOLT, POISON_BOLT, SHARP_EDGE ->
+                    drawBallisticHead(entity.spell(), at, dir, age, entity.getId());
             case WATER_PYTHON -> {
                 Vec3 side = side(dir);
                 // 蛇头至尾尖总长五格；尾部波浪在局部侧轴上摆动。
@@ -316,24 +327,59 @@ final class ClientSpellMaterials {
                 }
                 crystal(ICE, at.add(dir.scale(0.2)), dir, 0.16, 0.45, 0xDEF9FF, 0.8);
             }
-            case FLAME_SLASH, GALE_SLASHES -> {
-                Vec3 sideways = side(dir);
-                if (entity.spell() == SpellDefinition.GALE_SLASHES && entity.index() == 1) sideways = dir.cross(sideways).normalize();
-                for (int i = 0; i <= 20; i++) {
-                    double t = i / 20.0, offset = (t - 0.5) * 5;
-                    Vec3 p = at.add(sideways.scale(offset)).subtract(dir.scale(offset * offset * 0.12));
-                    if (entity.spell() == SpellDefinition.FLAME_SLASH) {
-                        // 斩击主体仅放七簇逐帧火焰，间隙用三种火星图案和烟边连接。
-                        if (i % 3 == 0) flame(p, 0.30 + 0.14 * Math.sin(Math.PI * t), age + i * 1.7, 0.92);
-                        else sprites.fireParticle(p.add(0, Math.sin(i * 1.8) * 0.06, 0), i,
-                                0.105 + i % 3 * 0.025, 0.88);
-                        if (i % 4 == 2) puff(p.subtract(dir.scale(0.05)), 0.13, 0x665A57, 0.20);
-                    } else crystal(LIQUID, p, dir, 0.07, 0.3, 0xC9FFE9, 0.86);
-                }
-            }
+            // 斩击用整段刀光贴图横着切过去，不再是一串火苗或水珠排成一条线。
+            case FLAME_SLASH, GALE_SLASHES -> drawSlashBlade(entity, at, dir, age);
             default -> { }
         }
     }
+
+    /** 基础投射弹体的本体：沿用 r386 的元素动画核心，不套方块表面。 */
+    private void drawBallisticHead(SpellDefinition spell, Vec3 at, Vec3 dir, double clock, int seed) {
+        switch (spell) {
+            // 每颗弹体按实体 id 错开一点相位，同屏多发火球不会同步跳同一帧。
+            case FIREBALL -> sprites.projectileCore(spell, at, dir, 0.58, clock + (seed & 7) * 0.37, 1.0);
+            case WATER_BOLT, POISON_BOLT -> {
+                int tint = spell == SpellDefinition.POISON_BOLT ? 0x9AC245 : 0xB4EBFF;
+                blob(at, 0.14, 0.18, clock, tint, 0.65);
+                sprites.projectileCore(spell, at, dir, 0.38, clock, 1.0);
+            }
+            case ICE_SPIKE -> {
+                crystal(ICE, at, dir, 0.21, 0.88, 0xF5FDFF, 1.0);
+                crystal(ICE, at.add(side(dir).scale(0.23)).subtract(dir.scale(0.24)), dir, 0.085, 0.48, 0xBDDFFF, 0.92);
+                crystal(ICE, at.subtract(side(dir).scale(0.20)).subtract(dir.scale(0.31)), dir, 0.075, 0.40, 0xD8F4FF, 0.88);
+            }
+            case WIND_BLADE -> sprites.horizontalSlash(2, at, horizontalSide(dir), dir, 0.92, 0.42, 0.95);
+            case THORNS -> {
+                for (int i = 0; i < 5; i++) {
+                    double a = i * 1.257 + clock * 0.11;
+                    Vec3 outward = new Vec3(Math.cos(a) * 0.8, Math.sin(a * 2.1) * 0.7, Math.sin(a) * 0.8).normalize();
+                    crystal(VINE, at.add(outward.scale(0.10)), outward, 0.06, 0.30, 0xDDD7A9, 0.95);
+                }
+                blob(at, 0.13, 0.16, clock, 0x6E8A3A, 0.7);
+            }
+            case SHARP_EDGE -> {
+                for (int i = 0; i < 3; i++)
+                    crystal(STEEL, at.add(side(dir).scale((i - 1) * 0.26)), dir, 0.09, 0.75, 0xFFFFFF, 1.0);
+            }
+            case LIGHT_BOLT -> sprites.projectileCore(spell, at, dir, 0.46, clock, 1.0);
+            default -> { }
+        }
+    }
+
+    private void drawSlashBlade(SpellProjectile entity, Vec3 at, Vec3 dir, double age) {
+        boolean wind = entity.spell() == SpellDefinition.GALE_SLASHES;
+        int tile = (wind ? 0 : 4) + (age < 2 ? 0 : age < 4 ? 1 : age < 7 ? 2 : 3);
+        Vec3 across = horizontalSide(dir);
+        // 不跟镜头旋转；低头抬头时整个横切面随弹道俯仰。
+        sprites.horizontalSlash(tile, at, across, dir, 2.75, 1.45, 0.96);
+        sprites.slash(tile, at.subtract(dir.scale(0.38)), across, dir, 2.61, 1.32, 0.22, false);
+    }
+
+    private static Vec3 horizontalSide(Vec3 direction) {
+        Vec3 side = direction.cross(UP);
+        return side.lengthSqr() < 0.0001 ? X : side.normalize();
+    }
+
     boolean drawNew(SpellDefinition spell, Vec3 start, Vec3 end, Vec3 anchor, Vec3 floor,
                     double age, double duration, double alpha, boolean attached, int phase) {
         switch (spell) {
@@ -434,7 +480,7 @@ final class ClientSpellMaterials {
         sprites.flame(p, size, age, alpha);
     }
     private void puff(Vec3 p, double size, int color, double alpha) {
-        sprite(SMOKE, p, size, size, 0, color, alpha, false);
+        sprites.smokeMotion(p, size, color, alpha);
     }
     private void leaf(Vec3 p, double size, double spin, double alpha) {
         sprite(LEAF, p, size, size, spin, 0xFFFFFF, alpha, false);
@@ -497,13 +543,27 @@ final class ClientSpellMaterials {
             color = ((int)((color >> 16 & 255) * factor) << 16) | ((int)((color >> 8 & 255) * factor) << 8) | (int)((color & 255) * factor);
         }
         VertexConsumer out = source.getBuffer(mat.type);
+        if (sprites.view().ownEffect && a.distanceToSqr(camera) < 36
+                && (a.distanceToSqr(b) > 0.25 || a.distanceToSqr(d) > 0.25)) {
+            // 近景护甲面也需要局部开口：四个外角都在屏幕边缘时不能漏掉面中心。
+            int n = 5;
+            for (int j = 0; j < n; j++) for (int i = 0; i < n; i++) {
+                float u0 = i / (float)n, u1 = (i + 1) / (float)n;
+                float v0 = j / (float)n, v1 = (j + 1) / (float)n;
+                vertex(out, a.lerp(b, u0).lerp(d.lerp(c, u0), v0), u0, v0, color, alpha, emissive);
+                vertex(out, a.lerp(b, u1).lerp(d.lerp(c, u1), v0), u1, v0, color, alpha, emissive);
+                vertex(out, a.lerp(b, u1).lerp(d.lerp(c, u1), v1), u1, v1, color, alpha, emissive);
+                vertex(out, a.lerp(b, u0).lerp(d.lerp(c, u0), v1), u0, v1, color, alpha, emissive);
+            }
+            return;
+        }
         vertex(out, a, 0, 0, color, alpha, emissive); vertex(out, b, 1, 0, color, alpha, emissive);
         vertex(out, c, 1, 1, color, alpha, emissive); vertex(out, d, 0, 1, color, alpha, emissive);
     }
     private void vertex(VertexConsumer out, Vec3 p, float u, float v, int color, double alpha, boolean emissive) {
         Vec3 r = p.subtract(camera);
         out.addVertex(matrix, (float)r.x, (float)r.y, (float)r.z)
-                .setColor(color >> 16 & 255, color >> 8 & 255, color & 255, (int)(Math.clamp(alpha, 0, 1) * 255))
+                .setColor(color >> 16 & 255, color >> 8 & 255, color & 255, (int)(Math.clamp(alpha * sprites.view().visibility(p), 0, 1) * 255))
                 .setUv(u, v).setLight(emissive ? 0xF000F0 : light);
     }
     private static Vec3 side(Vec3 dir) { return dir.cross(Math.abs(dir.y) > 0.9 ? X : UP).normalize(); }

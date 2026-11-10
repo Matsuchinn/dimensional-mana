@@ -1,0 +1,8 @@
+{
+  "type": "neoforge:add_features",
+  "biomes": "dimensional_mana:corrupted_wasteland",
+  "features": [
+    "dimensional_mana:corrupted_nest"
+  ],
+  "step": "top_layer_modification"
+}

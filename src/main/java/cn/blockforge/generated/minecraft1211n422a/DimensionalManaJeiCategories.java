@@ -206,6 +206,25 @@ public final class DimensionalManaJeiCategories {
                 }
                 return stacks;
             }
+            // 通用物品标签（如 #planks → minecraft:planks）：按标签展开成全部候选物品，
+            // 与加工台 matchesIngredient 的按标签匹配口径一致。之前这里没有兜底，
+            // "#planks" 会落到最后一行去 MOD_ITEMS 里查，直接 NPE，整条配方从 JEI 里消失。
+            if (id.startsWith("#")) {
+                String tagPath = id.substring(1);
+                ResourceLocation tagId = tagPath.indexOf(':') >= 0
+                        ? ResourceLocation.parse(tagPath)
+                        : ResourceLocation.withDefaultNamespace(tagPath);
+                List<ItemStack> stacks = new ArrayList<>();
+                net.minecraft.tags.TagKey<net.minecraft.world.item.Item> tag = net.minecraft.tags.TagKey.create(
+                        net.minecraft.core.registries.Registries.ITEM, tagId);
+                for (net.minecraft.core.Holder<net.minecraft.world.item.Item> holder
+                        : BuiltInRegistries.ITEM.getTagOrEmpty(tag)) {
+                    ItemStack stack = new ItemStack(holder.value(), count);
+                    if (!stack.isEmpty()) stacks.add(stack);
+                }
+                // 标签暂时解析不出来就显示空槽，别让异常把整条配方挤出 JEI。
+                return stacks;
+            }
             ItemStack stack = id.startsWith("minecraft:")
                     ? new ItemStack(BuiltInRegistries.ITEM.get(ResourceLocation.parse(id)), count)
                     : new ItemStack(GeneratedMod.MOD_ITEMS.get(id).get(), count);

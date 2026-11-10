@@ -212,6 +212,14 @@ public final class ManaEvents {
         if (event.getSource().is(net.neoforged.neoforge.common.Tags.DamageTypes.IS_MAGIC)) {
             incoming *= (float)MagicEquipment.magicDamageMultiplier(target);
         }
+        // 魔蚀蜂蜜块的独立乘区：身体接触蜜砖（泡在里面或踩在顶上）的生物/玩家，
+        // 受到的法术类伤害 −45%。乘算放在这条链上，与元素镀层、护甲各自结算，
+        // 任何数量的减伤叠在一起也不会直接封顶成免疫。
+        if ((SpellDamage.isSpell(event.getSource())
+                || event.getSource().is(net.neoforged.neoforge.common.Tags.DamageTypes.IS_MAGIC))
+                && CorruptedHoneyBlock.isTouching(target)) {
+            incoming *= 0.55F;
+        }
         // 高频声波无视眩晕落空、荆棘反制这类受击修正，直接进入斗气结算。
         if (!SonicSpells.isSonic(event.getSource())) {
             float spellAdjustedDamage = SpellCasting.modifyIncomingAttack(target, event.getSource(), incoming);
@@ -489,6 +497,8 @@ public final class ManaEvents {
         MagicStaffItem.syncSpellPowerAttribute(living);
         NaturalElementSystem.tick(living);
         MagicEtchingSystem.tickLiving(living);
+        // 魔蚀层数：身上没有魔蚀时每 5 秒退 1 层（有魔蚀就冻结，打起来才叠得上去）。
+        MagicErosionEffect.tickLiving(living);
         SpellCasting.tickLiving(living);
         NewSpellSystem.tickLiving(living);
         SpellEnvironmentSystem.tickLiving(living);

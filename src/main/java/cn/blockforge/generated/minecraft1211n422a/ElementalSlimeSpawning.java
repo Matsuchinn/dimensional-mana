@@ -44,6 +44,26 @@ public final class ElementalSlimeSpawning {
     private static final float COMMON_SLIME_THIN_CHANCE = 0.25F;
     private static final int LOCAL_CAP = 16;
     private static final double LOCAL_RADIUS = 56.0;
+    /**
+     * 蚀魔荒原的生态名单只有四种：变异体、魔素史莱姆、秽蚀蠹、秽蚀蜂。
+     *
+     * <p>其它元素史莱姆在这片群系里几乎不出现——木、风两种本来是最容易抽中的
+     * （森林/平原兜底 + 高空风点），玩家在荒原上看到的却是一片绿史莱姆和风史莱姆。
+     * 抽中以后只留 4% 的几率真的刷出来。</p>
+     */
+    private static final float WASTELAND_OTHER_SLIME_CHANCE = 0.04F;
+    /**
+     * 魔素史莱姆是荒原的「少量点缀」，不是主角：抽中以后再按这个几率放弃这一次。
+     *
+     * <p>以前魔素史莱姆几乎占满了整个荒原的刷怪容量（矿簇、魔晶洞穴两个判定在荒原里
+     * 一抽一个准），结果本该少量生成的秽蚀蠹被挤得刷不出来。</p>
+     */
+    private static final float WASTELAND_MANA_THIN_CHANCE = 0.70F;
+    /** 荒原里元素史莱姆的本地保有量上限：身边一两三只就是「少量」，其余容量留给变异体。 */
+    private static final int WASTELAND_LOCAL_CAP = 3;
+    private static final double WASTELAND_LOCAL_RADIUS = 48.0;
+    /** 荒原里的魔晶洞穴也按荒原的规矩补刷，顶多补到两三只。 */
+    private static final int WASTELAND_CAVE_CAP = 3;
     private static final int TRIES = 10;
     private static final int NORMAL_CAVE_CAP = 7;
     private static final int LARGE_CAVE_CAP = 14;
@@ -65,7 +85,11 @@ public final class ElementalSlimeSpawning {
             if (random.nextFloat() > ATTEMPT_CHANCE) continue;
             // 洞穴定额守卫优先补齐，不受周围普通环境史莱姆上限影响。
             if (topUpManaCave(level, player, random)) continue;
-            if (localCount(level, player.position(), LOCAL_RADIUS) >= LOCAL_CAP) continue;
+            // 蚀魔荒原的保有量单独算：这里只留少量魔素史莱姆，剩下的刷怪容量给变异体和秽蚀蠹。
+            boolean wasteland = CorruptedWastelandBiome.is(level.getBiome(player.blockPosition()));
+            int cap = wasteland ? WASTELAND_LOCAL_CAP : LOCAL_CAP;
+            double radius = wasteland ? WASTELAND_LOCAL_RADIUS : LOCAL_RADIUS;
+            if (localCount(level, player.position(), radius) >= cap) continue;
             SpawnPick pick = findPick(level, player, random);
             if (pick == null) continue;
             if (isCommonVariant(pick.variant()) && random.nextFloat() < COMMON_SLIME_THIN_CHANCE) continue;
@@ -124,6 +148,11 @@ public final class ElementalSlimeSpawning {
         boolean large = ManaCaveData.get(level).isLarge(cave);
         int cap = large ? LARGE_CAVE_CAP : NORMAL_CAVE_CAP;
         int guaranteedElites = large ? 4 : 2;
+        // 蚀魔荒原里的洞穴只是荒原的一部分：那里魔素史莱姆只保留少量，不给精英、也不补满。
+        if (CorruptedWastelandBiome.is(level.getBiome(cave))) {
+            cap = Math.min(cap, WASTELAND_CAVE_CAP);
+            guaranteedElites = 0;
+        }
         int radius = large ? 40 : 28;
         int existing = level.getEntitiesOfClass(ElementalSlime.class, new AABB(cave).inflate(radius),
                 slime -> slime.variant() == ElementalSlimeVariant.MANA).size();
@@ -486,7 +515,11 @@ public final class ElementalSlimeSpawning {
         // 史莱姆驱逐火把：这里是所有元素史莱姆刷怪的公共出口，先按中心点拦一次；
         // 落点会随机偏 ±3 格，所以下面挑到实际落脚点后还会再拦一次。
         if (SlimeRepellentTorchEvents.spawnBlocked(level, pos)) return;
+        // 蚀魔荒原的生态闸门：环境刷新、洞穴补刷、雷击召怪、声响召怪全都要过这一关。
+        // 逐只判定，一次刷三只也不会整批漏过去。
+        boolean wasteland = CorruptedWastelandBiome.is(level.getBiome(pos));
         for (int i = 0; i < count; i++) {
+            if (wasteland && !wastelandSpawnAllowed(level, variant)) continue;
             ElementalSlime slime = GeneratedMod.elementalSlimeType(variant).create(level);
             if (slime == null) continue;
             ElementalSlimeTier tier = forcedTier != null ? forcedTier : ElementalSlimeTier.roll(level.random);
@@ -529,6 +562,19 @@ public final class ElementalSlimeSpawning {
             if (persistent || variant == ElementalSlimeVariant.SOUND) slime.setPersistenceRequired();
             level.addFreshEntity(slime);
         }
+    }
+
+    /**
+     * 蚀魔荒原里这一只元素史莱姆放不放行。
+     *
+     * <p>荒原的生态只认变异体、魔素史莱姆、秽蚀蠹、秽蚀蜂：别的元素史莱姆（木、风最常见，
+     * 还有水、冰、火……）只留极小概率，魔素史莱姆也要再稀释七成。
+     * 这样荒原的刷怪容量才腾得出来给变异体，和「本来就该少量生成」的秽蚀蠹。</p>
+     */
+    private static boolean wastelandSpawnAllowed(ServerLevel level, ElementalSlimeVariant variant) {
+        if (variant != ElementalSlimeVariant.MANA)
+            return level.random.nextFloat() < WASTELAND_OTHER_SLIME_CHANCE;
+        return level.random.nextFloat() >= WASTELAND_MANA_THIN_CHANCE;
     }
 
     /**

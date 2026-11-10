@@ -53,9 +53,11 @@ public record SpellVisualPayload(String spellId, int phase, int owner, int ancho
             /** 鸣球结束，移除对应可视化。 */ SONIC_ORB_END = 40,
             /** 高频声波；end.y 与 start.y 的差值表示水平半径，起点是发出声波的鸣球。 */ SONIC_WAVE = 41,
             /** 沿攻击来向反射的声波；起点是施法者，终点是反射方向八格内。 */ SONIC_REFLECT = 42,
-            /** 鸣球碰到生物时的小型爆震圈。 */ SONIC_TOUCH = 43;
-    /** 客户端接受的最大阶段编号；以后再加视觉阶段要同步抬高，否则会被直接过滤掉。 */
-    public static final int MAX_PHASE = SONIC_TOUCH;
+            /** 鸣球碰到生物时的小型爆震圈。 */ SONIC_TOUCH = 43,
+            /** 实体弹体出手：只播手边短促释放，不冒充命中。 */ PROJECTILE_LAUNCH = 44,
+            /** 服务端确认接触后的命中演出，不再重新播放四刻弹头动画。 */ PROJECTILE_IMPACT = 45;
+    /** 客户端接受的最大阶段编号。 */
+    public static final int MAX_PHASE = PROJECTILE_IMPACT;
     public static final Type<SpellVisualPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(
             GeneratedMod.MOD_ID, "spell_visual"));
     public static final StreamCodec<RegistryFriendlyByteBuf, SpellVisualPayload> STREAM_CODEC = StreamCodec.of(
@@ -86,7 +88,12 @@ public record SpellVisualPayload(String spellId, int phase, int owner, int ancho
         SpellVisualPayload payload = new SpellVisualPayload(spell.id(), phase, caster.getId(), anchor, start, end, duration);
         if (caster.level() instanceof ServerLevel level) {
             // 直接按施法点广播，不依赖实体追踪列表刚好已经刷新；避免 NPC 法术偶发漏动画。
-            PacketDistributor.sendToPlayersNear(level, null, start.x, start.y, start.z, 96.0, payload);
+            // 射程拉长以后，命中点可能在八个区块开外：以起止点中点为圆心、按航程放宽半径，
+            // 站在目标附近的玩家也看得到那一发的命中演出，而不是只有施法者收到包。
+            double span = Math.min(start.distanceTo(end), SpellRange.MAX_VISUAL_SPAN);
+            Vec3 center = span < 1.0 ? start : start.lerp(end, 0.5);
+            double radius = Math.max(96.0, span * 0.5 + 64.0);
+            PacketDistributor.sendToPlayersNear(level, null, center.x, center.y, center.z, radius, payload);
         }
     }
 

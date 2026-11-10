@@ -122,6 +122,8 @@ public final class ClientModEvents {
         NeoForge.EVENT_BUS.addListener(ClientModEvents::antiVoidFogDistance);
         NeoForge.EVENT_BUS.addListener(ClientModEvents::replaceMagicCrystalAnvilScreen);
         NeoForge.EVENT_BUS.addListener(AdvancementBackground::onBackgroundRendered);
+        // 秽蚀蜂嗡鸣：把原版蜜蜂的循环音实例换成链锯刮擦味的自制音（见 CorruptedBeeHumInstance）。
+        NeoForge.EVENT_BUS.addListener(ClientModEvents::onBeeHumSound);
         NeoForge.EVENT_BUS.addListener(ClientSpellVisuals::tick);
         NeoForge.EVENT_BUS.addListener(ClientSpellVisuals::render);
         NeoForge.EVENT_BUS.addListener(ClientParryVisuals::tick);
@@ -605,6 +607,37 @@ public final class ClientModEvents {
         }
     }
 
+    /** {@code BeeSoundInstance.bee} 是受保护字段，反射读它来认出这只蜂是不是秽蚀蜂；读不到就放弃替换。 */
+    private static final java.lang.reflect.Field BEE_SOUND_BEE_FIELD = findBeeSoundField();
+
+    private static java.lang.reflect.Field findBeeSoundField() {
+        try {
+            java.lang.reflect.Field field =
+                    net.minecraft.client.resources.sounds.BeeSoundInstance.class.getDeclaredField("bee");
+            field.setAccessible(true);
+            return field;
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 原版客户端给每只 {@code Bee} 挂一个循环嗡鸣实例（音事件写死成 BEE_LOOP），
+     * 这里在发声的瞬间把它换成秽蚀蜂自家的刺耳嗡鸣——反射失败就维持原声，不会报错。
+     */
+    private static void onBeeHumSound(net.neoforged.neoforge.client.event.sound.PlaySoundEvent event) {
+        if (BEE_SOUND_BEE_FIELD == null) return;
+        net.minecraft.client.resources.sounds.SoundInstance sound = event.getSound();
+        if (!(sound instanceof net.minecraft.client.resources.sounds.BeeSoundInstance)) return;
+        try {
+            if (BEE_SOUND_BEE_FIELD.get(sound) instanceof CorruptedBeeEntity bee) {
+                event.setSound(new CorruptedBeeHumInstance(bee));
+            }
+        } catch (ReflectiveOperationException e) {
+            // 读不到实体就随它放原版声，绝不因此炸掉声音引擎。
+        }
+    }
+
     private static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(GeneratedMod.WANDERING_WITCH.get(), WanderingWitchRenderer::new);
         event.registerEntityRenderer(GeneratedMod.ADVENTURER.get(), AdventurerRenderer::new);
@@ -629,6 +662,10 @@ public final class ClientModEvents {
         // 魔蚀骸骨与它的两种魂火箭矢。
         event.registerEntityRenderer(GeneratedMod.CORRUPTED_SKELETON.get(), CorruptedSkeletonRenderer::new);
         event.registerEntityRenderer(GeneratedMod.CORRUPTED_WEAVER.get(), CorruptedWeaverRenderer::new);
+        // 秽蚀蠹：原版蠹虫模型 + 紫蓝甲壳贴图，每蜕一层皮整只缩一圈。
+        event.registerEntityRenderer(GeneratedMod.CORRUPTED_SILVERFISH.get(), CorruptedSilverfishRenderer::new);
+        // 秽蚀蜂：原版蜜蜂模型 + 紫黑贴图。
+        event.registerEntityRenderer(GeneratedMod.CORRUPTED_BEE.get(), CorruptedBeeRenderer::new);
         // r250 流浪剑士：GeckoLib 骨骼动画渲染（玩家比例模型 + 独立皮肤 + 模型内长剑）。
         event.registerEntityRenderer(GeneratedMod.WANDERING_SWORDMASTER.get(), SwordmasterRenderer::new);
         event.registerEntityRenderer(GeneratedMod.WEB_PROJECTILE.get(), WebProjectileRenderer::new);
@@ -834,6 +871,37 @@ public final class ClientModEvents {
                     "effect.dimensional_mana.goblin_dread.remove").withStyle(ChatFormatting.GOLD));
             event.getTooltip().add(Component.translatable(
                     "effect.dimensional_mana.goblin_dread.death").withStyle(ChatFormatting.GRAY));
+            return;
+        }
+        // 【狂化】：只挂在被虫群意识叫来的节肢动物身上；写成数值是方便玩家 /effect 试出来时看懂。
+        if (event.getEffectInstance().is(GeneratedMod.HIVE_FRENZY)) {
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.hive_frenzy.speed").withStyle(ChatFormatting.RED));
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.hive_frenzy.resist").withStyle(ChatFormatting.GOLD));
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.hive_frenzy.source").withStyle(ChatFormatting.DARK_GRAY));
+            return;
+        }
+        // 【魔蚀】的深渊侵蚀阶层：层数、当前跳伤、离下一阶层还差几层，一次写清。
+        if (event.getEffectInstance().is(GeneratedMod.MAGIC_EROSION)) {
+            int amplifier = event.getEffectInstance().getAmplifier();
+            int layers = ClientErosionState.layersFor(amplifier);
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.magic_erosion.layers",
+                    String.format(java.util.Locale.ROOT, "%,d", layers),
+                    String.format(java.util.Locale.ROOT, "%,d", MagicErosionEffect.MAX_LAYERS),
+                    MagicErosionEffect.tierOf(layers)).withStyle(ChatFormatting.GRAY));
+            event.getTooltip().add(Component.translatable(
+                    "effect.dimensional_mana.magic_erosion.damage",
+                    MagicErosionEffect.damageText(MagicErosionEffect.damageOf(layers)))
+                    .withStyle(ChatFormatting.RED));
+            int toNext = MagicErosionEffect.layersToNextTier(layers);
+            event.getTooltip().add(toNext <= 0
+                    ? Component.translatable("effect.dimensional_mana.magic_erosion.max")
+                            .withStyle(ChatFormatting.DARK_RED)
+                    : Component.translatable("effect.dimensional_mana.magic_erosion.next", toNext)
+                            .withStyle(ChatFormatting.DARK_PURPLE));
             return;
         }
         if (!event.getEffectInstance().is(GeneratedMod.MANA_EXHAUSTION)) return;

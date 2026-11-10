@@ -57,10 +57,14 @@ public class LumeliaPlantBlock extends ManaPlantBlock {
     private static final int MAX_STACK = 3;
     /** 贴墙的一株最多爬四段（崖壁矮的地方在崖顶自己就停了，到不了这个上限）。 */
     private static final int MAX_WALL_STACK = 4;
-    /** 每次随机刻往上长一格的概率。 */
+    /** 每次随机刻往上长一格的概率；魔素浓度 15～19 的「100%」档就是它。 */
     private static final float GROW_CHANCE = 0.35F;
     /** 贴墙形态顺着岩壁往上爬的概率。 */
     private static final float CLIMB_CHANCE = 0.5F;
+    /** 魔素浓度低于这个值，卢梅莉亚完全不生长。 */
+    private static final double MIN_GROWTH_MANA = 12.0;
+    /** 一轮随机刻最多长两格（浓度 ≥19 的「150%」档）。 */
+    private static final int MAX_GROWTH_PER_TICK = 2;
 
     private static final VoxelShape GROUND_SHAPE = Block.box(2.0, 0.0, 2.0, 14.0, 13.0, 14.0);
     // 贴墙形态是从墙面往外伸出约 8 格的立体植株，判定框跟着加深（原来只有 3 格，薄得像张纸）。
@@ -212,6 +216,10 @@ public class LumeliaPlantBlock extends ManaPlantBlock {
     /**
      * 随机刻：先把分段状态修正一遍（旧存档里的叠格植株在这里自愈），再让最上面那一格往上长。
      * 贴墙形态不往天上长，只顺着岩壁往上爬。
+     *
+     * <p><b>长多快由魔素浓度决定</b>（{@link #growthMultiplier}）：浓度不到 12 完全不长，
+     * 12～19 之间 25% / 50% / 75% / 100%，19 以上 150%（有几率一轮长两格）。
+     * 判定只挂在随机刻上，绝不每 tick 去查环境浓度。</p>
      */
     @Override
     protected void randomTick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
@@ -231,15 +239,55 @@ public class LumeliaPlantBlock extends ManaPlantBlock {
             return;
         }
         if (state.getValue(ABOVE)) return;
-        if (random.nextFloat() > GROW_CHANCE) return;
-        // 已经叠满三格就停手。
+        // 生长速度完全由脚下的魔素浓度决定（见 growthMultiplier）。这里只在随机刻里查一次浓度：
+        // 原版每格平均一分多钟才来一次随机刻，绝不会像每 tick 判定那样把服务器压垮。
+        float multiplier = growthMultiplier(ManaConcentration.at(level, pos));
+        if (multiplier <= 0.0F) return;
+        if (random.nextFloat() >= GROW_CHANCE * Math.min(1.0F, multiplier)) return;
+        // 150%：在「这一轮长一节」之外再掷一次 50% 的额外生长，成功就一次长两格。
+        int segments = multiplier > 1.0F && random.nextFloat() < multiplier - 1.0F
+                ? MAX_GROWTH_PER_TICK : 1;
+        BlockPos top = pos;
+        for (int i = 0; i < segments; i++) {
+            if (!growOneSegment(level, top)) break;
+            top = top.above();
+        }
+    }
+
+    /**
+     * 这一格卢梅莉亚的生长速度倍率，完全按魔素浓度分档：
+     *
+     * <ul>
+     *   <li>浓度 &lt; 12：0，完全不生长；</li>
+     *   <li>[12, 13)：25%；</li>
+     *   <li>[13, 14)：50%；</li>
+     *   <li>[14, 15)：75%；</li>
+     *   <li>[15, 19)：100%，也就是 {@link #GROW_CHANCE} 本身；</li>
+     *   <li>≥ 19：150%，即 100% 再有 50% 的额外生长，表现为有几率一次长两格。</li>
+     * </ul>
+     *
+     * <p>只会被随机刻调用（每格平均一分多钟一次）。环境浓度要算噪声、洞穴、蜡烛光环，
+     * 每 tick 查一次会直接把服务器拖垮——这条规则的全部意义就是「用低频判定换密度」。</p>
+     */
+    private static float growthMultiplier(double concentration) {
+        if (concentration < MIN_GROWTH_MANA) return 0.0F;
+        if (concentration < 13.0) return 0.25F;
+        if (concentration < 14.0) return 0.50F;
+        if (concentration < 15.0) return 0.75F;
+        if (concentration < 19.0) return 1.00F;
+        return 1.50F;
+    }
+
+    /** 在 top（当前最上面那一格）之上再长一节；已经叠满或者头上被占了就返回 false。 */
+    private boolean growOneSegment(ServerLevel level, BlockPos top) {
         int height = 1;
-        while (height < MAX_STACK && isSegment(level.getBlockState(pos.below(height)), state)) height++;
-        if (height >= MAX_STACK) return;
-        BlockPos above = pos.above();
-        if (!level.getBlockState(above).canBeReplaced()) return;
+        while (height < MAX_STACK && level.getBlockState(top.below(height)).is(this)) height++;
+        if (height >= MAX_STACK) return false;
+        BlockPos above = top.above();
+        if (!level.getBlockState(above).canBeReplaced()) return false;
         // 新的一段自带「下面还有」；下面那一段的「上面还有」由 updateShape 自动补上。
         level.setBlock(above, defaultBlockState().setValue(BELOW, true), Block.UPDATE_ALL);
+        return true;
     }
 
     /**
@@ -254,12 +302,29 @@ public class LumeliaPlantBlock extends ManaPlantBlock {
     private void climbWall(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         if (!state.is(this)) return;                       // 已经不是卢梅莉亚了（被连锁更新拆掉）
         if (state.getValue(ABOVE)) return;                 // 上面还有一段，交给最顶上那格去爬
-        if (random.nextFloat() > CLIMB_CHANCE) return;
+        // 爬墙速度同样吃魔素浓度，查法和地上那株一样：只在随机刻里查一次。
+        float multiplier = growthMultiplier(ManaConcentration.at(level, pos));
+        if (multiplier <= 0.0F) return;
+        if (random.nextFloat() > CLIMB_CHANCE * Math.min(1.0F, multiplier)) return;
+        // 150%：多出来的 50% 让这一轮有几率一次爬两段。
+        int segments = multiplier > 1.0F && random.nextFloat() < multiplier - 1.0F
+                ? MAX_GROWTH_PER_TICK : 1;
+        BlockPos cursor = pos;
+        for (int i = 0; i < segments; i++) {
+            if (!climbOneSegment(level, cursor)) return;
+            cursor = cursor.above();
+        }
+    }
+
+    /** 把 cursor 这一格（当前最上面一段贴墙株）顺着岩壁往上再爬一段，成功返回 true。 */
+    private boolean climbOneSegment(ServerLevel level, BlockPos cursor) {
+        BlockState state = level.getBlockState(cursor);
+        if (!state.is(this) || !state.getValue(WALL_MOUNTED) || state.getValue(ABOVE)) return false;
         int height = 1;
-        while (height < MAX_WALL_STACK && isSegment(level.getBlockState(pos.below(height)), state)) height++;
-        if (height >= MAX_WALL_STACK) return;              // 爬满了，剩下的高度交给崖顶那株
-        BlockPos above = pos.above();
-        if (!level.getBlockState(above).canBeReplaced() || !level.getFluidState(above).isEmpty()) return;
+        while (height < MAX_WALL_STACK && isSegment(level.getBlockState(cursor.below(height)), state)) height++;
+        if (height >= MAX_WALL_STACK) return false;        // 爬满了，剩下的高度交给崖顶那株
+        BlockPos above = cursor.above();
+        if (!level.getBlockState(above).canBeReplaced() || !level.getFluidState(above).isEmpty()) return false;
         Direction facing = state.getValue(FACING);
         BlockPos wall = above.relative(facing.getOpposite());
         // 背后还是墙：继续贴着爬一段；到墙顶了就在崖沿上换栽成地栽形态（脚下踩着的正是
@@ -274,10 +339,11 @@ public class LumeliaPlantBlock extends ManaPlantBlock {
         // stackState——读到空气时，stackState 里“空气 == 空气”照样通过方块比较，
         // 接着 getValue(WALL_MOUNTED) 就抛 IllegalArgumentException，整世界 tick 崩掉。
         // 现在先确认这一格还是卢梅莉亚，不是就直接收手。
-        BlockState self = level.getBlockState(pos);
-        if (!self.is(this)) return;
-        BlockState fixed = stackState(self, level, pos);
-        if (fixed != self) level.setBlock(pos, fixed, Block.UPDATE_ALL);
+        BlockState self = level.getBlockState(cursor);
+        if (!self.is(this)) return true;
+        BlockState fixed = stackState(self, level, cursor);
+        if (fixed != self) level.setBlock(cursor, fixed, Block.UPDATE_ALL);
+        return true;
     }
 
     /** 按上下邻居重新标出这一格是「底 / 中 / 顶」里的哪一种。 */

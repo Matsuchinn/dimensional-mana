@@ -12,7 +12,9 @@
     "dimensional_mana:erosion_door",
     "dimensional_mana:erosion_trapdoor",
     "dimensional_mana:erosion_leaves",
-    "dimensional_mana:erosion_sapling"
+    "dimensional_mana:erosion_sapling",
+    "dimensional_mana:corrupted_nest",
+    "dimensional_mana:corrupted_hive"
   ],
   "replace": false
 }

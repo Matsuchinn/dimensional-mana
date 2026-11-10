@@ -61,6 +61,15 @@ public final class WebProjectileEntity extends Projectile {
         return weaverId;
     }
 
+    /** 发射它的那只织网者：优先按记下的 UUID 找，找不到再退回原版 owner。 */
+    private CorruptedWeaverEntity ownerWeaver() {
+        if (level() instanceof ServerLevel serverLevel && weaverId != null
+                && serverLevel.getEntity(weaverId) instanceof CorruptedWeaverEntity found) {
+            return found;
+        }
+        return getOwner() instanceof CorruptedWeaverEntity weaver ? weaver : null;
+    }
+
     public void setWeaverId(UUID id) {
         this.weaverId = id;
     }
@@ -90,6 +99,8 @@ public final class WebProjectileEntity extends Projectile {
         LivingEntity victim = firstTarget(start, end);
         if (victim != null) {
             setPos(victim.getBoundingBox().getCenter());
+            // 虫群意识：蛛丝球黏住目标也算「首次命中」，和近战噬咬共用同一套 30 秒冷却。
+            if (ownerWeaver() instanceof CorruptedWeaverEntity weaver) HiveMind.onHiveStrike(weaver, victim);
             splat(BlockPos.containing(victim.position()));
             return;
         }
@@ -142,6 +153,7 @@ public final class WebProjectileEntity extends Projectile {
     @Override
     protected void onHitEntity(EntityHitResult result) {
         if (!(result.getEntity() instanceof LivingEntity living)) return;
+        if (ownerWeaver() instanceof CorruptedWeaverEntity weaver) HiveMind.onHiveStrike(weaver, living);
         splat(BlockPos.containing(living.position()));
     }
 

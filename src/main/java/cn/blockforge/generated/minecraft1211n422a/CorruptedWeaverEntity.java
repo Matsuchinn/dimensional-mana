@@ -58,6 +58,10 @@ import java.util.List;
  *       附近没有网就<b>就地自己织一张</b>蹲进去，贴着网每 2 刻回 1 血、2 魔素。</li>
  * </ul>
  *
+ * <p><b>虫群意识（{@link HiveMind}）：</b>毒牙噬咬或蛛丝球第一次黏住目标时，把 64 格内的
+ * 节肢动物（蜘蛛 / 洞穴蜘蛛 / 蠹虫 / 其它织网者……）最多 15 只叫过来，全部锁死这个目标并挂上
+ * 10 秒【狂化】（移速 +50%、受伤 −25%）。每只织网者 30 秒只能呼救一次，刷怪笼爆量也不会卡服。</p>
+ *
  * <p>以上所有战术对<b>任何目标</b>都生效（玩家、铁傀儡、任何还手的生物），只有「招架识破」是玩家专属。
  * 自然站桩的另一半原因是目标选择：原版蜘蛛本来就会主动猎杀铁傀儡，我们之前把这套目标 Goal 一起删了，
  * 现在补回来了。</p>
@@ -158,6 +162,8 @@ public final class CorruptedWeaverEntity extends Spider {
     private long bombardReadyAt;
     private long hitRunReadyAt;
     private long parryReadyAt;
+    /** 虫群意识的下一次可用时刻（gameTime）；每次呼叫后 30 秒冷却。 */
+    private long hiveReadyAt;
     /** 撤退中。 */
     private int retreatTicks;
     /** 连招：当前这一轮已经咬了几口（0 = 起手，1 = 等着补二段）。 */
@@ -231,6 +237,7 @@ public final class CorruptedWeaverEntity extends Spider {
         tag.putLong("WeaverBombardReady", bombardReadyAt);
         tag.putLong("WeaverHitRunReady", hitRunReadyAt);
         tag.putLong("WeaverParryReady", parryReadyAt);
+        tag.putLong("WeaverHiveReady", hiveReadyAt);
         tag.putLong("WeaverLightFireUntil", lightFireHurtUntil);
         tag.putInt("WeaverRetreatTicks", retreatTicks);
         long[] positions = new long[webs.size()];
@@ -245,6 +252,7 @@ public final class CorruptedWeaverEntity extends Spider {
         bombardReadyAt = tag.getLong("WeaverBombardReady");
         hitRunReadyAt = tag.getLong("WeaverHitRunReady");
         parryReadyAt = tag.getLong("WeaverParryReady");
+        hiveReadyAt = tag.getLong("WeaverHiveReady");
         lightFireHurtUntil = tag.getLong("WeaverLightFireUntil");
         retreatTicks = tag.getInt("WeaverRetreatTicks");
         webs.clear();
@@ -303,6 +311,17 @@ public final class CorruptedWeaverEntity extends Spider {
     public void cooldownBombard() { bombardReadyAt = level().getGameTime() + BOMBARD_COOLDOWN; }
     public void cooldownHitRun(int ticks) { hitRunReadyAt = level().getGameTime() + ticks; }
     public void cooldownParry() { parryReadyAt = level().getGameTime() + PARRY_COOLDOWN; }
+
+    // ---------------------------------------------------------------- 虫群意识
+    /** 虫群意识的冷却是不是好了（每只织网者各自 30 秒）。 */
+    public boolean hiveMindReady() {
+        return level().getGameTime() >= hiveReadyAt;
+    }
+
+    /** 呼叫完一轮虫群，进入 30 秒冷却。 */
+    public void cooldownHiveMind() {
+        hiveReadyAt = level().getGameTime() + HiveMind.COOLDOWN_TICKS;
+    }
 
     // ---------------------------------------------------------------- 连招记账
     /** 连招还没断：上一口咬完在窗口内，下一口算「二段」。 */
@@ -523,6 +542,8 @@ public final class CorruptedWeaverEntity extends Spider {
         }
         MagicErosionEffect.apply(target, finisher ? BITE_EROSION_TICKS * 3 / 2 : BITE_EROSION_TICKS);
         target.addEffect(new MobEffectInstance(MobEffects.POISON, finisher ? 160 : 100, finisher ? 1 : 0, false, true));
+        // 虫群意识：这一口咬实了就把 64 格内的节肢动物全叫过来（每只织网者 30 秒一次）。
+        if (target.isAlive()) HiveMind.onHiveStrike(this, target);
         // 咬完立刻后跳，二段跳得更远一点，看起来更有「收招」的感觉。
         backJump(target, finisher ? 0.64D : 0.52D);
         placeWebHere();

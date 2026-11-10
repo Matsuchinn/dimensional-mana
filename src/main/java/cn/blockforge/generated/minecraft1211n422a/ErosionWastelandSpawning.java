@@ -40,10 +40,19 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
 public final class ErosionWastelandSpawning {
     /** 白天补刷的间隔：400 刻 = 20 秒看一轮。 */
     private static final int DAY_SPAWN_INTERVAL = 400;
-    /** 每一轮真的补刷的概率，压得低一点才是「少量」。 */
-    private static final float DAY_SPAWN_CHANCE = 0.45F;
+    /** 每一轮真的补刷的概率，压得低一点才是「少量」。（r91：0.45 → 0.6，玩家反映荒原太冷清。） */
+    private static final float DAY_SPAWN_CHANCE = 0.6F;
     /** 玩家 64 格内最多同时存在这么多只白天补刷的变异体。 */
     private static final int DAY_LOCAL_CAP = 3;
+    /**
+     * 秽蚀蠹单独一条补刷路线：附近 48 格最多同时 2 只。
+     *
+     * <p>它本来是「随便补一只变异体」里的 4/10，名额一被行尸骸骨占满就再也不露头；
+     * 魔素史莱姆数量压下来以后，这里再给它一个独立的小名额，荒原上就稳定有「少量」秽蚀蠹。</p>
+     */
+    private static final int SILVERFISH_LOCAL_CAP = 2;
+    /** 每轮先按这个概率试着补一只秽蚀蠹，没补上再走变异体的名额判定。 */
+    private static final float SILVERFISH_SPAWN_CHANCE = 0.35F;
     /** 补刷点离玩家的水平距离区间（格）：太近会突然糊脸，太远又看不见。 */
     private static final double DAY_MIN_DISTANCE = 24.0;
     private static final double DAY_MAX_DISTANCE = 48.0;
@@ -78,6 +87,10 @@ public final class ErosionWastelandSpawning {
             if (!CorruptedWastelandBiome.is(level.getBiome(player.blockPosition()))) continue;
             RandomSource random = player.getRandom();
             if (random.nextFloat() >= DAY_SPAWN_CHANCE) continue;
+            // 先给秽蚀蠹留名额：它是荒原生态里最稀疏的一环，被变异体的上限挤掉就整片荒原都看不见。
+            if (countNearbySilverfish(level, player) < SILVERFISH_LOCAL_CAP
+                    && random.nextFloat() < SILVERFISH_SPAWN_CHANCE
+                    && spawnDayMob(level, player, random, GeneratedMod.CORRUPTED_SILVERFISH.get())) continue;
             if (countNearbyMutants(level, player) >= DAY_LOCAL_CAP) continue;
             spawnDayMutant(level, player, random);
         }
@@ -95,8 +108,24 @@ public final class ErosionWastelandSpawning {
                 mob -> mob.isAlive() && CrystalClusterData.isManaMutant(mob)).size();
     }
 
-    /** 在玩家周围找一块能站人的荒原地面，塞一只变异体进去。 */
+    /** 玩家 48 格内现有的秽蚀蠹数量。 */
+    private static int countNearbySilverfish(ServerLevel level, ServerPlayer player) {
+        return level.getEntitiesOfClass(CorruptedSilverfishEntity.class,
+                player.getBoundingBox().inflate(48.0), mob -> mob.isAlive()).size();
+    }
+
+    /** 变异三兄弟按 4 : 3 : 3 抽——r91 把秽蚀蠹也拉进白昼轮换，别只看得见行尸和骸骨。 */
     private static void spawnDayMutant(ServerLevel level, ServerPlayer player, RandomSource random) {
+        int roll = random.nextInt(10);
+        EntityType<? extends Mob> type = roll < 4 ? GeneratedMod.CORRUPTED_SILVERFISH.get()
+                : roll < 7 ? GeneratedMod.CRYSTALLIZED_ZOMBIE.get()
+                : GeneratedMod.CORRUPTED_SKELETON.get();
+        spawnDayMob(level, player, random, type);
+    }
+
+    /** 在玩家周围找一块能站人的荒原地面，塞一只指定种类的变异生物进去。 */
+    private static boolean spawnDayMob(ServerLevel level, ServerPlayer player, RandomSource random,
+                                       EntityType<? extends Mob> type) {
         for (int attempt = 0; attempt < 8; attempt++) {
             double angle = random.nextDouble() * Math.PI * 2.0;
             double distance = DAY_MIN_DISTANCE + random.nextDouble() * (DAY_MAX_DISTANCE - DAY_MIN_DISTANCE);
@@ -105,16 +134,17 @@ public final class ErosionWastelandSpawning {
             BlockPos pos = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, probe);
             if (!CorruptedWastelandBiome.is(level.getBiome(pos))) continue;
             if (!hasRoom(level, pos)) continue;
-            // 一半晶化行尸、一半魔蚀骸骨。
-            EntityType<? extends Mob> type = random.nextBoolean()
-                    ? GeneratedMod.CRYSTALLIZED_ZOMBIE.get()
-                    : GeneratedMod.CORRUPTED_SKELETON.get();
             Mob mob = type.create(level);
             if (mob == null) continue;
             mob.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, random.nextFloat() * 360.0F, 0.0F);
             mob.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), MobSpawnType.EVENT, null);
-            if (level.addFreshEntity(mob)) return;
+            if (level.addFreshEntity(mob)) {
+                // 蠹虫补刷要有「破土」的登场：尘土 + 音效，不然凭空冒出来很出戏。
+                if (mob instanceof CorruptedSilverfishEntity silverfish) silverfish.emergeFromGround();
+                return true;
+            }
         }
+        return false;
     }
 
     /** 脚下是实心地面、身上两格是空的。 */
