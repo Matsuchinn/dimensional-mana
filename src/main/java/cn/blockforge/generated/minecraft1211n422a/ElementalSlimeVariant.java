@@ -44,6 +44,23 @@ public enum ElementalSlimeVariant {
     public SpellDefinition basicSpell() { return basicSpell; }
     public int color() { return color; }
     public Item icon() { return icon; }
+
+    /**
+     * 法术弹体飞在半空中时用哪个物品当外观。
+     *
+     * <p>图鉴、天赋界面这些地方仍然用 {@link #icon()}；只有水史莱姆不一样：以前它的弹体渲染的是
+     * 一桶原版水桶，画面上像它把桶丢过来了，现在换成自己的一颗水球（{@link WaterBallItem}）。</p>
+     *
+     * <p>物品是延迟注册的，枚举常量在类加载时就建好了，所以这里按 id 现取，取不到再退回图鉴图标，
+     * 不会因为加载顺序空指针。</p>
+     */
+    public Item projectileIcon() {
+        if (this == WATER) {
+            var holder = GeneratedMod.MOD_ITEMS.get(WaterBallItem.ITEM_ID);
+            if (holder != null) return holder.get();
+        }
+        return icon;
+    }
     public String entityId() { return id + "_elemental_slime"; }
     public String spawnEggId() { return entityId() + "_spawn_egg"; }
     public String powderId() { return id + "_element_crystal_dust"; }

@@ -103,6 +103,7 @@ public final class ClientModEvents {
     public static void register(IEventBus modBus) {
         modBus.addListener(ClientModEvents::registerHud);
         modBus.addListener(ClientModEvents::registerScreens);
+        modBus.addListener(ClientModEvents::registerRecipeBookCategories);
         modBus.addListener(ClientModEvents::registerEntityRenderers);
         modBus.addListener(ClientModEvents::registerLayerDefinitions);
         modBus.addListener(ClientModEvents::registerKeys);
@@ -669,6 +670,8 @@ public final class ClientModEvents {
         // r250 流浪剑士：GeckoLib 骨骼动画渲染（玩家比例模型 + 独立皮肤 + 模型内长剑）。
         event.registerEntityRenderer(GeneratedMod.WANDERING_SWORDMASTER.get(), SwordmasterRenderer::new);
         event.registerEntityRenderer(GeneratedMod.WEB_PROJECTILE.get(), WebProjectileRenderer::new);
+        // r400 元素史莱姆的法术弹体：带元素颜色的结晶，飞行中可辨认、可招架。
+        event.registerEntityRenderer(GeneratedMod.SLIME_SPELL_BOLT.get(), SlimeSpellBoltRenderer::new);
         // r265 虚空蚀影三兄弟：本体（换贴图的末影人）、半透明分身、绕圈浮游的眼球。
         event.registerEntityRenderer(GeneratedMod.VOID_SHADE.get(), VoidShadeRenderer::new);
         event.registerEntityRenderer(GeneratedMod.VOID_PHANTOM.get(), VoidPhantomRenderer::new);
@@ -804,6 +807,27 @@ public final class ClientModEvents {
         event.register(GeneratedMod.WEAPON_WORKBENCH_MENU.get(), WeaponWorkbenchScreen::new);
         event.register(GeneratedMod.MANA_GRINDSTONE_MENU.get(), ManaGrindstoneScreen::new);
         event.register(GeneratedMod.ADVENTURER_TRADE_MENU.get(), AdventurerTradeScreen::new);
+    }
+
+    /**
+     * 给自定义熔炼配方类型登记配方书类别（r107）。
+     *
+     * <p>原版配方书在给每个配方分类时，会先问「这个配方类型归到哪个书页」，问不到就刷一条
+     * {@code Unknown recipe category: <类型>/<配方>} 的警告。本模组有
+     * {@code professional_smelting} 与 {@code mana_forge_smelting} 两个自己的配方类型，
+     * 几十张配方各刷一条，进世界就是两三百行日志——虽然不影响合成，但看着像坏了。</p>
+     *
+     * <p>这两个类型本来就没有对应的书页：配方在 JEI 里由
+     * {@link DimensionalManaJeiPlugin} 单独建了分类，原版配方书里也不需要多出一个标签页。
+     * 所以这里把它们统一归到 {@link RecipeBookCategories#UNKNOWN}——原版配方书不会给
+     * 未知类别画页签，警告也随之消失。玩家真要查配方，用 JEI 或模组自带的魔法法典。</p>
+     */
+    private static void registerRecipeBookCategories(
+            net.neoforged.neoforge.client.event.RegisterRecipeBookCategoriesEvent event) {
+        event.registerRecipeCategoryFinder(GeneratedMod.MANA_FORGE_RECIPE_TYPE.get(),
+                holder -> net.minecraft.client.RecipeBookCategories.UNKNOWN);
+        event.registerRecipeCategoryFinder(GeneratedMod.PROFESSIONAL_RECIPE_TYPE.get(),
+                holder -> net.minecraft.client.RecipeBookCategories.UNKNOWN);
     }
 
     private static void registerFluidRendering(RegisterClientExtensionsEvent event) {

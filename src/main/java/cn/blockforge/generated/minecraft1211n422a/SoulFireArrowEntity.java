@@ -154,6 +154,38 @@ public class SoulFireArrowEntity extends AbstractArrow {
         setXRot((float) (Math.toDegrees(Math.atan2(dir.y, horizontal))));
     }
 
+    /**
+     * 被斗气完美格挡弹回来：掉头飞回去，归属换成弹反的玩家。
+     *
+     * <p>魂火箭矢和原版箭不一样，它自带<b>锁定目标</b>与「升空 → 冲刺」二次袭击：
+     * 光把速度取反的话，它下一秒就会顺着 {@code target()} 拐回玩家身上，
+     * 于是「完美格挡」变成了自杀。所以这里把锁定目标、二次袭击、追踪计时一起清掉，
+     * 并把归属换成玩家 —— 这样它只会沿原路飞回去，撞上谁算谁的（打中原来的射手也不为过）。</p>
+     */
+    public void reflectBy(LivingEntity parrier) {
+        setOwner(parrier);
+        // setAimedTarget(null) 会把 UUID 与缓存的目标一起清掉。
+        setAimedTarget(null);
+        this.secondAttackEnabled = false;
+        this.secondAttackUsed = false;
+        this.phase = Phase.FLY;
+        this.age = 0;
+        this.trackDelay = 0;
+        this.homingTicks = 0;
+        this.closestDistSqr = Double.MAX_VALUE;
+        this.awayTicks = 0;
+        Vec3 motion = getDeltaMovement();
+        Vec3 back = motion.lengthSqr() < 1.0E-4 ? getLookAngle().scale(-1.0) : motion.scale(-1.0);
+        setDeltaMovement(back);
+        applyRotation(back.normalize());
+        onReflected(back);
+        setPos(position().add(back.normalize().scale(0.5)));
+        hasImpulse = true;
+    }
+
+    /** 子类在反弹之后补自己的账（巨型箭要把「已飞里程」清零，否则下一帧就裂开）。 */
+    protected void onReflected(Vec3 back) { }
+
     // ---------------------------------------------------------------- 目标
     /** 这只箭认定的目标；已经死掉或换维度就返回 null。 */
     public LivingEntity target() {

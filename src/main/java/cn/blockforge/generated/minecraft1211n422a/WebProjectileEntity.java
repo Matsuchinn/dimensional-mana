@@ -5,6 +5,7 @@ import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -74,6 +75,26 @@ public final class WebProjectileEntity extends Projectile {
         this.weaverId = id;
     }
 
+    /**
+     * 被斗气完美格挡弹回来：掉头，归属换成弹反的玩家。
+     *
+     * <p>蛛丝球原本记着「我是哪只织网者吐的」。掉头之后这条关系必须改掉：</p>
+     * <ul>
+     *   <li>不改的话，弹回去的丝团还会给<b>虫群意识</b>送一次「首次命中」，等于白送对面一层增益；</li>
+     *   <li>改成弹反玩家的 UUID 之后，落地的网按「玩家的网」计时消失，不会变成一张永久的蛛网。</li>
+     * </ul>
+     */
+    public void reflectBy(LivingEntity parrier) {
+        setOwner(parrier);
+        this.weaverId = parrier.getUUID();
+        Vec3 motion = getDeltaMovement();
+        Vec3 back = motion.lengthSqr() < 1.0E-4 ? getLookAngle().scale(-1.0) : motion.scale(-1.0);
+        setDeltaMovement(back);
+        updateRotation();
+        setPos(position().add(back.normalize().scale(0.5)));
+        hasImpulse = true;
+    }
+
     @Override
     protected void defineSynchedData(net.minecraft.network.syncher.SynchedEntityData.Builder builder) {
     }
@@ -98,6 +119,8 @@ public final class WebProjectileEntity extends Projectile {
 
         LivingEntity victim = firstTarget(start, end);
         if (victim != null) {
+            // 斗气招架：这一发飞到玩家身上时先问招架系统 —— 完美格挡会让蛛丝球原地掉头。
+            if (victim instanceof ServerPlayer player && BattleQiParry.onIncomingProjectile(player, this)) return;
             setPos(victim.getBoundingBox().getCenter());
             // 虫群意识：蛛丝球黏住目标也算「首次命中」，和近战噬咬共用同一套 30 秒冷却。
             if (ownerWeaver() instanceof CorruptedWeaverEntity weaver) HiveMind.onHiveStrike(weaver, victim);

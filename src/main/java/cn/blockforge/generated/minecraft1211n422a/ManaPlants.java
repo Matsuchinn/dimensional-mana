@@ -212,6 +212,12 @@ public final class ManaPlants {
 
     /** 把一株植物放进世界；放不下就返回 false，交给调用方换位置。 */
     public static boolean place(LevelAccessor level, Kind kind, BlockPos pos) {
+        // 运行时（非世界生成）种植必须先确认这块区块已经加载完：setBlock 会触发邻块更新，
+        // 落在没加载的区块上时游戏会让主线程同步去生成它——那正是死锁的入口。
+        // 世界生成阶段传进来的是 WorldGenRegion，不走这条检查（它有自己的可读范围判定）。
+        if (level instanceof net.minecraft.server.level.ServerLevel server && !ChunkSafety.ready(server, pos)) {
+            return false;
+        }
         if (kind == Kind.LUMELIA) {
             // 卢梅莉亚两种活法：脚下有土就照常长，脚下没有但背后有岩壁就贴墙。
             if (canPlantAt(level, pos)) return setPlant(level, pos, defaultState(kind));

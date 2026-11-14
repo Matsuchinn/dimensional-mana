@@ -563,7 +563,7 @@ final class ClientSpellSprites {
         float u0 = (x + inset) / atlas.width, u1 = (x + atlas.tileWidth - inset) / atlas.width;
         float v0 = (y + inset) / atlas.height, v1 = (y + atlas.tileHeight - inset) / atlas.height;
         VertexConsumer out = source.getBuffer(atlas.type);
-        if (view.ownEffect && center.distanceToSqr(camera) < 64 && Math.max(width, height) > 0.35) {
+        if (view.ownScreen && center.distanceToSqr(camera) < 64 && Math.max(width, height) > 0.35) {
             // 大光片细分后只挖掉准星前的区域，不能靠四个外角把整张光片压暗。
             int n = 6;
             for (int j = 0; j < n; j++) for (int i = 0; i < n; i++) {

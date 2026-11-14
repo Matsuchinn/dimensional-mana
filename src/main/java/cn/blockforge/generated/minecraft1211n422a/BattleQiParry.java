@@ -29,8 +29,9 @@ import net.minecraft.world.entity.projectile.Snowball;
 import net.minecraft.world.entity.projectile.ThrownPotion;
 import net.minecraft.world.entity.projectile.WitherSkull;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.event.entity.ProjectileImpactEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 
 import java.util.HashMap;
@@ -44,7 +45,8 @@ import java.util.UUID;
  * 每挨一下扣主手剑 1 点耐久。姿态下按左键发动弹反，没有冷却，按一次算一次：</p>
  *
  * <ul>
- *   <li>3.6 格内有敌对弹射物：消耗 2 点斗气，弹射物当场消散。</li>
+ *   <li>远程：按下后 11 刻内飞到的敌对弹射物（箭矢、火球、雪球、法术弹体）都接得住。前 3 刻内飞到的
+ *       算完美格挡：弹体按原路掉头飞回去，<b>不花斗气</b>；剩下 8 刻才到的是普通格挡：弹体当场碎掉、扣斗气。</li>
  *   <li>近战：按下后 11 刻内挡下近战伤害就算弹反成功，其中 5 刻内到达的判定为完美招架。</li>
  *   <li>斗气不足以支付怪物攻击力时弹反失败：硬吃伤害、斗气清零并进入斗气溃散。</li>
  *   <li>窗口到点也没挡住任何东西（空挥）：扣 1 点斗气；只扣这一笔，不会因此进溃散。</li>
@@ -63,8 +65,15 @@ public final class BattleQiParry {
     public static final int GUARD_WINDOW_TICKS = 11;
     /** 窗口内前 5 刻到达的伤害算完美招架（「招架特化」词条会把这个窗口再拉长）。 */
     public static final int PERFECT_WINDOW_TICKS = 5;
-    /** 远程/法术弹反的判定半径。 */
-    public static final double PROJECTILE_RANGE = 3.6;
+    /**
+     * 投掷类远程法术与弹射物（箭矢、火球、雪球……）的完美格挡窗口：<b>只有 3 刻</b>。
+     *
+     * <p>近战是「看到怪物抬手再按」，靠的是 5 刻的预判；弹射物则是「看到东西快贴脸了再按」——
+     * 满蓄力的箭一刻能飞三格多，3 刻的窗口意味着它已经进到眼前、再晚一点就要挨打。
+     * 这 3 刻里接住的一发会把弹体<b>按原路径掉头打回去</b>，而且不花斗气；
+     * 窗口剩下的 8 刻、以及举着姿态没按左键时飞来的，都按原来的普通格挡结算（打碎 / 扣斗气）。</p>
+     */
+    public static final int PROJECTILE_PERFECT_WINDOW_TICKS = 3;
     /** 近战弹反的判定半径。 */
     public static final double MELEE_RANGE = 3.0;
     /** 瞬发法术弹反的判定半径：没有弹道可躲，给得比近战宽一些。 */
@@ -95,6 +104,17 @@ public final class BattleQiParry {
 
     /** 弹反结果：无、成功、失败（失败会继续吃伤害）。 */
     public enum Outcome { NONE, PARRIED, FAILED }
+
+    /**
+     * 弹射物弹反结果。
+     *
+     * <ul>
+     *   <li>{@link #NONE}：没接住，调用方照常结算伤害；</li>
+     *   <li>{@link #NORMAL}：普通格挡，弹体已经被打碎，调用方只要把它删掉就行；</li>
+     *   <li>{@link #REFLECTED}：完美格挡，弹体<b>已经按原路掉头飞回去</b>了，调用方什么都别做。</li>
+     * </ul>
+     */
+    public enum ProjectileParry { NONE, NORMAL, REFLECTED }
 
     private static final class State {
         boolean stance;
@@ -301,26 +321,20 @@ public final class BattleQiParry {
         }
     }
 
-    /** 姿态下按左键：先看弹射物，没有就开一个近战弹反窗口。没有冷却，客户端按一次发一次。 */
+    /**
+     * 姿态下按左键：开一个 11 刻的招架窗口。没有冷却，客户端按一次发一次。
+     *
+     * <p>这一按<b>不再当场打碎身边的弹射物</b>，而是统一等东西真的飞到自己身上再结算：
+     * 按下后前 3 刻内飞到的弹体算完美格挡（掉头打回去、不花斗气），剩下的 8 刻按普通格挡结算（打碎、扣斗气）。
+     * 这样「弹反」拼的是按下去的那一刻，而不是谁运气好身边正好有颗弹体。</p>
+     */
     public static void attempt(ServerPlayer player) {
         State state = STATES.get(player.getUUID());
         if (state == null || !state.stance || !canParry(player)) return;
         long now = player.level().getGameTime();
-        state.guardUntil = -1;
-        state.pressTick = now;
-
-        Projectile projectile = findHostileProjectile(player);
-        if (projectile != null) {
-            // 弹掉弹射物就算这一按有了交代，上一个没结算的窗口不再追账。
-            state.whiffPending = false;
-            if (!parryProjectile(player, projectile)) {
-                player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
-                        "message.dimensional_mana.parry_no_qi"), true);
-            }
-            return;
-        }
-        // 没有弹射物：开一个 11 刻的近战招架窗口，等伤害落下来再结算；到点没挡住就按空挥扣 1 点斗气。
+        // 开一个 11 刻的窗口，等近战伤害 / 弹射物落下来再结算；到点没挡住就按空挥扣 1 点斗气。
         state.guardUntil = now + GUARD_WINDOW_TICKS;
+        state.pressTick = now;
         state.whiffPending = true;
         if (player.level() instanceof ServerLevel level) {
             // 空挥一声，告诉玩家「这一刀已经按下去了」。
@@ -383,6 +397,46 @@ public final class BattleQiParry {
         state.whiffPending = false;
         Vec3 middle = player.position().add(caster.position()).scale(0.5).add(0, 0.9, 0);
         return settle(player, caster, perfect, amount, middle, flavor);
+    }
+
+    /**
+     * 已经飞到眼前的弹体法术（元素史莱姆的 {@link SlimeSpellBolt}）。
+     *
+     * <p>判定分三档：</p>
+     * <ul>
+     *   <li>按下左键后 <b>3 刻内</b>飞到：完美格挡 —— 弹体原地掉头，按原路径飞回施法者脸上，
+     *       <b>一点斗气都不花</b>（{@link ProjectileParry#REFLECTED}）；</li>
+     *   <li>按下左键后 3~11 刻内飞到，或者只是举着招架姿态没按：普通格挡 ——
+     *       弹体当场碎掉，按这一发的伤害扣斗气（{@link ProjectileParry#NORMAL}）；</li>
+     *   <li>斗气不够：这一下没挡住，照常吃伤害（{@link ProjectileParry#NONE}）。</li>
+     * </ul>
+     *
+     * @param bolt  飞过来的那颗弹体，完美格挡要拿它掉头
+     * @param at    弹体命中玩家的位置，用来放碎裂特效
+     */
+    public static ProjectileParry parryIncomingSpell(ServerPlayer player, SlimeSpellBolt bolt, LivingEntity caster,
+                                                     String flavor, float amount, Vec3 at) {
+        State state = STATES.get(player.getUUID());
+        if (state == null || !state.stance) return ProjectileParry.NONE;
+        if (caster instanceof Player && !ManaConfig.PVP_PARRY.get()) return ProjectileParry.NONE;
+        if (!canParry(player)) return ProjectileParry.NONE;
+        if (caster != null && !NewSpellSystem.enemy(player, caster)) return ProjectileParry.NONE;
+        long now = player.level().getGameTime();
+        // 弹体飞到了才算完美格挡，所以不看施法者还在不在（史莱姆死了弹体也照样会飞完）。
+        boolean perfect = inWindow(state, now) && now - state.pressTick <= PROJECTILE_PERFECT_WINDOW_TICKS;
+        state.guardUntil = -1;
+        state.pressTick = -1;
+        state.whiffPending = false;
+        Vec3 middle = at == null ? player.position().add(0, 1.0, 0) : at;
+        if (perfect) {
+            // 完美格挡：掉头打回去，斗气一分不动。
+            if (player.level() instanceof ServerLevel level) projectileBurst(level, middle, flavor);
+            bolt.reflect(player);
+            perfectProjectileParry(player, middle);
+            return ProjectileParry.REFLECTED;
+        }
+        return settle(player, caster, false, amount, middle, flavor)
+                ? ProjectileParry.NORMAL : ProjectileParry.NONE;
     }
 
     /**
@@ -450,16 +504,112 @@ public final class BattleQiParry {
 
     // ---------------------------------------------------------------- 远程弹反
 
-    private static Projectile findHostileProjectile(ServerPlayer player) {
-        AABB area = player.getBoundingBox().inflate(PROJECTILE_RANGE);
-        Projectile best = null;
-        double bestDistance = Double.MAX_VALUE;
-        for (Projectile projectile : player.level().getEntitiesOfClass(Projectile.class, area,
-                candidate -> hostileProjectile(player, candidate))) {
-            double distance = projectile.distanceToSqr(player);
-            if (distance < bestDistance) { bestDistance = distance; best = projectile; }
+    /** 招架窗口还开着吗：按下左键之后的 {@link #GUARD_WINDOW_TICKS} 刻内。 */
+    private static boolean inWindow(State state, long now) {
+        return state != null && state.guardUntil >= 0 && state.pressTick >= 0 && now <= state.guardUntil;
+    }
+
+    /**
+     * 弹射物（箭矢、火球、雪球、药水、魂火箭……）马上要打到玩家：窗口里就接住它。
+     *
+     * <p>r406 起弹射物不再靠「贴脸按一下就碎」的扫描，而是统一在这一刻结算：</p>
+     * <ul>
+     *   <li>按下左键后 <b>3 刻内</b>飞到（{@link #PROJECTILE_PERFECT_WINDOW_TICKS}）：完美格挡 ——
+     *       弹体按原路径掉头飞回去，<b>一点斗气都不花</b>；</li>
+     *   <li>窗口内剩下的 8 刻才飞到：普通格挡 —— 弹体当场碎掉，扣 {@link #PROJECTILE_QI_COST} 点斗气；</li>
+     *   <li>窗口已经关了（只是举着姿态）：不接，照常吃这一下（姿态的 10% 减伤还在）。</li>
+     * </ul>
+     *
+     * @return true 表示这一发已经处理完，调用方要取消这次命中
+     *         （完美格挡是弹体已经掉头、普通格挡是弹体已经碎掉）
+     */
+    public static boolean onIncomingProjectile(ServerPlayer player, Projectile projectile) {
+        if (player == null || projectile == null || player.level().isClientSide) return false;
+        State state = STATES.get(player.getUUID());
+        if (state == null || !state.stance || !canParry(player)) return false;
+        if (!hostileProjectile(player, projectile)) return false;
+        long now = player.level().getGameTime();
+        if (!inWindow(state, now)) return false;
+        Vec3 at = projectile.getBoundingBox().getCenter();
+        boolean perfect = now - state.pressTick <= PROJECTILE_PERFECT_WINDOW_TICKS;
+        state.guardUntil = -1;
+        state.pressTick = -1;
+        state.whiffPending = false;
+        if (perfect) {
+            if (player.level() instanceof ServerLevel level) projectileBurst(level, at, projectileFlavor(projectile));
+            reflectProjectile(player, projectile);
+            perfectProjectileParry(player, at);
+            AdvancementTriggers.onPerfectParry(player);
+            return true;
         }
-        return best;
+        // 普通格挡：和以前一样，2 点斗气换这一发碎在半空。
+        if (ManaData.get(player).battleQi() < PROJECTILE_QI_COST) {
+            player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
+                    "message.dimensional_mana.parry_no_qi"), true);
+            return false;
+        }
+        ManaData.spendBattleQiQuiet(player, PROJECTILE_QI_COST);
+        if (player.level() instanceof ServerLevel level) projectileBurst(level, at, projectileFlavor(projectile));
+        projectile.discard();
+        feedback(player, ParryFeedbackPayload.PROJECTILE, at);
+        return true;
+    }
+
+    /**
+     * NeoForge 的弹射物命中事件。
+     *
+     * <p>1.21.1 里它排在真正结算伤害之前（{@code AbstractArrow#tick} 里碰到实体就发），
+     * 所以「取消」就等于「这一下没发生」，箭不会插在身上、伤害也不会落地。
+     * 元素史莱姆的法术弹体不走原版命中，自己结算（见 {@link #parryIncomingSpell}）。</p>
+     */
+    public static void onProjectileImpact(ProjectileImpactEvent event) {
+        if (event.isCanceled()) return;
+        if (!(event.getRayTraceResult() instanceof EntityHitResult hit)) return;
+        if (!(hit.getEntity() instanceof ServerPlayer player)) return;
+        if (player.level().isClientSide) return;
+        Projectile projectile = event.getProjectile();
+        if (projectile instanceof SlimeSpellBolt) return;
+        if (onIncomingProjectile(player, projectile)) event.setCanceled(true);
+    }
+
+    /**
+     * 完美格挡把弹体按原路径打回去。
+     *
+     * <p>就是「速度取反、主人换成玩家」两件事：</p>
+     * <ul>
+     *   <li>原版箭矢的朝向每刻跟着速度重新算（{@code AbstractArrow#tick}），取反之后客户端看到的就是
+     *       原路飞回去；</li>
+     *   <li>主人换成玩家，打中怪物算玩家的击杀，而且 {@code Projectile#canHitEntity} 会放过主人，
+     *       不会再回头打自己；</li>
+     *   <li>位置顺着反弹方向推出去大半格，免得弹体还卡在玩家碰撞箱里。</li>
+     * </ul>
+     */
+    private static void reflectProjectile(ServerPlayer player, Projectile projectile) {
+        // 自带追踪 / 自定义命中判定的弹体，交给它们自己把内部状态（目标、施法者、里程）一起清掉；
+        // 否则弹体表面上掉头了，下一秒又顺着记着的目标拐回来咬人。
+        switch (projectile) {
+            case SoulFireArrowEntity soulArrow -> {
+                soulArrow.reflectBy(player);
+                return;
+            }
+            case WebProjectileEntity web -> {
+                web.reflectBy(player);
+                return;
+            }
+            case DistortedCrystalShardEntity shard -> {
+                shard.reflectBy(player);
+                return;
+            }
+            default -> { }
+        }
+        Vec3 motion = projectile.getDeltaMovement();
+        // 快掉地上的箭速度很小：这时沿玩家视线的反方向推一把，保证它真能飞回去。
+        Vec3 back = motion.lengthSqr() < 0.25 ? player.getLookAngle().scale(-1.0) : motion.scale(-1.0);
+        projectile.setOwner(player);
+        projectile.setDeltaMovement(back);
+        projectile.setPos(projectile.position().add(back.normalize().scale(0.9)));
+        // 速度是同步属性：标记一下才会把新的运动发给客户端，画面上才真的掉头。
+        projectile.hasImpulse = true;
     }
 
     private static boolean hostileProjectile(ServerPlayer player, Projectile projectile) {
@@ -473,28 +623,11 @@ public final class BattleQiParry {
         return !(owner instanceof Player);
     }
 
-    private static boolean parryProjectile(ServerPlayer player, Projectile projectile) {
-        ManaData.Snapshot qi = ManaData.get(player);
-        if (qi.battleQi() < PROJECTILE_QI_COST) return false;
-        ManaData.spendBattleQiQuiet(player, PROJECTILE_QI_COST);
-        Vec3 center = projectile.getBoundingBox().getCenter();
-        if (player.level() instanceof ServerLevel level) projectileBurst(level, center, projectileFlavor(projectile));
-        projectile.discard();
-        if (projectile instanceof GiantSoulFireArrowEntity) {
-            // 巨型魂火箭矢穿盾、但不吃招架：挡下来按「完美格挡」结算——
-            // 白色爆闪 + 金色光晕 + 那套剑鸣，手感上配得上「徒手接住一发大招」。
-            perfectProjectileParry(player, center);
-        } else {
-            feedback(player, ParryFeedbackPayload.PROJECTILE, center);
-        }
-        return true;
-    }
-
     /**
-     * 弹开巨型魂火箭矢的完美格挡表现。
+     * 弹射物完美格挡的表现：金色十字冲击、准心金圈、白闪与剑鸣。
      *
      * <p>完美招架的正常流程要眩晕一只怪物，而这里弹的是弹射物、没有「被弹开的那只怪」，
-     * 所以只放画面与音效（金色的十字冲击、准心金圈、白闪、剑鸣），不结算眩晕与破绽。</p>
+     * 所以只放画面与音效，不结算眩晕与破绽；弹体本身已经在 {@link #reflectProjectile} 里掉头了。</p>
      */
     private static void perfectProjectileParry(ServerPlayer player, Vec3 at) {
         if (player.level() instanceof ServerLevel level) {
@@ -511,6 +644,7 @@ public final class BattleQiParry {
     }
 
     private static String projectileFlavor(Projectile projectile) {
+        if (projectile instanceof SlimeSpellBolt bolt) return bolt.damageElement();
         if (projectile instanceof GiantSoulFireArrowEntity) return "soul_fire_giant";
         if (projectile instanceof SoulFireArrowEntity) return "soul_fire";
         if (projectile instanceof SmallFireball || projectile instanceof LargeFireball
@@ -584,7 +718,9 @@ public final class BattleQiParry {
         }
         // 普通格挡的屏幕反馈：准心白圈 + 被打的那只怪物身上一段小闪光（和完美格挡同一套画法，
         // 只是小一号）。带上实体 id，闪光是跟着怪物走的，不是钉在一个坐标上。
-        ParryFeedbackPayload.sendFlash(player, ParryFeedbackPayload.NORMAL, at, attacker.getId());
+        // 弹体打来的法术可能连施法者都已经死了（caster 为 null）：这时只闪准心，不指实体。
+        ParryFeedbackPayload.sendFlash(player, ParryFeedbackPayload.NORMAL, at,
+                attacker == null ? -1 : attacker.getId());
     }
 
     private static void perfectParry(ServerPlayer player, LivingEntity attacker, int cost, int maxQi, Vec3 at) {

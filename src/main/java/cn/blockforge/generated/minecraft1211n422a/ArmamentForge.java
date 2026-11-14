@@ -12,8 +12,16 @@ import java.util.List;
  * 以后要调价或者加新面额也只需要改这一处。</p>
  */
 public final class ArmamentForge {
-    /** 武备等级上限，和词条系统的主词条上限保持一致。 */
+    /** 武备等级的绝对上限（只有 S / SS / SSS 吃得满），也就是词条系统的主词条上限。 */
     public static final int MAX_LEVEL = EquipmentAffixSystem.MAIN_MAX_LEVEL;
+
+    /**
+     * 这件武备自己的等级上限：按评级 C 3 / B 6 / A 9 / S、SS、SSS 12。
+     * 白板装备（还没赋词条）按绝对上限返回。
+     */
+    public static int maxLevel(ItemStack equipment) {
+        return EquipmentAffixSystem.mainMaxLevel(equipment);
+    }
 
     /** 一种材料：物品 id + 它能顶多少魔素。 */
     public record Denomination(String itemId, int value) { }

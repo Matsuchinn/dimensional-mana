@@ -5,7 +5,13 @@ import net.minecraft.world.entity.ai.goal.Goal;
 
 import java.util.EnumSet;
 
-/** 无前摇初级元素法术：冷却就绪立即命中，冷却未好时本 Goal 让位给近战 Goal。 */
+/**
+ * 元素史莱姆的初级法术：进入蓄力前摇，前摇结束才射出一颗看得见、飞得慢的弹体。
+ *
+ * <p>r400 起不再「抬手即命中」：本 Goal 只负责起手（{@link ElementalSlime#castBasicSpell}），
+ * 之后由史莱姆自己的蓄力推进发射 {@link SlimeSpellBolt}。弹体必须真正飞到目标身上才结算伤害，
+ * 路上可以走位躲开，也可以举招架打掉。冷却未好、目标超距或没有视线时，本 Goal 让位给近战 Goal。</p>
+ */
 public final class ElementalSlimeSpellGoal extends Goal {
     private final ElementalSlime slime;
 

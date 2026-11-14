@@ -97,13 +97,15 @@ public final class PlantEffects {
 
     /** 血吻花蔓延：击杀发生在花朵附近时，向周围补种 1~3 株。 */
     public static void spreadBloodKiss(ServerLevel level, BlockPos death) {
+        // 扫一圈之前先确认覆盖到的区块都真正加载完（9×5×9 最多跨四个区块）。
+        // 以前逐格 isLoaded 只是「有票据」，区块还在生成中时读方块会让主线程同步等它补完 —— 死锁。
+        if (!ChunkSafety.readyAround(level, death, 4)) return;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         java.util.List<BlockPos> flowers = new java.util.ArrayList<>();
         for (int x = -4; x <= 4; x++) {
             for (int y = -2; y <= 2; y++) {
                 for (int z = -4; z <= 4; z++) {
                     cursor.setWithOffset(death, x, y, z);
-                    if (!level.isLoaded(cursor)) continue;
                     if (ManaPlants.isPlant(level.getBlockState(cursor), ManaPlants.Kind.BLOOD_KISS)) {
                         flowers.add(cursor.immutable());
                     }

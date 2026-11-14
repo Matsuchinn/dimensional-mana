@@ -52,6 +52,8 @@ public final class ManaCommands {
                                         .executes(context -> showReduction(context.getSource(),
                                                 FloatArgumentType.getFloat(context, "damage"))))))
                 .then(mobCommand())
+                // r105：本模组生物的自然生成权重（dimensional_mana-spawns.toml 的 [spawn_weights]）。
+                .then(spawnWeightsCommand())
                 // 魔蚀层数 / 深渊阶层：对着生物用看那只生物，空着用看自己。
                 // 生物身上没有状态说明可看，想知道「它到底叠了几层、每跳掉几点」只能靠这一条。
                 .then(Commands.literal("erosion")
@@ -748,6 +750,118 @@ public final class ManaCommands {
                 .then(Commands.literal("compact")
                         .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
                         .executes(context -> mobCompact(context.getSource())));
+    }
+
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> spawnWeightsCommand() {
+        return Commands.literal("spawnweights")
+                .executes(context -> spawnWeightsSummary(context.getSource()))
+                .then(Commands.literal("list")
+                        .executes(context -> spawnWeightsList(context.getSource())))
+                .then(Commands.literal("set")
+                        .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                        .then(Commands.argument("mob", StringArgumentType.word())
+                                .suggests((context, builder) -> net.minecraft.commands.SharedSuggestionProvider
+                                        .suggest(SpawnConfig.WEIGHTS.keySet(), builder))
+                                .then(Commands.argument("weight", IntegerArgumentType.integer(0, 1000))
+                                        .executes(context -> spawnWeightSet(context.getSource(),
+                                                StringArgumentType.getString(context, "mob"),
+                                                IntegerArgumentType.getInteger(context, "weight"))))))
+                .then(Commands.literal("reset")
+                        .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                        .executes(context -> spawnWeightsReset(context.getSource())));
+    }
+
+    /** 只看被改过的那些；全都还是 100 时给一句提示，免得聊天栏刷满一屏。 */
+    private static int spawnWeightsSummary(CommandSourceStack source) {
+        if (!SpawnConfig.SPEC.isLoaded()) return configNotReady(source);
+        // 先把「现在到底刷多少」的几个总开关摆出来，玩家不用翻 toml 也能确认。
+        ServerLevel level = source.getLevel();
+        long day = SpawnPacing.daysPlayed(level) + 1L;
+        int percent = Math.round(SpawnPacing.intensity(level) * 100.0F);
+        String curve = SpawnPacing.curveEnabled()
+                ? "第 " + day + " 天，当前强度 " + percent + "%（玩满 "
+                        + SpawnConfig.PACING_FULL_STRENGTH_DAYS.get() + " 天恢复正常；"
+                        + "魔素浓度 > 12 的地方不受影响）"
+                : "已关闭，当前强度 100%";
+        source.sendSuccess(() -> Component.literal("开局节奏：" + curve).withStyle(ChatFormatting.AQUA), false);
+        source.sendSuccess(() -> Component.literal("整体倍率：元素史莱姆 "
+                        + format(SpawnPacing.elementalRate()) + "，哥布林巡逻 "
+                        + format(SpawnPacing.goblinRate()) + "，荒原补刷 "
+                        + format(SpawnPacing.wastelandRate()))
+                .withStyle(ChatFormatting.AQUA), false);
+        source.sendSuccess(() -> Component.literal("刷怪距离：元素史莱姆 "
+                        + format(SpawnPacing.slimeMinDistance()) + "～" + format(SpawnPacing.slimeMaxDistance())
+                        + " 格，哥布林巡逻 " + format(SpawnPacing.goblinMinDistance()) + "～"
+                        + format(SpawnPacing.goblinMaxDistance()) + " 格")
+                .withStyle(ChatFormatting.AQUA), false);
+        int changed = 0;
+        for (String key : SpawnConfig.WEIGHTS.keySet()) {
+            int value = SpawnConfig.weightOf(key);
+            if (value == SpawnConfig.DEFAULT_WEIGHT) continue;
+            changed++;
+            String name = SpawnConfig.NAMES.getOrDefault(key, key);
+            source.sendSuccess(() -> Component.literal("  " + name + "（" + key + "）= " + value)
+                    .withStyle(value == 0 ? ChatFormatting.RED : ChatFormatting.YELLOW), false);
+        }
+        if (changed == 0) {
+            source.sendSuccess(() -> Component.literal("本模组 " + SpawnConfig.WEIGHTS.size()
+                            + " 种生物的自然生成权重全部保持默认 100。"
+                            + "用 /dimensional_mana spawnweights list 看完整表，set <生物> <权重> 改其中一个。")
+                    .withStyle(ChatFormatting.GRAY), false);
+        } else {
+            int total = changed;
+            source.sendSuccess(() -> Component.literal("有 " + total + " 种生物的权重被改过（共 "
+                            + SpawnConfig.WEIGHTS.size() + " 种）。100 = 默认，50 = 只刷一半，0 = 不再自然生成。")
+                    .withStyle(ChatFormatting.AQUA), false);
+        }
+        return 1;
+    }
+
+    private static int spawnWeightsList(CommandSourceStack source) {
+        if (!SpawnConfig.SPEC.isLoaded()) return configNotReady(source);
+        source.sendSuccess(() -> Component.literal("本模组生物的自然生成权重（100 = 默认，0 = 不再自然生成）：")
+                .withStyle(ChatFormatting.LIGHT_PURPLE), false);
+        for (String key : SpawnConfig.WEIGHTS.keySet()) {
+            int value = SpawnConfig.weightOf(key);
+            String name = SpawnConfig.NAMES.getOrDefault(key, key);
+            source.sendSuccess(() -> Component.literal("  " + name + "（" + key + "）= " + value)
+                    .withStyle(value == 0 ? ChatFormatting.RED
+                            : value == SpawnConfig.DEFAULT_WEIGHT ? ChatFormatting.GRAY : ChatFormatting.YELLOW), false);
+        }
+        source.sendSuccess(() -> Component.literal("也可以直接编辑 config/dimensional_mana-spawns.toml 的 [spawn_weights] 段。")
+                .withStyle(ChatFormatting.DARK_GRAY), false);
+        return 1;
+    }
+
+    private static int spawnWeightSet(CommandSourceStack source, String key, int weight) {
+        if (!SpawnConfig.SPEC.isLoaded()) return configNotReady(source);
+        if (!SpawnConfig.setWeight(key, weight)) {
+            source.sendFailure(Component.literal("没有这个生物 id：" + key
+                    + "。用 /dimensional_mana spawnweights list 看可用的 id（不带 dimensional_mana: 前缀）。"));
+            return 0;
+        }
+        String name = SpawnConfig.NAMES.getOrDefault(key, key);
+        source.sendSuccess(() -> Component.literal(name + " 的生成权重已改为 " + weight
+                + "（100 = 默认，50 = 只刷一半，0 = 不再自然生成），立刻生效。").withStyle(ChatFormatting.GREEN), true);
+        return 1;
+    }
+
+    /**
+     * 一键恢复默认：不只是生物权重，倍率、距离、开局爬坡也一起拉回本版默认值。
+     *
+     * <p>玩家手改过 toml 又改乱了、或者从旧版本升上来想统一到新默认值时，用这一条最省事。</p>
+     */
+    private static int spawnWeightsReset(CommandSourceStack source) {
+        if (!SpawnConfig.SPEC.isLoaded()) return configNotReady(source);
+        int total = SpawnConfig.resetAll();
+        source.sendSuccess(() -> Component.literal("已恢复默认：" + SpawnConfig.WEIGHTS.size()
+                        + " 种生物权重 100、三套总倍率 1.0、史莱姆 "
+                        + format(SpawnConfig.DEFAULT_SLIME_MIN) + "～" + format(SpawnConfig.DEFAULT_SLIME_MAX)
+                        + " 格、哥布林 " + format(SpawnConfig.DEFAULT_GOBLIN_MIN) + "～"
+                        + format(SpawnConfig.DEFAULT_GOBLIN_MAX) + " 格、开局第 "
+                        + SpawnConfig.DEFAULT_PACING_FULL_DAYS + " 天满强度。共 " + total + " 项，立刻生效。")
+                .withStyle(ChatFormatting.GREEN), true);
+        return 1;
     }
 
     private static int mobHelp(CommandSourceStack source) {

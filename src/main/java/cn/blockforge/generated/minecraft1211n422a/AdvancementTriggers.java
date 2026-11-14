@@ -69,7 +69,7 @@ public final class AdvancementTriggers {
         }
     }
 
-    /** 头盔 / 胸甲 / 护腿 / 靴子四件都带词条、评级 SSS、主词条还都喂到了 Lv.12。 */
+    /** 头盔 / 胸甲 / 护腿 / 靴子四件都带词条、评级 SSS、主词条还都喂到了本评级上限（Lv.12）。 */
     private static boolean fullSssArmor(Player player) {
         for (net.minecraft.world.entity.EquipmentSlot slot : new net.minecraft.world.entity.EquipmentSlot[]{
                 net.minecraft.world.entity.EquipmentSlot.HEAD, net.minecraft.world.entity.EquipmentSlot.CHEST,
@@ -77,7 +77,7 @@ public final class AdvancementTriggers {
             ItemStack stack = player.getItemBySlot(slot);
             if (stack.isEmpty() || !EquipmentAffixSystem.hasAffix(stack)) return false;
             if (!"SSS".equals(EquipmentAffixSystem.gradeName(stack))) return false;
-            if (EquipmentAffixSystem.mainLevel(stack) < EquipmentAffixSystem.MAIN_MAX_LEVEL) return false;
+            if (EquipmentAffixSystem.mainLevel(stack) < EquipmentAffixSystem.mainMaxLevel(stack)) return false;
         }
         return true;
     }

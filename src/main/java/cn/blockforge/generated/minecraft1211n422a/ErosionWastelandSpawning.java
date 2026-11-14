@@ -14,6 +14,8 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
+import java.util.List;
+
 /**
  * 蚀魔荒原的刷怪接线。
  *
@@ -86,10 +88,17 @@ public final class ErosionWastelandSpawning {
             // 玩家得站在荒原里；站在别的群系边上不替他刷荒原的怪。
             if (!CorruptedWastelandBiome.is(level.getBiome(player.blockPosition()))) continue;
             RandomSource random = player.getRandom();
-            if (random.nextFloat() >= DAY_SPAWN_CHANCE) continue;
+            // r106：荒原白天补刷也走「开局爬坡 × 荒原倍率」，头几天荒原不会立刻挤满变异体。
+            // r107：荒原本身浓度就 13.5，按位置判断时永远走满强度，不再被开局爬坡压低。
+            if (!SpawnPacing.roll(level, random, DAY_SPAWN_CHANCE, SpawnPacing.wastelandRate(),
+                    player.blockPosition())) continue;
             // 先给秽蚀蠹留名额：它是荒原生态里最稀疏的一环，被变异体的上限挤掉就整片荒原都看不见。
+            // r105 权重：这里的补刷概率也跟着配置里的秽蚀蠹权重缩放。
+            // 概率 = 原来的 35% × 荒原倍率 × 开局爬坡 × 秽蚀蠹自己的权重。
+            float silverfishChance = SILVERFISH_SPAWN_CHANCE
+                    * SpawnPacing.multiplier(level, SpawnPacing.wastelandRate(), player.blockPosition());
             if (countNearbySilverfish(level, player) < SILVERFISH_LOCAL_CAP
-                    && random.nextFloat() < SILVERFISH_SPAWN_CHANCE
+                    && MobSpawnWeights.roll(random, silverfishChance, "corrupted_silverfish")
                     && spawnDayMob(level, player, random, GeneratedMod.CORRUPTED_SILVERFISH.get())) continue;
             if (countNearbyMutants(level, player) >= DAY_LOCAL_CAP) continue;
             spawnDayMutant(level, player, random);
@@ -114,12 +123,18 @@ public final class ErosionWastelandSpawning {
                 player.getBoundingBox().inflate(48.0), mob -> mob.isAlive()).size();
     }
 
-    /** 变异三兄弟按 4 : 3 : 3 抽——r91 把秽蚀蠹也拉进白昼轮换，别只看得见行尸和骸骨。 */
+    /**
+     * 变异三兄弟按 4 : 3 : 3 抽——r91 把秽蚀蠹也拉进白昼轮换，别只看得见行尸和骸骨。
+     *
+     * <p>r105：这张比例表改成「基准份额 × 配置权重」，三种都被调到 0 时这一轮就不补刷。</p>
+     */
     private static void spawnDayMutant(ServerLevel level, ServerPlayer player, RandomSource random) {
-        int roll = random.nextInt(10);
-        EntityType<? extends Mob> type = roll < 4 ? GeneratedMod.CORRUPTED_SILVERFISH.get()
-                : roll < 7 ? GeneratedMod.CRYSTALLIZED_ZOMBIE.get()
-                : GeneratedMod.CORRUPTED_SKELETON.get();
+        List<MobSpawnWeights.Candidate<EntityType<? extends Mob>>> pool = List.of(
+                MobSpawnWeights.candidate(GeneratedMod.CORRUPTED_SILVERFISH.get(), "corrupted_silverfish", 4),
+                MobSpawnWeights.candidate(GeneratedMod.CRYSTALLIZED_ZOMBIE.get(), "crystallized_zombie", 3),
+                MobSpawnWeights.candidate(GeneratedMod.CORRUPTED_SKELETON.get(), "corrupted_skeleton", 3));
+        EntityType<? extends Mob> type = MobSpawnWeights.pick(random, pool);
+        if (type == null) return;
         spawnDayMob(level, player, random, type);
     }
 
@@ -131,6 +146,8 @@ public final class ErosionWastelandSpawning {
             double distance = DAY_MIN_DISTANCE + random.nextDouble() * (DAY_MAX_DISTANCE - DAY_MIN_DISTANCE);
             BlockPos probe = BlockPos.containing(player.getX() + Math.cos(angle) * distance, 0.0,
                     player.getZ() + Math.sin(angle) * distance);
+            // r107：只在已经加载的区块里找落点，不为了补一只怪去生成远处地形。
+            if (!SectionScan.loadedColumn(level, probe.getX(), probe.getZ())) continue;
             BlockPos pos = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, probe);
             if (!CorruptedWastelandBiome.is(level.getBiome(pos))) continue;
             if (!hasRoom(level, pos)) continue;
@@ -149,6 +166,8 @@ public final class ErosionWastelandSpawning {
 
     /** 脚下是实心地面、身上两格是空的。 */
     private static boolean hasRoom(ServerLevel level, BlockPos pos) {
+        // 只读同一列的几格；这一列的区块没加载完就直接放弃，不替玩家生成地形。
+        if (!ChunkSafety.ready(level, pos)) return false;
         return level.getBlockState(pos.below()).isSolid()
                 && level.isEmptyBlock(pos) && level.isEmptyBlock(pos.above());
     }

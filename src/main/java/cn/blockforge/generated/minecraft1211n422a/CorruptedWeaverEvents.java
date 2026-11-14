@@ -107,13 +107,17 @@ public final class CorruptedWeaverEvents {
         if (event.getSpawnType() != MobSpawnType.NATURAL) return;
         if (!(event.getLevel() instanceof ServerLevel level) || level.dimension() != Level.OVERWORLD) return;
         if (ManaConcentration.at(level, mob.blockPosition()) < REPLACE_CONCENTRATION) return;
-        if (level.getRandom().nextFloat() >= REPLACE_CHANCE) return;
+        // r105 权重：织网者调到 0 时蜘蛛不再被替换，调到 50 时替换概率减半。
+        if (!MobSpawnWeights.roll(level.getRandom(), REPLACE_CHANCE, "corrupted_weaver")) return;
         Mob replacement = GeneratedMod.CORRUPTED_WEAVER.get().create(level);
         if (replacement == null) return;
         event.setSpawnCancelled(true);
         replacement.moveTo(mob.getX(), mob.getY(), mob.getZ(), mob.getYRot(), mob.getXRot());
-        replacement.finalizeSpawn(level, event.getDifficulty(), MobSpawnType.NATURAL, null);
-        level.addFreshEntity(replacement);
+        // 替换概率上面已经乘过一次权重，这里不再让 NATURAL 权重门二次衰减。
+        MobSpawnWeights.bypassing(() -> {
+            replacement.finalizeSpawn(level, event.getDifficulty(), MobSpawnType.NATURAL, null);
+            level.addFreshEntity(replacement);
+        });
     }
 
     // ---------------------------------------------------------------- 破坏蛛网

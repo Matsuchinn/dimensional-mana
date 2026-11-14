@@ -151,29 +151,33 @@ public final class EquipmentAffixSystem {
     }
 
     /**
-     * 武备评级。除词条数量之外，评级还带三项修正（r342 起）：
+     * 武备评级。除词条数量之外，评级还带四项修正（r342 起，r404 加了等级上限）：
      *
      * <table border="1">
      *   <caption>评级修正</caption>
-     *   <tr><th>评级</th><th>耐久上限</th><th>基础面板</th><th>专属特性</th></tr>
-     *   <tr><td>C</td><td>-5%</td><td>×0.90</td><td>—</td></tr>
-     *   <tr><td>B</td><td>±0%</td><td>×1.00</td><td>—</td></tr>
-     *   <tr><td>A</td><td>+5%</td><td>×1.05</td><td>附魔时 10% 多 1 条中等级</td></tr>
-     *   <tr><td>S</td><td>+10%</td><td>×1.10</td><td>附魔时 25% 多 1～2 条中等级</td></tr>
-     *   <tr><td>SS</td><td>+15%</td><td>×1.15</td><td>必定 1 条高等级；铁砧 / 加工台消耗 -10%</td></tr>
-     *   <tr><td>SSS</td><td>+20%</td><td>×1.20</td><td>必定 2 条高等级；铁砧 / 加工台消耗 -20%</td></tr>
+     *   <tr><th>评级</th><th>武备等级上限</th><th>耐久上限</th><th>基础面板</th><th>专属特性</th></tr>
+     *   <tr><td>C</td><td>Lv.3</td><td>-5%</td><td>×0.90</td><td>—</td></tr>
+     *   <tr><td>B</td><td>Lv.6</td><td>±0%</td><td>×1.00</td><td>—</td></tr>
+     *   <tr><td>A</td><td>Lv.9</td><td>+5%</td><td>×1.05</td><td>附魔时 10% 多 1 条中等级</td></tr>
+     *   <tr><td>S</td><td>Lv.12</td><td>+10%</td><td>×1.10</td><td>附魔时 25% 多 1～2 条中等级</td></tr>
+     *   <tr><td>SS</td><td>Lv.12</td><td>+15%</td><td>×1.15</td><td>必定 1 条高等级；铁砧 / 加工台消耗 -10%</td></tr>
+     *   <tr><td>SSS</td><td>Lv.12</td><td>+20%</td><td>×1.20</td><td>必定 2 条高等级；铁砧 / 加工台消耗 -20%</td></tr>
      * </table>
      *
      * <p>基础面板修正只乘「物品自己的基础数值」（武器基础攻击力 / 防具基础护甲），
      * 词条加成与魔精钢的独立减伤都不受影响；耐久修正按向下取整算。</p>
+     *
+     * <p>{@code mainCap} 是这件武备能用魔晶锻打到的主词条等级上限：
+     * C / B / A 分别卡在 Lv.3 / 6 / 9，S 及以上才吃满 {@link #MAIN_MAX_LEVEL}。
+     * 副词条上限 {@link #SUB_MAX_LEVEL} 和条数上限 {@link #SUB_MAX_COUNT} 与评级无关，一律不变。</p>
      */
     private enum Grade {
-        C(ChatFormatting.GRAY, 1, 2, 0, 2, -5, 0.90D),
-        B(ChatFormatting.WHITE, 1, 3, 0, 2, 0, 1.00D),
-        A(ChatFormatting.GREEN, 1, 4, 1, 3, 5, 1.05D),
-        S(ChatFormatting.BLUE, 1, 6, 1, 4, 10, 1.10D),
-        SS(ChatFormatting.LIGHT_PURPLE, 1, 8, 2, 4, 15, 1.15D),
-        SSS(ChatFormatting.GOLD, 1, 10, 2, 4, 20, 1.20D);
+        C(ChatFormatting.GRAY, 1, 2, 0, 2, -5, 0.90D, 3),
+        B(ChatFormatting.WHITE, 1, 3, 0, 2, 0, 1.00D, 6),
+        A(ChatFormatting.GREEN, 1, 4, 1, 3, 5, 1.05D, 9),
+        S(ChatFormatting.BLUE, 1, 6, 1, 4, 10, 1.10D, 12),
+        SS(ChatFormatting.LIGHT_PURPLE, 1, 8, 2, 4, 15, 1.15D, 12),
+        SSS(ChatFormatting.GOLD, 1, 10, 2, 4, 20, 1.20D, 12);
 
         final ChatFormatting color;
         final int mainMin;
@@ -184,9 +188,11 @@ public final class EquipmentAffixSystem {
         final int durabilityPct;
         /** 基础面板修正倍率：0.90 ～ 1.20。 */
         final double panelScale;
+        /** 主词条（= 武备等级）能升到的上限。 */
+        final int mainCap;
 
         Grade(ChatFormatting color, int mainMin, int mainMax, int subMin, int subMax,
-              int durabilityPct, double panelScale) {
+              int durabilityPct, double panelScale, int mainCap) {
             this.color = color;
             this.mainMin = mainMin;
             this.mainMax = mainMax;
@@ -194,6 +200,7 @@ public final class EquipmentAffixSystem {
             this.subMax = subMax;
             this.durabilityPct = durabilityPct;
             this.panelScale = panelScale;
+            this.mainCap = mainCap;
         }
 
         static Grade parse(String value) {
@@ -1025,6 +1032,9 @@ public final class EquipmentAffixSystem {
         }
         event.getToolTip().add(Component.translatable("tooltip.dimensional_mana.affix_grade", grade.name())
                 .withStyle(grade.color));
+        // 等级上限跟着评级走：C 3 / B 6 / A 9 / S 及以上 12，直接在说明里写清楚。
+        event.getToolTip().add(Component.translatable("tooltip.dimensional_mana.grade_level_cap", grade.mainCap)
+                .withStyle(ChatFormatting.DARK_AQUA));
         // 评级修正值：耐久上限一行，基础面板再按装备类别单独一行，玩家一眼能看出差距。
         String durabilityText = (grade.durabilityPct > 0 ? "+" : "") + grade.durabilityPct + "%";
         event.getToolTip().add(Component.translatable("tooltip.dimensional_mana.grade_bonus", durabilityText)
@@ -1154,7 +1164,8 @@ public final class EquipmentAffixSystem {
     /**
      * 同类装备合成（4.3）：
      * <ul>
-     *   <li>主词条：两件相同 → 等级 +1；不同 → 取左槽（第一件）的主词条；已满 12 级 → 额外触发一次副词条成长。</li>
+     *   <li>主词条：两件相同 → 等级 +1；不同 → 取左槽（第一件）的主词条；已到本评级上限
+     *       （C 3 / B 6 / A 9 / S 及以上 12）→ 额外触发一次副词条成长。</li>
      *   <li>副词条：左槽原样保留，右槽同名词条在左槽基础上 +1 级，新词条直接加入；
      *       合并后超过 4 条时随机保留 4 条。</li>
      *   <li>主词条等级跨过 3 / 6 / 9 / 12 时，每次跨档各追加一次随机副词条成长。</li>
@@ -1168,7 +1179,7 @@ public final class EquipmentAffixSystem {
         CompoundTag main = a.getCompound(MAIN);
         CompoundTag otherMain = b.getCompound(MAIN);
         boolean sameMain = main.getString(ID).equals(otherMain.getString(ID));
-        boolean mainMaxed = main.getInt(LEVEL) >= MAIN_MAX_LEVEL;
+        boolean mainMaxed = main.getInt(LEVEL) >= grade.mainCap;
 
         ListTag combined = new ListTag();
         ListTag leftSubs = a.getList(SUBS, 10);
@@ -1188,7 +1199,7 @@ public final class EquipmentAffixSystem {
                 bonusSubGrowth += 1;
             } else {
                 int before = main.getInt(LEVEL);
-                levelUpMain(main);
+                levelUpMain(main, grade.mainCap);
                 bonusSubGrowth += subGrowthCrossings(before, main.getInt(LEVEL));
             }
         }
@@ -1209,7 +1220,7 @@ public final class EquipmentAffixSystem {
         return writeRoot(output, a, grade);
     }
 
-    /** 主词条等级上限。 */
+    /** 主词条等级的绝对上限：只有 S / SS / SSS 武备能吃满。 */
     public static final int MAIN_MAX_LEVEL = 12;
     /** 副词条等级上限。内部 1 级是「无等级」的初始档，2～5 级对外显示 +1～+4。 */
     public static final int SUB_MAX_LEVEL = 5;
@@ -1218,11 +1229,30 @@ public final class EquipmentAffixSystem {
     /** 主词条每到这些等级，额外让一条副词条成长。 */
     private static final int[] SUB_GROWTH_LEVELS = {3, 6, 9, 12};
 
+    /**
+     * 这件武备的主词条等级上限，按评级算：C 3 / B 6 / A 9 / S、SS、SSS 12。
+     *
+     * <p>没有武备数据（白板装备）时按绝对上限 {@link #MAIN_MAX_LEVEL} 返回，
+     * 这样赋词条之前的装备也不会被误判成「已满级」。</p>
+     */
+    public static int mainMaxLevel(ItemStack stack) {
+        CompoundTag root = affixRoot(stack);
+        return root == null ? MAIN_MAX_LEVEL : mainMaxLevel(root.getString(GRADE));
+    }
+
+    /** 按评级名取主词条等级上限；评级名缺失或写坏时按绝对上限兜底。 */
+    public static int mainMaxLevel(String gradeName) {
+        if (gradeName == null || gradeName.isBlank()) return MAIN_MAX_LEVEL;
+        return Grade.parse(gradeName).mainCap;
+    }
+
     /** 主词条升级：按主词条曲线 mainStart + mainStep × (等级-1) 计算数值。 */
-    private static void levelUpMain(CompoundTag tag) {
+    private static void levelUpMain(CompoundTag tag, int cap) {
         Affix affix = findAffix(tag.getString(ID));
         if (affix == null) return;
-        int level = Math.min(MAIN_MAX_LEVEL, tag.getInt(LEVEL) + 1);
+        int current = tag.getInt(LEVEL);
+        // 已经超过这个评级上限的老存档不往回收等级，只是不再往上涨。
+        int level = current >= cap ? current : current + 1;
         tag.putInt(LEVEL, level);
         tag.putDouble(VALUE, affix.mainValue(level));
     }
@@ -1690,16 +1720,20 @@ public final class EquipmentAffixSystem {
     /**
      * 敲击升级：主词条 +1 级，跨过 3 / 6 / 9 / 12 级时追加一次随机副词条成长。
      *
+     * <p>等级上限按评级算（C 3 / B 6 / A 9 / S 及以上 12），到顶就原样返回。</p>
+     *
      * <p>和魔晶铁砧「同类装备合成」用的是同一套等级曲线与成长规则，
      * 所以打铁升上来的武器和合出来的武器数值完全一致。</p>
      */
     public static ItemStack upgradeMainLevel(ItemStack stack, net.minecraft.util.RandomSource random) {
         CompoundTag root = affixRoot(stack);
-        if (root == null || root.getCompound(MAIN).getInt(LEVEL) >= MAIN_MAX_LEVEL) return stack;
+        if (root == null) return stack;
+        int cap = mainMaxLevel(root.getString(GRADE));
+        if (root.getCompound(MAIN).getInt(LEVEL) >= cap) return stack;
         root = root.copy();
         CompoundTag main = root.getCompound(MAIN);
         int before = main.getInt(LEVEL);
-        levelUpMain(main);
+        levelUpMain(main, cap);
         ListTag subs = root.getList(SUBS, 10);
         School school = schoolOf(root, stack);
         for (int i = 0; i < subGrowthCrossings(before, main.getInt(LEVEL)); i++) {

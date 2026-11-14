@@ -148,7 +148,7 @@ public final class WeaponWorkbenchMenu extends AbstractContainerMenu {
             message(player, "message.dimensional_mana.weapon_workbench.no_affix");
             return;
         }
-        // 武备强化石：武备满级之后才解锁，一颗强制成长一条副词条（直到四条副词条全满）。
+        // 武备强化石：武备到本评级上限之后才解锁，一颗强制成长一条副词条（直到四条副词条全满）。
         if (ArmamentForge.isEnhanceStone(material)) {
             growSub(player, equipment);
             return;
@@ -168,8 +168,9 @@ public final class WeaponWorkbenchMenu extends AbstractContainerMenu {
             return;
         }
         int level = EquipmentAffixSystem.mainLevel(equipment);
-        if (level >= ArmamentForge.MAX_LEVEL) {
-            message(player, "message.dimensional_mana.weapon_workbench.max_level", ArmamentForge.MAX_LEVEL);
+        int maxLevel = ArmamentForge.maxLevel(equipment);
+        if (level >= maxLevel) {
+            message(player, "message.dimensional_mana.weapon_workbench.max_level", maxLevel);
             return;
         }
         int cost = ArmamentForge.upgradeCost(equipment, level + 1);
@@ -180,7 +181,7 @@ public final class WeaponWorkbenchMenu extends AbstractContainerMenu {
         consumeOneMaterial();
         ItemStack upgraded = EquipmentAffixSystem.upgradeMainLevel(equipment, player.getRandom());
         container.setItem(WeaponWorkbenchBlockEntity.EQUIPMENT_SLOT, upgraded);
-        // 进度「千锤百炼」：主词条喂到 Lv.12 满级。
+        // 进度「千锤百炼」：主词条喂到绝对上限 Lv.12（C / B / A 评级到不了，天然被卡住）。
         if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer
                 && EquipmentAffixSystem.mainLevel(upgraded) >= ArmamentForge.MAX_LEVEL) {
             MagicProgression.awardAdvancement(serverPlayer, "affix_max");
@@ -194,10 +195,11 @@ public final class WeaponWorkbenchMenu extends AbstractContainerMenu {
                 EquipmentAffixSystem.mainLevel(upgraded), refund);
     }
 
-    /** 武备强化石：满级武备专用的「副词条强制成长」，一颗一次，直到四条副词条都到顶。 */
+    /** 武备强化石：满级（到本评级上限）专用的「副词条强制成长」，一颗一次，直到四条副词条都到顶。 */
     private void growSub(Player player, ItemStack equipment) {
-        if (EquipmentAffixSystem.mainLevel(equipment) < ArmamentForge.MAX_LEVEL) {
-            message(player, "message.dimensional_mana.weapon_workbench.stone_need_max", ArmamentForge.MAX_LEVEL);
+        int maxLevel = ArmamentForge.maxLevel(equipment);
+        if (EquipmentAffixSystem.mainLevel(equipment) < maxLevel) {
+            message(player, "message.dimensional_mana.weapon_workbench.stone_need_max", maxLevel);
             return;
         }
         if (!EquipmentAffixSystem.hasGrowableSub(equipment)) {

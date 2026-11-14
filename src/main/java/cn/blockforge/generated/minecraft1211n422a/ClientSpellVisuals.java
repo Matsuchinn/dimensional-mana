@@ -559,7 +559,13 @@ public final class ClientSpellVisuals {
                          SpellVisualPayload.SONIC_ORB, SpellVisualPayload.BEAM -> true;
                     default -> false;
                 };
-                sprites.scope(nearCaster ? v.data.owner() : -1, v.data.anchor());
+                // 前摇这种「长在施法者手上」的视觉只认 owner；瞄准用的 anchor 不参与，否则
+                // 怪物瞄着玩家放法术时，玩家会被当成施法者、在镜头前看到自己的前摇。
+                // 贴身领域仍然允许 anchor 参与，让依附在自己身上的光环内部留出开口。
+                boolean chargeVisual = v.data.phase() == SpellVisualPayload.CHARGE
+                        || v.data.phase() == SpellVisualPayload.RADIANT_CHARGE;
+                sprites.scope(nearCaster ? v.data.owner() : -1,
+                        nearCaster && chargeVisual ? -1 : v.data.anchor());
                 draw(mesh, materials, sprites, v, age, mc.level, partial);
             }
             for (SpellProjectile projectile : projectiles) {
@@ -2004,7 +2010,7 @@ public final class ClientSpellVisuals {
                     .setColor((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255, (int)(Math.clamp(alpha * view.visibility(p), 0, 1) * 255));
         }
         void quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, double alpha) {
-            if (view.ownEffect && a.distanceToSqr(camera) < 36
+            if (view.ownScreen && a.distanceToSqr(camera) < 36
                     && (a.distanceToSqr(b) > 0.36 || a.distanceToSqr(d) > 0.36)) {
                 int n = 4;
                 for (int j = 0; j < n; j++) for (int i = 0; i < n; i++) {

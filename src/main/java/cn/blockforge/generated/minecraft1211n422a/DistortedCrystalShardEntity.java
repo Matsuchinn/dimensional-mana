@@ -3,6 +3,7 @@ package cn.blockforge.generated.minecraft1211n422a;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -56,6 +57,24 @@ public final class DistortedCrystalShardEntity extends Projectile {
         setXRot((float) -Math.toDegrees(Math.asin(Math.max(-1.0, Math.min(1.0, d.y)))));
     }
 
+    /**
+     * 被斗气完美格挡弹回来：掉头，归属换成弹反的玩家，原来的施法者关系作废。
+     *
+     * <p>{@link #firstTarget} 会跳过 {@code getOwner()}，所以掉头之后它不会再打回弹反的人，
+     * 只会沿原路飞回去撞上谁算谁的。</p>
+     */
+    public void reflectBy(LivingEntity parrier) {
+        setOwner(parrier);
+        this.blastCaster = null;
+        this.casterId = null;
+        Vec3 motion = getDeltaMovement();
+        Vec3 back = motion.lengthSqr() < 1.0E-4 ? getLookAngle().scale(-1.0) : motion.scale(-1.0);
+        setDeltaMovement(back);
+        applyRotationFrom(back);
+        setPos(position().add(back.normalize().scale(0.5)));
+        hasImpulse = true;
+    }
+
     /** 伤害归属：优先内存引用，重载存档后按 UUID 找回。 */
     private LivingEntity caster() {
         if (blastCaster != null) return blastCaster;
@@ -91,6 +110,8 @@ public final class DistortedCrystalShardEntity extends Projectile {
         // 无穿透：取航线上第一个能命中的生物。
         LivingEntity victim = firstTarget(start, end);
         if (victim != null) {
+            // 斗气招架：这一发飞到玩家身上时先问招架系统 —— 完美格挡会让晶片原地掉头。
+            if (victim instanceof ServerPlayer player && BattleQiParry.onIncomingProjectile(player, this)) return;
             setPos(victim.getBoundingBox().getCenter());
             hitLiving(victim);
             shatter();
@@ -118,6 +139,7 @@ public final class DistortedCrystalShardEntity extends Projectile {
         List<LivingEntity> candidates = level().getEntitiesOfClass(LivingEntity.class,
                 new AABB(start, end).inflate(0.45),
                 entity -> entity.isAlive() && !(entity instanceof CrystallizedZombie)
+                        && entity != getOwner()
                         && (caster() == null || entity != caster()) && !entity.isSpectator());
         LivingEntity best = null;
         double bestDistance = Double.MAX_VALUE;

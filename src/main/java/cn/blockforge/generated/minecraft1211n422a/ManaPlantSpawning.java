@@ -23,8 +23,11 @@ import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 植物在世界里的“活起来”的部分：血吻花牵引、原版花朵被魔素史莱姆浸染，以及
@@ -44,8 +47,19 @@ public final class ManaPlantSpawning {
     private static final int LEVILIA_ATTEMPTS = 3;
     /** 只有三成多的区块会考虑补种，避免每块地都长。 */
     private static final float LEVILIA_CHUNK_CHANCE = 0.35F;
+    /** 补种队列每刻最多处理几个区块：一次批量加载几百块时不会在同一刻集中写方块。 */
+    private static final int PLANT_CHUNKS_PER_TICK = 2;
+    /** 排进队列的区块最多等多久（刻）：超过就丢掉，等下次加载再来。 */
+    private static final long PLANT_QUEUE_TTL = 1200L;
 
     private static final String FLOWER_TIMERS = "dmFlowerTimers";
+    /**
+     * 等服务器刻去补种的区块。
+     *
+     * <p>键是区块坐标，值是「排进来的那一刻」的游戏刻。用并发集合是因为区块加载回调
+     * 可能来自加载线程（整合包把区块生成放到工作线程时就是这样），而真正补种只在服务器主线程做。</p>
+     */
+    private static final Map<Long, Long> PENDING_PLANTS = new ConcurrentHashMap<>();
     private static final ResourceLocation ESCAPE_MODIFIER =
             ResourceLocation.fromNamespaceAndPath(GeneratedMod.MOD_ID, "blood_kiss_escape");
     /** 生命值低于最大生命一半时，血吻花的藤蔓会死死缠住生物：移动速度 -90%。 */
@@ -59,6 +73,8 @@ public final class ManaPlantSpawning {
     public static void tickLevel(LevelTickEvent.Post event) {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         long time = level.getGameTime();
+        // 区块加载时只记坐标、不碰世界；真正的补种在这里、按每刻固定预算慢慢做。
+        plantPendingChunks(level, time);
         if (time % PULL_INTERVAL == 0) {
             for (ServerPlayer player : level.players()) tickBloodKiss(level, player);
         }
@@ -67,26 +83,68 @@ public final class ManaPlantSpawning {
         }
     }
 
-    // ---------------------------------------------------------------- 洞穴上方的蕾薇莉亚
+    // ---------------------------------------------------------------- 区块加载时的补种队列
 
     /**
-     * 区块加载时补种一株蕾薇莉亚。
+     * 区块加载时只登记坐标，绝不在这里读方块、写方块、查高度图。
+     *
+     * <p><b>这是本轮死锁修复的核心。</b>这个回调是在区块「补成完整状态」的那一步里发出的，
+     * 而这一步本身就排在服务器主线程的任务队列上。回调里只要有一次 {@code getBlockState}
+     * 落在还没加载的区块上，游戏就会让主线程<b>停下来等那块区块生成完</b>——可那块区块正好
+     * 也排在同一个主线程队列里，于是谁都推进不了：世界定格、TPS 归零、没有 crash-report，
+     * 退出存档还会因为区块/实体数据没写完而丢档。以前「读高度图 + 扫 7×7×7 找空地 + 写方块」
+     * 一次能跨好几个相邻区块，地形模组把区块生成拖慢之后几乎必中。</p>
+     *
+     * <p>现在这里只往队列里放一个区块坐标，连随机数都不掷；补种挪到 {@link #tickLevel}，
+     * 那时区块早就加载完了，而且每刻只处理两个区块。</p>
+     */
+    public static void onChunkLoad(ChunkEvent.Load event) {
+        if (!(event.getLevel() instanceof ServerLevel level)) return;
+        ChunkPos chunk = event.getChunk().getPos();
+        // 队列只用于「加载后一分钟内补一株」：堆到上限先清空，不会无限长。
+        if (PENDING_PLANTS.size() > 512) PENDING_PLANTS.clear();
+        PENDING_PLANTS.put(chunk.toLong(), level.getGameTime());
+    }
+
+    /** 每刻处理最多 {@link #PLANT_CHUNKS_PER_TICK} 个区块；区块或邻块还没就绪就留到下一刻。 */
+    private static void plantPendingChunks(ServerLevel level, long now) {
+        if (PENDING_PLANTS.isEmpty()) return;
+        int budget = PLANT_CHUNKS_PER_TICK;
+        Iterator<Map.Entry<Long, Long>> iterator = PENDING_PLANTS.entrySet().iterator();
+        while (iterator.hasNext() && budget > 0) {
+            Map.Entry<Long, Long> entry = iterator.next();
+            // 等太久的直接丢掉：玩家可能早就走远了，等下次加载区块时会重新排队。
+            if (now - entry.getValue() > PLANT_QUEUE_TTL) {
+                iterator.remove();
+                continue;
+            }
+            ChunkPos chunk = new ChunkPos(entry.getKey());
+            if (level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null) continue;
+            iterator.remove();
+            budget--;
+            plantLevilia(level, chunk);
+        }
+    }
+
+    /**
+     * 在已经加载好的区块里补种一株蕾薇莉亚。
      *
      * <p>蕾薇莉亚要求“魔晶洞穴正上方、浓度 ≥15”，洞穴表是运行时才有的数据，世界生成阶段读不到，
      * 所以这一种只能等区块加载后用浓度判定补。每个区块最多一株，而且只在洞穴影响圈内，
      * 没有洞穴的区块查几次方块就直接跳过，开销可以忽略。</p>
      */
-    public static void onChunkLoad(ChunkEvent.Load event) {
-        if (!(event.getLevel() instanceof ServerLevel level)) return;
+    private static void plantLevilia(ServerLevel level, ChunkPos chunk) {
         RandomSource random = level.getRandom();
         if (random.nextFloat() > LEVILIA_CHUNK_CHANCE) return;
-        ChunkPos chunk = event.getChunk().getPos();
         for (int attempt = 0; attempt < LEVILIA_ATTEMPTS; attempt++) {
             int x = chunk.getMinBlockX() + random.nextInt(16);
             int z = chunk.getMinBlockZ() + random.nextInt(16);
+            if (!ChunkSafety.readyColumn(level, x, z)) continue;
             BlockPos pos = new BlockPos(x, level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z), z);
             if (!ManaPlants.Kind.LEVILIA.heightFits(pos.getY())) continue;
-            if (!level.isLoaded(pos) || !ManaPlants.canPlantAt(level, pos)) continue;
+            // 这一株周围 4 格（含相邻区块）必须都加载好了：写方块会触发邻块更新。
+            if (!ChunkSafety.readyAround(level, pos, 4)) continue;
+            if (!ManaPlants.canPlantAt(level, pos)) continue;
             // 洞穴在附近时浓度一定被抬到 15，所以这里只查洞穴表，不用再算一遍噪声浓度。
             if (!ManaCaveData.get(level).isNearCave(pos, 48)) continue;
             if (countNearby(level, pos, 3) >= 2) continue;
@@ -97,6 +155,8 @@ public final class ManaPlantSpawning {
 
     /** 周围 5 格内已经有多少株本模组的植物，防止同一种铺成地毯。 */
     private static int countNearby(ServerLevel level, BlockPos center, int radius) {
+        // 扫一圈之前先确认覆盖到的区块都加载好了，否则 getBlockState 会把主线程卡在区块加载上。
+        if (!ChunkSafety.readyAround(level, center, radius)) return Integer.MAX_VALUE;
         int count = 0;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (int x = -radius; x <= radius; x++) {
@@ -160,6 +220,9 @@ public final class ManaPlantSpawning {
     }
 
     private static BlockPos nearestBloodKiss(ServerLevel level, BlockPos center, int radius) {
+        // 先在区块段的调色板里筛一遍：附近根本没有血吻花时（绝大多数地方），一格都不用读。
+        if (!SectionScan.anyNear(level, center, radius, 1,
+                state -> ManaPlants.isPlant(state, ManaPlants.Kind.BLOOD_KISS))) return null;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         BlockPos found = null;
         double best = Double.MAX_VALUE;
@@ -235,10 +298,18 @@ public final class ManaPlantSpawning {
     }
 
     private static void mutateAround(ServerLevel level, ElementalSlime slime) {
+        BlockPos center = slime.blockPosition();
+        // 史莱姆本身一定在已加载的区块里，但它周围 2 格可能已经跨到隔壁还没加载的区块；
+        // 这时整只跳过，下一个结算周期再看，绝不为了一次浸染去同步加载区块。
+        if (!ChunkSafety.readyAround(level, center, 3)) return;
         CompoundTag tag = slime.getPersistentData();
         CompoundTag timers = tag.getCompound(FLOWER_TIMERS);
         if (timers.size() > 48) timers = new CompoundTag();
-        BlockPos center = slime.blockPosition();
+        // 先问区块段的调色板：附近一朵小黄花都没有时（绝大多数位置），下面 100 格一次都不读。
+        if (!SectionScan.anyNear(level, center, 2, 1, state -> state.is(BlockTags.SMALL_FLOWERS))) {
+            if (!timers.isEmpty()) tag.put(FLOWER_TIMERS, new CompoundTag());
+            return;
+        }
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (int x = -2; x <= 2; x++) {
             for (int y = -1; y <= 2; y++) {

@@ -82,9 +82,39 @@ public final class ElementalSlime extends Slime {
      * 只作用于元素史莱姆，玩家学会同一法术时的冷却不受影响。
      */
     private static final int SPELL_COOLDOWN_MULTIPLIER = 2;
+    /** 施法前摇：0.65 秒，足够玩家看清是哪只史莱姆在准备法术、也来得及举招架。 */
+    private static final int CAST_TICKS = 13;
+    /** 风史莱姆一轮漂浮/落地闲逛的时长（秒）。 */
+    private static final int WIND_FLOAT_MIN_SECONDS = 20;
+    private static final int WIND_FLOAT_MAX_SECONDS = 50;
+    private static final int WIND_GROUND_MIN_SECONDS = 15;
+    private static final int WIND_GROUND_MAX_SECONDS = 35;
+    /** 飘点离地表的高度：贴近屋顶掠过，不再是「离地三十多格的一层」。 */
+    private static final int WIND_TARGET_MIN_ABOVE = 8;
+    private static final int WIND_TARGET_MAX_ABOVE = 16;
 
     private final ElementalSlimeVariant variant;
     private long nextSpellTick;
+    /**
+     * 施法前摇的结束时刻（gameTime）；{@code 0} 表示没有在施法。
+     *
+     * <p>r400：初级法术不再是「抬手就命中」，而是先蓄力 {@link #CAST_TICKS} 刻再射出一颗
+     * 看得见、飞得慢的弹体（{@link SlimeSpellBolt}）。前摇期间史莱姆会盯着目标、身上冒对应颜色的
+     * 粒子，玩家能清楚看出「它要打我了」。</p>
+     */
+    private long castingUntil;
+    /** 正在蓄力的目标实体 id；-1 表示没有。 */
+    private int castingTargetId = -1;
+    /** 雷史莱姆电击光环的蓄能结束时刻；0 表示没有在蓄能。 */
+    private long shockAt;
+    /** 下一次可以开始电击蓄能的时刻。 */
+    private long nextShockTick;
+    /** 电击光环蓄能时长：0.5 秒，够玩家看清脚下的电火花并走出范围。 */
+    private static final int SHOCK_CHARGE_TICKS = 10;
+    /** 两次电击之间的间隔（蓄能结束才开始算）。 */
+    private static final int SHOCK_INTERVAL_TICKS = 30;
+    /** 电击光环的作用半径（格）。 */
+    private static final double SHOCK_RADIUS = 3.25;
     private long nextGiftTick;
     private long nextDailyProductTick;
     private long soundExpiresAt;
@@ -111,6 +141,13 @@ public final class ElementalSlime extends Slime {
     private double windTargetY;
     /** 到达飘点后先悬停到这个时刻，再挑下一个点。 */
     private long windPauseUntil;
+    /**
+     * 这一轮漂浮的结束时刻：到点就落地待一会儿，再重新起飞。
+     *
+     * <p>r400：以前风史莱姆一旦起飞就永远飘着，玩家身边慢慢攒出一整片高空史莱姆。
+     * 现在飞 {@value #WIND_FLOAT_MIN_SECONDS}～{@value #WIND_FLOAT_MAX_SECONDS} 秒就会自己落下去歇一阵。</p>
+     */
+    private long windFloatUntil;
     // ---------------------------------------------------------------- 手持物品吸引
     /** 被玩家手持物吸引时要凑过去的点；null 表示当前没有吸引源。 */
     private Vec3 lurePoint;
@@ -501,9 +538,10 @@ public final class ElementalSlime extends Slime {
         }
         tickFluidWalking();
         tickLure();
+        // 蓄力推进：到点就射出弹体，目标跑掉就取消（见 castBasicSpell）。
+        tickCasting(now);
         if (approach != null && now >= approachUntil) approach = null;
-        if (variant == ElementalSlimeVariant.LIGHTNING && tickCount % 10 == 0
-                && (isInWaterOrBubble() || level().isRainingAt(blockPosition()))) electrifyNearby();
+        if (variant == ElementalSlimeVariant.LIGHTNING) tickShockAura(now);
         if (variant == ElementalSlimeVariant.WIND) tickWindFlight(now);
         else setNoGravity(false);
         if (isTamed() && getTarget() != null) setTarget(null);
@@ -525,10 +563,17 @@ public final class ElementalSlime extends Slime {
 
     /** 生成时 50% 直接在半空漂浮；其余先落回地面闲逛 30 秒，再起飞去别的地方。 */
     private void initWindState() {
+        long now = level().getGameTime();
         windFloating = getRandom().nextFloat() < 0.50F;
-        windGroundUntil = level().getGameTime() + 30 * 20L;
+        windGroundUntil = now + randomSeconds(WIND_GROUND_MIN_SECONDS, WIND_GROUND_MAX_SECONDS);
+        windFloatUntil = now + randomSeconds(WIND_FLOAT_MIN_SECONDS, WIND_FLOAT_MAX_SECONDS);
         windTarget = null;
         windPauseUntil = 0;
+    }
+
+    /** 两个秒数之间随机一个刻数；同一只史莱姆每次也不一样。 */
+    private long randomSeconds(int min, int max) {
+        return (min + getRandom().nextInt(Math.max(1, max - min + 1))) * 20L;
     }
 
     /**
@@ -542,12 +587,21 @@ public final class ElementalSlime extends Slime {
             setNoGravity(false);
             if (now >= windGroundUntil) {
                 windFloating = true;
+                windFloatUntil = now + randomSeconds(WIND_FLOAT_MIN_SECONDS, WIND_FLOAT_MAX_SECONDS);
                 windTarget = null;
                 windPauseUntil = 0;
             }
             return;
         }
         setNoGravity(true);
+        // 飞够时间就落回地面歇一会儿：不会出现一整片永远挂在天上的风史莱姆。
+        if (now >= windFloatUntil && getTarget() == null) {
+            windFloating = false;
+            windTarget = null;
+            windGroundUntil = now + randomSeconds(WIND_GROUND_MIN_SECONDS, WIND_GROUND_MAX_SECONDS);
+            setNoGravity(false);
+            return;
+        }
         // 偶尔会顶进方块里（树冠、山洞顶），先把自己拔出来。
         if (isInWall()) {
             setDeltaMovement(getDeltaMovement().x, 0.25, getDeltaMovement().z);
@@ -595,18 +649,28 @@ public final class ElementalSlime extends Slime {
         }
     }
 
-    /** 在地表往上约 32 格、水平 16～40 格外挑一个飘点。 */
+    /**
+     * 在地表往上 8～16 格、水平 8～24 格外挑一个飘点。
+     *
+     * <p>r400：以前是「地表往上 32 格、水平 16～40 格」，玩家在山上抬头就能看到一层漂浮的风史莱姆，
+     * 观感就是满天都是。现在高度贴近屋顶、距离也收近，它们更像「在房顶之间掠过的家伙」。</p>
+     */
     private void pickWindTarget() {
         double angle = getRandom().nextDouble() * Math.PI * 2.0;
-        double distance = 16.0 + getRandom().nextDouble() * 24.0;
+        double distance = 8.0 + getRandom().nextDouble() * 16.0;
         int x = Mth.floor(getX() + Math.cos(angle) * distance);
         int z = Mth.floor(getZ() + Math.sin(angle) * distance);
-        BlockPos column = new BlockPos(x, Mth.floor(getY()), z);
-        int surface = level().hasChunkAt(column)
-                ? level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) : Mth.floor(getY());
+        int surface;
+        // 只往已经加载好的区块里飞：没加载就沿用当前高度，绝不让游戏为了挑个飘点去生成地形。
+        if (level() instanceof ServerLevel server && ChunkSafety.readyColumn(server, x, z)) {
+            surface = level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+        } else {
+            return;
+        }
         double maxY = level().getMaxBuildHeight() - 6.0;
         double minY = level().getMinBuildHeight() + 12.0;
-        windTargetY = Mth.clamp(surface + 32, minY, maxY);
+        int above = WIND_TARGET_MIN_ABOVE + getRandom().nextInt(WIND_TARGET_MAX_ABOVE - WIND_TARGET_MIN_ABOVE + 1);
+        windTargetY = Mth.clamp(surface + above, minY, maxY);
         windTarget = new Vec3(x + 0.5, windTargetY, z + 0.5);
         windPauseUntil = 0;
     }
@@ -761,6 +825,10 @@ public final class ElementalSlime extends Slime {
     private void tickElementEnvironment() {
         BlockPos feet = blockPosition();
         if (variant == ElementalSlimeVariant.ICE) {
+            // 冰史莱姆会把脚下的水冻成霜冰；这里要写方块，先确认周围 2 格的区块都加载好了
+            // （跨区块写方块会触发邻块更新，落在没加载完的区块上就会让主线程同步去生成它）。
+            if (!(level() instanceof net.minecraft.server.level.ServerLevel server)
+                    || !ChunkSafety.readyAround(server, feet, 2)) return;
             for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-1, -1, -1), feet.offset(1, 0, 1))) {
                 if (level().getBlockState(pos).is(Blocks.WATER)) level().setBlockAndUpdate(pos, Blocks.FROSTED_ICE.defaultBlockState());
             }
@@ -775,14 +843,67 @@ public final class ElementalSlime extends Slime {
         return level().getBiome(blockPosition()).value().coldEnoughToSnow(blockPosition());
     }
 
+    /**
+     * 雷史莱姆「湿身放电」的光环：先蓄能，再放电。
+     *
+     * <p>r401：以前只要泡在水里或者淋着雨，每 10 刻（0.5 秒）就直接对身边 3 格内的生物结算一次伤害，
+     * 玩家往往是「血怎么掉了」才发现被电。现在改成可见的前摇：先在头顶冒一圈电火花、响一声充电音，
+     * {@value #SHOCK_CHARGE_TICKS} 刻（半秒）后才真正放电。半秒够玩家横向走开三四格，
+     * 也让「挨了一下」有明确的画面来源。离开水或雨会立刻打断蓄能，不会把电攒着等玩家回来。</p>
+     */
+    private void tickShockAura(long now) {
+        boolean wet = isInWaterOrBubble() || level().isRainingAt(blockPosition());
+        if (!wet) {
+            shockAt = 0;
+            return;
+        }
+        if (shockAt > 0) {
+            if (now >= shockAt) {
+                shockAt = 0;
+                nextShockTick = now + SHOCK_INTERVAL_TICKS;
+                electrifyNearby();
+                return;
+            }
+            if (level() instanceof ServerLevel server && tickCount % 2 == 0) {
+                server.sendParticles(ParticleTypes.ELECTRIC_SPARK,
+                        getX(), getY() + getBbHeight() * 0.85, getZ(),
+                        4, 0.4, 0.3, 0.4, 0.02);
+            }
+            return;
+        }
+        if (now >= nextShockTick) {
+            shockAt = now + SHOCK_CHARGE_TICKS;
+            if (level() instanceof ServerLevel server) {
+                server.playSound(null, getX(), getY(), getZ(), SoundEvents.AMETHYST_BLOCK_CHIME,
+                        getSoundSource(), getSoundVolume() * 0.7F, 1.8F);
+                server.sendParticles(ParticleTypes.ELECTRIC_SPARK,
+                        getX(), getY() + getBbHeight() * 0.9, getZ(),
+                        12, 0.45, 0.4, 0.45, 0.06);
+            }
+        }
+    }
+
     private void electrifyNearby() {
-        AABB area = getBoundingBox().inflate(3.0);
-        // 「周围 3 格内所有实体」：仍然照打同类，但创造/旁观模式与和平难度下的玩家照规矩放过。
+        AABB area = getBoundingBox().inflate(SHOCK_RADIUS);
+        // 「周围 3 格内所有实体」：仍然照打同类，但创造/旁观模式与和平难度下的玩家照规矩放过；
+        // 隔着墙的不导电，隔着方块也不会莫名其妙掉血。
         for (LivingEntity target : level().getEntitiesOfClass(LivingEntity.class, area,
                 entity -> entity != this && entity.isAlive() && validTerritoryTarget(entity))) {
+            if (!getSensing().hasLineOfSight(target)) continue;
             float damage = ElementReactionSystem.elementalDamage(this, target, ElementType.LIGHTNING,
                     2.0F * tier().damageScale());
             SpellDamage.hitResolvedElement(level(), this, target, ElementType.LIGHTNING.id(), damage);
+        }
+        if (level() instanceof ServerLevel server) {
+            // 放电的一圈电弧：让没被打到的人也看清「刚才那一下是从它脚下炸开的」。
+            for (int i = 0; i < 16; i++) {
+                double angle = Math.PI * 2.0 * i / 16.0;
+                server.sendParticles(ParticleTypes.ELECTRIC_SPARK,
+                        getX() + Math.cos(angle) * SHOCK_RADIUS, getY() + 0.25,
+                        getZ() + Math.sin(angle) * SHOCK_RADIUS, 1, 0.0, 0.15, 0.0, 0.02);
+            }
+            server.playSound(null, getX(), getY(), getZ(), SoundEvents.TRIDENT_RIPTIDE_1,
+                    getSoundSource(), getSoundVolume(), 0.75F);
         }
     }
 
@@ -808,6 +929,8 @@ public final class ElementalSlime extends Slime {
 
     public boolean isSpellReady() {
         LivingEntity target = getTarget();
+        // 正在蓄力时不再重复起手：否则同一个前摇会被 Goal 每刻重新触发一遍。
+        if (castingUntil > 0) return false;
         if (target == null || isTamed() || level().getGameTime() < nextSpellTick) return false;
         // 必须和 SpellGoal.canUse 的射程/视线判定完全一致。旧版只判冷却，
         // 于是「冷却好了但目标在 16 格以外或被挡住」时法术 Goal 不跑、
@@ -820,27 +943,85 @@ public final class ElementalSlime extends Slime {
         return variant.basicSpell().cooldownTicks() * SPELL_COOLDOWN_MULTIPLIER;
     }
 
+    /**
+     * 开始蓄力释放初级法术。
+     *
+     * <p>r400：不再抬手即命中。这里只进入前摇——盯着目标、冒对应颜色的粒子、放一声低沉的起手音，
+     * {@value #CAST_TICKS} 刻后才由 {@link #tickCasting} 射出真正的弹体
+     * （{@link SlimeSpellBolt}，速度是玩家投射法术的一半）。这样玩家既看得见施法过程，
+     * 也有时间走位或者在弹体飞近时举招架把它弹掉。</p>
+     */
     public void castBasicSpell(LivingEntity target) {
         if (!isSpellReady() || target == null || !validCombatTarget(target)) return;
-        float damage = variant.basicSpellDamage() * SPELL_DIFFICULTY[difficultyIndex()] * tier().damageScale();
-        // 这一发没有弹道、瞬间命中，招架系统照样能接：处于招架姿态且距离够近就弹开，
-        // 左键窗口内还算完美招架。被弹掉时伤害和元素附着一起取消，只留碎裂特效。
-        if (target instanceof ServerPlayer parryTarget
-                && BattleQiParry.parryInstantSpell(parryTarget, this, variant.damageElementId(), damage)) {
-            nextSpellTick = level().getGameTime() + spellCooldownTicks();
+        if (level().isClientSide) return;
+        castingUntil = level().getGameTime() + CAST_TICKS;
+        castingTargetId = target.getId();
+        getLookControl().setLookAt(target, 30.0F, 30.0F);
+        // 客户端据此播放蓄力动画；服务端每两刻再补一圈粒子，远处也看得见。
+        SpellVisualPayload.send(this, variant.basicSpell(), SpellVisualPayload.CHARGE, target.getId(),
+                getEyePosition(), target.getEyePosition(), CAST_TICKS);
+        playSound(voice(), getSoundVolume() * 0.8F, voicePitch(0.8F));
+    }
+
+    /** 是否正在蓄力（蓄力期间法术 Goal 不会重复触发）。 */
+    public boolean isCasting() {
+        return castingUntil > 0;
+    }
+
+    /**
+     * 蓄力推进：目标跑出射程 / 死亡 / 视线被挡就取消；时间到就把弹体射出去。
+     *
+     * <p>只做「看目标 + 冒粒子 + 到点发射」，不读任何方块，所以不会碰到区块加载问题。</p>
+     */
+    private void tickCasting(long now) {
+        if (castingUntil <= 0) return;
+        LivingEntity target = castingTargetId >= 0 && level().getEntity(castingTargetId) instanceof LivingEntity found
+                ? found : null;
+        if (target == null || !target.isAlive() || !validCombatTarget(target)
+                || distanceToSqr(target) > 24.0 * 24.0 || !getSensing().hasLineOfSight(target)) {
+            cancelCasting();
             return;
         }
-        if (variant == ElementalSlimeVariant.MANA) {
-            damage = ElementReactionSystem.arcaneDamage(this, target, damage);
-            SpellDamage.hitResolvedElement(level(), this, target, MagicEquipment.ARCANE, damage);
-        } else {
-            damage = ElementReactionSystem.elementalDamage(this, target, variant.element(), damage);
-            SpellDamage.hitResolvedElement(level(), this, target, variant.element().id(), damage);
+        getLookControl().setLookAt(target, 30.0F, 30.0F);
+        if (level() instanceof ServerLevel serverLevel && tickCount % 2 == 0) {
+            Vec3 focus = getEyePosition().add(getLookAngle().scale(0.7));
+            int color = variant.color();
+            float r = ((color >> 16) & 0xFF) / 255.0F;
+            float g = ((color >> 8) & 0xFF) / 255.0F;
+            float b = (color & 0xFF) / 255.0F;
+            serverLevel.sendParticles(new net.minecraft.core.particles.DustParticleOptions(
+                            new org.joml.Vector3f(r, g, b), 1.0F),
+                    focus.x, focus.y, focus.z, 4, 0.12, 0.12, 0.12, 0.0);
+            serverLevel.sendParticles(net.minecraft.core.particles.ParticleTypes.ENCHANT,
+                    focus.x, focus.y, focus.z, 2, 0.15, 0.15, 0.15, 0.0);
         }
-        SpellVisualPayload.send(this, variant.basicSpell(), SpellVisualPayload.RELEASE, target.getId(),
-                getEyePosition(), target.getEyePosition(), 10);
+        if (now + 1 < castingUntil) return;
+        releaseSpell(target);
+    }
+
+    private void cancelCasting() {
+        if (castingUntil <= 0) return;
+        castingUntil = 0;
+        castingTargetId = -1;
+        SpellVisualPayload.send(this, variant.basicSpell(), SpellVisualPayload.CANCEL, getId(),
+                getEyePosition(), getEyePosition(), 4);
+    }
+
+    /** 前摇结束：把这一发交给弹体，伤害沿用原来的档位与难度系数。 */
+    private void releaseSpell(LivingEntity target) {
+        castingUntil = 0;
+        castingTargetId = -1;
+        if (!(level() instanceof ServerLevel serverLevel)) return;
+        float damage = variant.basicSpellDamage() * SPELL_DIFFICULTY[difficultyIndex()] * tier().damageScale();
+        SlimeSpellBolt bolt = GeneratedMod.SLIME_SPELL_BOLT.get().create(serverLevel);
+        if (bolt != null) {
+            bolt.launch(this, target, damage);
+            serverLevel.addFreshEntity(bolt);
+        }
+        SpellVisualPayload.send(this, variant.basicSpell(), SpellVisualPayload.PROJECTILE_LAUNCH,
+                target.getId(), getEyePosition(), target.getEyePosition(), 8);
         nextSpellTick = level().getGameTime() + spellCooldownTicks();
-        // 这一发把目标打死了就当场放开，下一刻直接回闲逛，不用再等 tickTargetValidity 兜底。
+        // 目标已经死了就当场放开，下一刻直接回闲逛，不用再等 tickTargetValidity 兜底。
         if (!target.isAlive()) setTarget(null);
     }
 

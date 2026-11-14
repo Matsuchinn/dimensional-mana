@@ -634,6 +634,16 @@ public final class GeneratedMod {
             "web_projectile", () -> EntityType.Builder.<WebProjectileEntity>of(WebProjectileEntity::new, MobCategory.MISC)
                     .sized(0.35F, 0.35F).clientTrackingRange(8).updateInterval(1).build(MOD_ID + ":web_projectile"));
     /**
+     * 元素史莱姆的「魔法子弹」：看得见、飞得慢（玩家投射速度的一半）、能被打掉的弹体。
+     *
+     * <p>r400 之前史莱姆的初级法术是瞬间命中，玩家只看到目标身上闪一下，既分不清是哪只史莱姆
+     * 在打人，也没有反应时间。现在改成这颗真正的弹体：带对应元素颜色的拖尾，命中才结算，
+     * 举招架姿态左键可以把它打掉。</p>
+     */
+    public static final DeferredHolder<EntityType<?>, EntityType<SlimeSpellBolt>> SLIME_SPELL_BOLT = ENTITY_TYPES.register(
+            "slime_spell_bolt", () -> EntityType.Builder.<SlimeSpellBolt>of(SlimeSpellBolt::new, MobCategory.MISC)
+                    .sized(0.4F, 0.4F).clientTrackingRange(10).updateInterval(1).build(MOD_ID + ":slime_spell_bolt"));
+    /**
      * 秽蚀蠹：四阶蜕皮的蠹虫，生成在末地传送门遗迹 / 高魔素魔晶矿 / 蚀魔荒原地表。
      *
      * <p>它被登记成动物类（Creature），所以走的是原版「生物」那套刷怪上限与白天生成，
@@ -1002,6 +1012,8 @@ public final class GeneratedMod {
         registerCorruptedWither();
         // r271：蚀魔荒原——方块 / 物品 / 粒子一次挂齐。
         ErosionWasteland.registerItems();
+        // 水球最后注册：自然页里排在所有刷怪蛋、装备和掉落物之后。
+        registerWaterBall();
     }
 
     /**
@@ -1643,6 +1655,9 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(AntiVoidSystem::onBlockBreak);
         // 史莱姆驱逐火把：5×5 区块内禁刷史莱姆，16 格内把已经刷出来的史莱姆熏走。
         NeoForge.EVENT_BUS.addListener(SlimeRepellentTorchEvents::onFinalizeSpawn);
+        // r105：本模组生物的自然生成权重。数据驱动的群系刷怪（荒原里的晶化行尸 / 魔蚀骸骨 / 秽蚀蠹）
+        // 没有代码里的抽取点，只能在这里按权重放行或取消；权重在 dimensional_mana-spawns.toml 里调。
+        NeoForge.EVENT_BUS.addListener(MobSpawnWeights::onFinalizeSpawn);
         NeoForge.EVENT_BUS.addListener(SlimeRepellentTorchEvents::onEntityJoin);
         // 进度：击杀类与法阵投影的摆放事件（每秒轮询覆盖不到的那些）。
         NeoForge.EVENT_BUS.addListener(AdvancementTriggers::onLivingDeath);
@@ -1676,6 +1691,14 @@ public final class GeneratedMod {
         // r378 魔法蜡烛：蜡烛光环缓存按服务器实例组织，关服清一次，避免跨存档残留。
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStoppingEvent stopEvent) ->
                 MagicCandleAura.clear());
+        // r107 老刷怪配置迁移：服务器起来（配置已加载完）时检查一次 dimensional_mana-spawns.toml，
+        // 如果那六项还全是 r106 的默认值（= 玩家从没动过），就整体翻新成本版默认值。
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStartedEvent startEvent) ->
+                SpawnConfig.migrateLegacyDefaults());
+        // r107 卡顿看门狗：服务器刻卡住超过 8 秒时自己把线程栈写进 logs/，下次好定位是谁卡住的。
+        NeoForge.EVENT_BUS.addListener(TickWatchdog::onTick);
+        NeoForge.EVENT_BUS.addListener(TickWatchdog::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(TickWatchdog::onServerStopping);
         // r332 物理词条扩充：受击阶段记下破甲 / 连击 / 处决 / 见切加成（要排在斗气减伤之后、
         // 护甲结算之前，破甲才反推得准）。
         NeoForge.EVENT_BUS.addListener(PhysicalAffixEffects::onIncomingDamage);
@@ -1726,10 +1749,15 @@ public final class GeneratedMod {
         // 流浪剑士：雇佣交互、友伤豁免、完美格挡、远程格挡、瞬身闪避、喝药/集气打断、死亡清理。
         NeoForge.EVENT_BUS.addListener(SwordmasterEvents::onIncomingDamage);
         NeoForge.EVENT_BUS.addListener(SwordmasterEvents::onProjectileImpact);
+        // r406 斗气招架：箭矢、火球这类弹射物飞到身上的那一刻结算。
+        // 前 3 刻内按下左键的算完美格挡（原路弹回去、不花斗气），之后按普通格挡（打碎、扣斗气）。
+        NeoForge.EVENT_BUS.addListener(BattleQiParry::onProjectileImpact);
         NeoForge.EVENT_BUS.addListener(SwordmasterEvents::onEntityInteract);
         NeoForge.EVENT_BUS.addListener(SwordmasterEvents::onLivingDeath);
         // 玩家举着掉落的长剑格挡：完美格挡全免、普通格挡七成减伤。
         NeoForge.EVENT_BUS.addListener(SwordmasterVillageSpawning::onChunkLoad);
+        // r400 死锁修复：村庄判定从区块加载回调挪到服务器刻（回调里只记坐标）。
+        NeoForge.EVENT_BUS.addListener(SwordmasterVillageSpawning::tickLevel);
         NeoForge.EVENT_BUS.addListener(RelicEffects::onIncomingDamage);
         // 天使庇护的保命兜底要排在所有伤害乘区之后；死亡兜底同理，排在其它死亡处理之后。
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, RelicEffects::onAngelShelterFinalGuard);
@@ -1782,6 +1810,8 @@ public final class GeneratedMod {
         NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::onExplosion);
         NeoForge.EVENT_BUS.addListener(ElementalSlimeSpawning::onSound);
         NeoForge.EVENT_BUS.addListener(AdventurerSpawning::onChunkLoad);
+        // r400 死锁修复：祭坛之间冒险者的落点高度也挪到服务器刻再查。
+        NeoForge.EVENT_BUS.addListener(AdventurerSpawning::tickLevel);
         NeoForge.EVENT_BUS.addListener(AncientAltarData::onChunkLoad);
         // r282：露天魔晶矿簇——区块加载补登记（浓度 +4.00 / 粒子 / 变异体回血都靠这张表）。
         NeoForge.EVENT_BUS.addListener(CrystalClusterData::onChunkLoad);
@@ -1943,6 +1973,18 @@ public final class GeneratedMod {
                     new DeferredSpawnEggItem(type, variant.color() & 0xFFFFFF,
                             (variant.color() ^ 0x6A4C7A) & 0xFFFFFF, new Item.Properties().rarity(Rarity.RARE))));
         }
+    }
+
+    /**
+     * 水球：水元素史莱姆法术弹体的外观物品（见 {@link ElementalSlimeVariant#projectileIcon()}）。
+     *
+     * <p>本体没有功能，摆在「次元物语：自然」页末尾的掉落物区，跟元素结晶粉末、史莱姆掉落物
+     * 摆在一起；在注册流程最后调用，这样它不会插到刷怪蛋那一段中间去。</p>
+     */
+    private static void registerWaterBall() {
+        MOD_ITEMS.put(WaterBallItem.ITEM_ID, ITEMS.register(WaterBallItem.ITEM_ID, () ->
+                new WaterBallItem(new Item.Properties().rarity(Rarity.COMMON))));
+        NATURAL_ITEM_IDS.add(WaterBallItem.ITEM_ID);
     }
 
     /** 五种哥布林：实体、刷怪蛋，以及整套粗糙装备与掉落物。 */

@@ -72,7 +72,13 @@ public final class CrystallizedZombieEvents {
         if (event.getSpawnType() != MobSpawnType.NATURAL) return;
         if (!(event.getLevel() instanceof ServerLevel level) || level.dimension() != net.minecraft.world.level.Level.OVERWORLD) return;
         if (ManaConcentration.at(level, mob.blockPosition()) < REPLACE_CONCENTRATION) return;
-        if (level.getRandom().nextFloat() >= REPLACE_CHANCE) return;
+        // r105 权重：替换概率 = 50% × 目标变异体在配置里的权重。调到 0 时这种变异体
+        // 不再通过「替换普通怪」出现，原版怪保持原样。
+        String weightKey = zombie ? "crystallized_zombie"
+                : creeper ? "mana_creeper"
+                : skeleton ? "corrupted_skeleton"
+                : "void_shade";
+        if (!MobSpawnWeights.roll(level.getRandom(), REPLACE_CHANCE, weightKey)) return;
         // 先造替换者，造得出来才取消原生成。
         Mob replacement = zombie
                 ? GeneratedMod.CRYSTALLIZED_ZOMBIE.get().create(level)
@@ -82,8 +88,11 @@ public final class CrystallizedZombieEvents {
         if (replacement == null) return;
         event.setSpawnCancelled(true);
         replacement.moveTo(mob.getX(), mob.getY(), mob.getZ(), mob.getYRot(), mob.getXRot());
-        replacement.finalizeSpawn(level, event.getDifficulty(), MobSpawnType.NATURAL, null);
-        level.addFreshEntity(replacement);
+        // 替换概率上面已经乘过一次权重，这里不再让 NATURAL 权重门二次衰减。
+        MobSpawnWeights.bypassing(() -> {
+            replacement.finalizeSpawn(level, event.getDifficulty(), MobSpawnType.NATURAL, null);
+            level.addFreshEntity(replacement);
+        });
     }
 
     /**

@@ -390,12 +390,17 @@ public final class CrystalClusterData extends SavedData {
         }
     }
 
-    /** 矿簇包围盒四个角所在的区块是不是都加载好了（矩形是连续的，四角齐了就全齐）。 */
+    /**
+     * 矿簇包围盒四个角所在的区块是不是都<b>完整加载完</b>了。
+     *
+     * <p>r401：原来用 {@code hasChunkAt}，它只反映「这块区块有没有票据」，区块可能还在生成中；
+     * 这时下面逐格读方块就会让主线程同步去把它补完，正是死锁的入口（见 {@link ChunkSafety}）。
+     * 改用 {@code getChunkNow}：只有真正完整加载的区块才算就绪。</p>
+     */
     private static boolean cornersLoaded(ServerLevel level, BlockPos center, int half) {
-        return level.hasChunkAt(center.offset(half, 0, half))
-                && level.hasChunkAt(center.offset(half, 0, -half))
-                && level.hasChunkAt(center.offset(-half, 0, half))
-                && level.hasChunkAt(center.offset(-half, 0, -half));
+        return ChunkSafety.readyArea(level,
+                center.offset(-half, 0, -half),
+                center.offset(half, 0, half));
     }
 
     /** 这个朝向的支撑面撑不撑得住（和 {@code AmethystClusterBlock#canSurvive} 同一套判定）。 */

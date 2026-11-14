@@ -103,6 +103,8 @@ public final class CorruptedSilverfishEvents {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         if (level.dimension() != Level.OVERWORLD) return;
         if (!nearEndPortal(level, mob.blockPosition())) return;
+        // r105 权重：秽蚀蠹调到 0 时遗迹刷怪笼保持原版蠹虫，调低时替换率按比例下降。
+        if (!MobSpawnWeights.roll(level.getRandom(), 1.0F, "corrupted_silverfish")) return;
         if (localCount(level, mob.blockPosition(), 16.0D) >= SPAWNER_LOCAL_CAP) {
             event.setSpawnCancelled(true);
             return;
@@ -111,9 +113,12 @@ public final class CorruptedSilverfishEvents {
         if (replacement == null) return;
         event.setSpawnCancelled(true);
         replacement.moveTo(mob.getX(), mob.getY(), mob.getZ(), mob.getYRot(), mob.getXRot());
-        replacement.finalizeSpawn(level, event.getDifficulty(), event.getSpawnType(), null);
-        if (replacement instanceof CorruptedSilverfishEntity bug) bug.emergeFromGround();
-        level.addFreshEntity(replacement);
+        // 替换概率上面已经乘过一次权重，这里不再让 NATURAL 权重门二次衰减。
+        MobSpawnWeights.bypassing(() -> {
+            replacement.finalizeSpawn(level, event.getDifficulty(), event.getSpawnType(), null);
+            if (replacement instanceof CorruptedSilverfishEntity bug) bug.emergeFromGround();
+            level.addFreshEntity(replacement);
+        });
     }
 
     /**
@@ -128,7 +133,8 @@ public final class CorruptedSilverfishEvents {
         for (ServerPlayer player : level.players()) {
             if (player.isSpectator() || player.isCreative()) continue;
             RandomSource random = player.getRandom();
-            if (random.nextFloat() >= PORTAL_SPAWN_CHANCE) continue;
+            // r105 权重：遗迹补刷概率同样按秽蚀蠹权重缩放。
+            if (!MobSpawnWeights.roll(random, PORTAL_SPAWN_CHANCE, "corrupted_silverfish")) continue;
             BlockPos portal = findPortalFrame(level, player.blockPosition());
             if (portal == null) continue;
             if (localCount(level, portal, 24.0D) >= PORTAL_LOCAL_CAP) continue;
@@ -138,9 +144,12 @@ public final class CorruptedSilverfishEvents {
             if (bug == null) continue;
             bug.moveTo(spot.getX() + 0.5D, spot.getY(), spot.getZ() + 0.5D,
                     random.nextFloat() * 360.0F, 0.0F);
-            bug.finalizeSpawn(level, level.getCurrentDifficultyAt(spot), MobSpawnType.NATURAL, null);
-            level.addFreshEntity(bug);
-            bug.emergeFromGround();
+            // 这是模组自己补的一只（概率已乘权重），不让 NATURAL 权重门再衰减一次。
+            MobSpawnWeights.bypassing(() -> {
+                bug.finalizeSpawn(level, level.getCurrentDifficultyAt(spot), MobSpawnType.NATURAL, null);
+                level.addFreshEntity(bug);
+                bug.emergeFromGround();
+            });
         }
     }
 

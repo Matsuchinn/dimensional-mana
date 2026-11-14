@@ -134,7 +134,7 @@ public final class ManaGrindstoneLogic {
      *
      * <ul>
      *   <li>评级 S / SS / SSS → 1 / 2 / 3 份武备强化石粉，C / B / A 不返还；</li>
-     *   <li>主词条满级（Lv.12）→ 额外 1 份特级魔晶粉；</li>
+     *   <li>主词条到本评级上限（C 3 / B 6 / A 9 / S 及以上 12）→ 额外 1 份特级魔晶粉；</li>
      *   <li>每一条满级（+4）副词条 → 额外 1 份极品魔晶粉。</li>
      * </ul>
      *
@@ -155,7 +155,8 @@ public final class ManaGrindstoneLogic {
             ItemStack stone = itemOf(ArmamentForge.ENHANCE_STONE_DUST);
             if (!stone.isEmpty()) result.add(stone);
         }
-        if (view.mainLevel() >= EquipmentAffixSystem.MAIN_MAX_LEVEL) {
+        // 「满级」按这件武备自己的评级上限算：C 3 / B 6 / A 9 / S 及以上 12。
+        if (view.mainLevel() >= EquipmentAffixSystem.mainMaxLevel(stack)) {
             ItemStack dust = itemOf("special_mana_crystal_dust");
             if (!dust.isEmpty()) result.add(dust);
         }

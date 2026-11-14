@@ -64,9 +64,32 @@ public final class ElementalSlimeSpawning {
     private static final double WASTELAND_LOCAL_RADIUS = 48.0;
     /** 荒原里的魔晶洞穴也按荒原的规矩补刷，顶多补到两三只。 */
     private static final int WASTELAND_CAVE_CAP = 3;
+    /**
+     * 沙漠里挑中土史莱姆的比例：沙漠不刷木史莱姆，改成有概率出土壤史莱姆。
+     * 没中签的那几次直接放弃，所以沙漠比森林稀疏一些，不会变成一片土史莱姆。
+     */
+    private static final float DESERT_EARTH_CHANCE = 0.55F;
     private static final int TRIES = 10;
     private static final int NORMAL_CAVE_CAP = 7;
     private static final int LARGE_CAVE_CAP = 14;
+    /** 洞穴补刷离玩家至少这么远：洞穴很窄，贴在脸前刷出一只出来很吓人。 */
+    private static final double CAVE_MIN_PLAYER_DISTANCE = 18.0;
+    /**
+     * 玩家海拔超过 100 时抽一次「高空风史莱姆」的概率。
+     *
+     * <p>以前是 50%，加上它们在玩家身边来去自由地飘，观感就是整片天空都是风史莱姆。
+     * 现在压到 16%，再加上下面「附近最多几只」的上限，高空风景里只剩零星几只。</p>
+     */
+    private static final float WIND_HIGH_AIR_CHANCE = 0.16F;
+    /** 附近 96 格内最多允许这么多只风史莱姆在飞；再多就不再往高空刷。 */
+    private static final int WIND_HIGH_AIR_CAP = 5;
+    private static final double WIND_HIGH_AIR_RADIUS = 96.0;
+    /**
+     * 高空落点离地表的高度：以前固定 +32，效果是「离地三十多格的一层漂浮史莱姆」。
+     * 现在改成 8～18 格，它们是「屋顶上方掠过」的一群，而不是满天都是。
+     */
+    private static final int WIND_AIR_MIN_OFFSET = 8;
+    private static final int WIND_AIR_MAX_OFFSET = 18;
 
     private ElementalSlimeSpawning() { }
 
@@ -82,9 +105,19 @@ public final class ElementalSlimeSpawning {
             if (level.getGameTime() % 40 == 0 && !player.isSpectator()) tickJukeboxMusic(level, player, 40);
             if (level.getGameTime() % CHECK_INTERVAL != 0) continue;
             RandomSource random = player.getRandom();
-            if (random.nextFloat() > ATTEMPT_CHANCE) continue;
-            // 洞穴定额守卫优先补齐，不受周围普通环境史莱姆上限影响。
-            if (topUpManaCave(level, player, random)) continue;
+            // r107：魔晶洞穴的定额补刷按洞穴自己的浓度算——洞里恒定 15 以上，
+            // 属于「高魔素区域」，所以它不吃开局爬坡，先单独处理（补上了这一轮就结束）。
+            // 玩家身边的「元素史莱姆总量倍率」仍然生效（调到 0 就彻底不刷、调 0.5 就少补一半），
+            // 只是不再乘开局那几天的新手折扣。没有洞穴时这里只是几次列表查询，几乎不花钱。
+            float caveRate = SpawnPacing.elementalRate();
+            if (caveRate > 0.0F && random.nextFloat() < Math.min(1.0F, caveRate)
+                    && topUpManaCave(level, player, random)) continue;
+            // r106：每 4 秒一次的尝试再乘「开局爬坡 × 元素史莱姆总倍率」，
+            // 新存档头几天几乎不刷，到设定的天数后回到正常量。
+            // r107：位置一起传进去——玩家站在魔素浓度 > 12 的地方（矿簇、祭坛、晶洞）时
+            // 不吃开局爬坡，那些高危区从第一天起就是满强度。
+            if (!SpawnPacing.roll(level, random, ATTEMPT_CHANCE, SpawnPacing.elementalRate(),
+                    player.blockPosition())) continue;
             // 蚀魔荒原的保有量单独算：这里只留少量魔素史莱姆，剩下的刷怪容量给变异体和秽蚀蠹。
             boolean wasteland = CorruptedWastelandBiome.is(level.getBiome(player.blockPosition()));
             int cap = wasteland ? WASTELAND_LOCAL_CAP : LOCAL_CAP;
@@ -93,6 +126,8 @@ public final class ElementalSlimeSpawning {
             SpawnPick pick = findPick(level, player, random);
             if (pick == null) continue;
             if (isCommonVariant(pick.variant()) && random.nextFloat() < COMMON_SLIME_THIN_CHANCE) continue;
+            // r105 权重：抽中的这一种在配置里被调低时，按比例跳过这一次（0 = 彻底不刷）。
+            if (!MobSpawnWeights.roll(random, 1.0F, pick.variant().entityId())) continue;
             spawn(level, pick.variant(), pick.pos(), pick.forcedTier(), 1 + random.nextInt(3),
                     false, pick.fluidSurface(), pick.airborne());
         }
@@ -159,6 +194,8 @@ public final class ElementalSlimeSpawning {
         if (existing >= cap) return false;
         BlockPos spot = randomCaveFloor(level, cave, random, large ? 13 : 7, existing < guaranteedElites ? 3 : 2);
         if (spot == null) return false;
+        // 洞穴里的史莱姆也不能贴着玩家的脸刷：18 格以内这个周期先不补（洞穴很窄，抓得住的）。
+        if (spot.distSqr(player.blockPosition()) < CAVE_MIN_PLAYER_DISTANCE * CAVE_MIN_PLAYER_DISTANCE) return false;
         int count = Math.min(existing < guaranteedElites ? 2 : 1, cap - existing);
         spawn(level, ElementalSlimeVariant.MANA, spot,
                 existing < guaranteedElites ? ElementalSlimeTier.ELITE : null, count, true, false, false);
@@ -169,7 +206,8 @@ public final class ElementalSlimeSpawning {
     public static void onEntityJoin(EntityJoinLevelEvent event) {
         if (!(event.getLevel() instanceof ServerLevel level) || !(event.getEntity() instanceof LightningBolt bolt)) return;
         // 雷史莱姆 50% 与“巨大声响召来音史莱姆”25% 是两次独立判定，不能串成 12.5%。
-        if (level.random.nextFloat() < 0.50F)
+        // r105 权重：这两条事件召怪也按各自权重缩放概率。
+        if (MobSpawnWeights.roll(level.random, 0.50F, ElementalSlimeVariant.LIGHTNING.entityId()))
             spawn(level, ElementalSlimeVariant.LIGHTNING, bolt.blockPosition(), null, 1 + level.random.nextInt(4));
         loudSound(level, bolt.position());
     }
@@ -189,11 +227,15 @@ public final class ElementalSlimeSpawning {
     }
 
     private static void loudSound(ServerLevel level, Vec3 source) {
-        if (level.random.nextFloat() >= 0.25F) return;
+        // r105 权重：巨响召来的音史莱姆同样受权重控制。
+        if (!MobSpawnWeights.roll(level.random, 0.25F, ElementalSlimeVariant.SOUND.entityId())) return;
         double angle = level.random.nextDouble() * Math.PI * 2.0;
         double distance = 64.0 + level.random.nextDouble() * 24.0;
         int x = (int)Math.floor(source.x + Math.cos(angle) * distance);
         int z = (int)Math.floor(source.z + Math.sin(angle) * distance);
+        // r107：落点在没加载的区块里就放弃这一声。以前这里直接问高度图，等于让游戏在主线程上
+        // 去生成 64～88 格外的地形；钟声、爆炸一多就成了持续的卡顿来源。
+        if (!SectionScan.loadedColumn(level, x, z)) return;
         int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
         spawn(level, ElementalSlimeVariant.SOUND, new BlockPos(x, y, z), null, 1);
     }
@@ -207,6 +249,10 @@ public final class ElementalSlimeSpawning {
 
     private static void tickJukeboxMusic(ServerLevel level, Player player, int ticks) {
         BlockPos origin = player.blockPosition();
+        // 覆盖到的 3×3 个区块必须都加载好，否则下面逐格读方块会把主线程卡在区块加载上。
+        if (!ChunkSafety.readyArea(level,
+                origin.offset(-JUKEBOX_RANGE_XZ, -JUKEBOX_RANGE_Y, -JUKEBOX_RANGE_XZ),
+                origin.offset(JUKEBOX_RANGE_XZ, JUKEBOX_RANGE_Y, JUKEBOX_RANGE_XZ))) return;
         // 原版这里是 33×13×33 ≈ 1.4 万个方块逐格查一遍，一个唱片机都没有的普通场景也要付这笔钱。
         // 先问区块段的调色板：附近根本没有唱片机方块时直接返回。
         if (!sectionsMayHaveJukebox(level, origin)) return;
@@ -266,9 +312,11 @@ public final class ElementalSlimeSpawning {
             BlockPos lava = findNetherLavaSurface(level, origin, random);
             if (lava != null) return pick(ElementalSlimeVariant.FIRE, lava, true);
         }
-        // 风史莱姆：玩家海拔超过 100 就有机会出现在「离地约 32 格」的高空，
-        // 而不是像旧版那样要求 Y>250（主世界几乎没有这种落脚点，等于永远刷不出）。
-        if (origin.getY() > 100 && random.nextFloat() < 0.50F) {
+        // 风史莱姆：玩家海拔超过 100 就有机会出现在「离地 8～18 格」的空中。
+        // 以前是 50% 概率生成在离地 32 格处，玩家抬头就是一片漂浮的风史莱姆；
+        // 现在概率压低、高度贴近屋顶，而且附近已经有一群时就不再补。
+        if (origin.getY() > 100 && random.nextFloat() < WIND_HIGH_AIR_CHANCE
+                && countFloatingWindSlimes(level, origin) < WIND_HIGH_AIR_CAP) {
             SpawnPick wind = findHighAirSpot(level, origin, random);
             if (wind != null) return wind;
         }
@@ -277,6 +325,8 @@ public final class ElementalSlimeSpawning {
                 < level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, origin.getX(), origin.getZ()) - 10;
         for (int i = 0; i < TRIES; i++) {
             BlockPos candidate = candidatePos(level, origin, underground, random);
+            // 环带里抽到的那一列还没加载：这一轮不刷，下一轮重新抽。
+            if (candidate == null) continue;
 
             // 液面优先于岸边：火和水史莱姆现在能直接站在岩浆/水面出生。
             BlockPos lava = findFluidSurface(level, candidate, true);
@@ -300,14 +350,25 @@ public final class ElementalSlimeSpawning {
         return null;
     }
 
-    /** 在玩家周围找一根柱子，把落点定在地表往上 32 格；找不到（头顶被山挡住）就回落普通判定。 */
+    /** 附近已经在飘的风史莱姆有几只：给「漫天风史莱姆」设一个实实在在的数量上限。 */
+    private static int countFloatingWindSlimes(ServerLevel level, BlockPos origin) {
+        return level.getEntitiesOfClass(ElementalSlime.class, new AABB(origin).inflate(WIND_HIGH_AIR_RADIUS),
+                slime -> slime.variant() == ElementalSlimeVariant.WIND).size();
+    }
+
+    /** 在玩家周围找一根柱子，把落点定在地表往上 8～18 格；找不到（头顶被山挡住）就回落普通判定。 */
     private static SpawnPick findHighAirSpot(ServerLevel level, BlockPos origin, RandomSource random) {
         for (int i = 0; i < TRIES; i++) {
-            int x = origin.getX() + random.nextInt(65) - 32;
-            int z = origin.getZ() + random.nextInt(65) - 32;
-            if (!level.hasChunkAt(new BlockPos(x, origin.getY(), z))) continue;
+            // r106：高空风史莱姆同样只在环带里生成，免得直接落在玩家房顶上。
+            double angle = random.nextDouble() * Math.PI * 2.0;
+            double distance = SpawnPacing.pickDistance(random, SpawnPacing.slimeMinDistance(),
+                    SpawnPacing.slimeMaxDistance());
+            int x = origin.getX() + (int) Math.round(Math.cos(angle) * distance);
+            int z = origin.getZ() + (int) Math.round(Math.sin(angle) * distance);
+            if (!SectionScan.loadedColumn(level, x, z)) continue;
             int surface = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-            int y = Math.min(surface + 32, level.getMaxBuildHeight() - 4);
+            int offset = WIND_AIR_MIN_OFFSET + random.nextInt(WIND_AIR_MAX_OFFSET - WIND_AIR_MIN_OFFSET + 1);
+            int y = Math.min(surface + offset, level.getMaxBuildHeight() - 4);
             BlockPos air = new BlockPos(x, y, z);
             if (level.isEmptyBlock(air) && level.isEmptyBlock(air.above()))
                 return new SpawnPick(ElementalSlimeVariant.WIND, air, null, false, true);
@@ -328,18 +389,51 @@ public final class ElementalSlimeSpawning {
         return biome.is(Biomes.SWAMP) || biome.is(Biomes.MANGROVE_SWAMP);
     }
 
+    /**
+     * 沙漠类群系：普通沙漠，加上恶地与侵蚀恶地（两块台地）。
+     *
+     * <p>它们的地表都是沙 / 红沙，没有树也不常有水，木史莱姆在这里不合适；
+     * 有树的繁茂恶地（wooded badlands）除外——那里真的长着树。</p>
+     */
+    private static boolean isDesert(net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> biome) {
+        return biome.is(Biomes.DESERT) || biome.is(Biomes.BADLANDS) || biome.is(Biomes.ERODED_BADLANDS);
+    }
+
+    /**
+     * 在玩家周围的环带里抽一根柱子。
+     *
+     * <p>r106：以前是在 ±32 格的方块范围内均匀抽，玩家脚下、房顶、院子里都会中签。
+     * 现在改成「最小距离～最大距离」的环带（默认 28～128 格），近处不再刷史莱姆。</p>
+     *
+     * <p>r107：落点所在区块没加载时返回 {@code null}，这一轮直接跳过。
+     * 以前这里无脑问高度图，落在没生成的区块上时游戏会在服务器主线程里当场生成那块地形；
+     * 每 4 秒给每个玩家「预生成」一次远处地形，玩久了就是卡顿、TPC 掉到个位数。
+     * 刷怪只该往已经在那里世界里放生物，不该替玩家花钱生成地形。</p>
+     */
     private static BlockPos candidatePos(ServerLevel level, BlockPos origin, boolean underground, RandomSource random) {
-        int x = origin.getX() + random.nextInt(65) - 32;
-        int z = origin.getZ() + random.nextInt(65) - 32;
-        if (underground) return new BlockPos(x, origin.getY() + random.nextInt(25) - 8, z);
+        double angle = random.nextDouble() * Math.PI * 2.0;
+        double distance = SpawnPacing.pickDistance(random, SpawnPacing.slimeMinDistance(), SpawnPacing.slimeMaxDistance());
+        int x = origin.getX() + (int) Math.round(Math.cos(angle) * distance);
+        int z = origin.getZ() + (int) Math.round(Math.sin(angle) * distance);
+        if (underground) {
+            if (!SectionScan.loadedColumn(level, x, z)) return null;
+            return new BlockPos(x, origin.getY() + random.nextInt(25) - 8, z);
+        }
+        if (!SectionScan.loadedColumn(level, x, z)) return null;
         return level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, new BlockPos(x, 0, z));
     }
 
-    /** 下界在玩家周围 48 格内抽 24 根柱子，向下最多搜索 80 格寻找岩浆海/池表面。 */
+    /** 下界在玩家周围的环带里抽 24 根柱子，向下最多搜索 80 格寻找岩浆海/池表面。 */
     private static BlockPos findNetherLavaSurface(ServerLevel level, BlockPos origin, RandomSource random) {
         for (int attempt = 0; attempt < 24; attempt++) {
-            int x = origin.getX() + random.nextInt(97) - 48;
-            int z = origin.getZ() + random.nextInt(97) - 48;
+            // r106：下界岩浆海同样只在环带里找，不在玩家脚边刷火史莱姆。
+            double angle = random.nextDouble() * Math.PI * 2.0;
+            double distance = SpawnPacing.pickDistance(random, SpawnPacing.slimeMinDistance(),
+                    SpawnPacing.slimeMaxDistance() + 16.0D);
+            int x = origin.getX() + (int) Math.round(Math.cos(angle) * distance);
+            int z = origin.getZ() + (int) Math.round(Math.sin(angle) * distance);
+            // r107：这一列没加载就直接换一根柱子，别在没加载的区块里逐格空转。
+            if (!SectionScan.loadedColumn(level, x, z)) continue;
             int top = Math.min(level.getMaxBuildHeight() - 2, origin.getY() + 12);
             int bottom = Math.max(level.getMinBuildHeight(), origin.getY() - 80);
             for (int y = top; y >= bottom; y--) {
@@ -373,6 +467,9 @@ public final class ElementalSlimeSpawning {
     }
 
     private static BlockPos findFloor(ServerLevel level, BlockPos start, int clear, int maxDrop) {
+        // 整条竖扫都落在同一列（同一个区块）里：区块没加载完就直接放弃，
+        // 不能靠 getBlockState 让游戏在主线程上同步生成它（那会把服务器刻卡死）。
+        if (!ChunkSafety.readyColumn(level, start.getX(), start.getZ())) return null;
         for (int drop = 0; drop <= maxDrop; drop++) {
             BlockPos pos = start.below(drop);
             if (pos.getY() - 1 < level.getMinBuildHeight()) return null;
@@ -423,9 +520,18 @@ public final class ElementalSlimeSpawning {
         if (underground) {
             if (biome.is(BiomeTags.HAS_MINESHAFT)
                     || near(level, pos, Blocks.RAIL, 9, 2)
-                    || nearAny(level, pos, 7, 2, Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE))
+                    // r108：金史莱姆的规矩是「长在铁矿、金矿旁边」。以前只认铁矿，
+                    // 玩家在金矿洞里转半天一只都碰不到；金矿（含深层金矿）现在同样算数。
+                    || nearAny(level, pos, 7, 2, Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE,
+                            Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE))
                 return pick(ElementalSlimeVariant.METAL, pos, false);
             return pick(ElementalSlimeVariant.EARTH, pos, false);
+        }
+        // r108：沙漠里不刷木史莱姆——这里既没有树也没有水，木史莱姆站在沙丘上很出戏。
+        // 改成就近刷土史莱姆，但只放行一部分（有概率出现，不是遍地都是）。
+        // 必须放在森林/兜底判定之前，否则沙漠会掉到最后的「主世界露天地表 → 木」那条里。
+        if (isDesert(biome)) {
+            return random.nextFloat() < DESERT_EARTH_CHANCE ? pick(ElementalSlimeVariant.EARTH, pos, false) : null;
         }
         if (biome.is(BiomeTags.IS_FOREST) || biome.is(Biomes.PLAINS) || biome.is(Biomes.MEADOW))
             return pick(ElementalSlimeVariant.NATURE, pos, false);
@@ -477,17 +583,15 @@ public final class ElementalSlimeSpawning {
         return nearAny(level, center, radius, step, block);
     }
 
+    /**
+     * 附近有没有这几种方块。
+     *
+     * <p>r107：改走 {@link SectionScan}——先问区块段的调色板，附近根本没有目标方块时
+     * 只花几次调色板比对。以前这里对每个刷怪候选逐格查 13×13×13 = 2197 格，
+     * 而「附近有岩浆 / 水 / 铁轨 / 魔晶矿」在绝大多数位置都是否定的，钱全白花。</p>
+     */
     private static boolean nearAny(ServerLevel level, BlockPos center, int radius, int step, Block... blocks) {
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        for (int x = -radius; x <= radius; x += step)
-            for (int y = -radius; y <= radius; y += step)
-                for (int z = -radius; z <= radius; z += step) {
-                    cursor.setWithOffset(center, x, y, z);
-                    if (!level.isLoaded(cursor)) continue;
-                    var state = level.getBlockState(cursor);
-                    for (Block block : blocks) if (state.is(block)) return true;
-                }
-        return false;
+        return SectionScan.anyNearAny(level, center, radius, step, blocks);
     }
 
     private static int localCount(ServerLevel level, Vec3 at, double radius) {
@@ -510,6 +614,8 @@ public final class ElementalSlimeSpawning {
                               boolean fluidSurface, boolean airborne) {
         // 野外刷怪的统一闸门：环境刷新、音乐/雷击/魔晶洞穴补刷全都从这里过。
         if (!SpawnControl.hostileSpawningAllowed(level)) return;
+        // r105 权重：调到 0 的史莱姆连洞穴定额、落雷召怪、声响召怪一起停掉。
+        if (!MobSpawnWeights.enabled(variant.entityId())) return;
         // r290：连雷击、爆炸这类「声音召怪」的旁路也一并封死——反虚空里任何途径都不许出史莱姆。
         if (level.dimension().equals(AntiVoidSystem.ANTI_VOID)) return;
         // 史莱姆驱逐火把：这里是所有元素史莱姆刷怪的公共出口，先按中心点拦一次；
@@ -537,6 +643,9 @@ public final class ElementalSlimeSpawning {
                     offset = fluid;
                     targetY = fluid.getY() + state.getHeight(level, fluid) - 0.02;
                 } else if (airborne) {
+                    // 空中落点会在中心 ±3 格里随机偏，靠区块边缘时可能跨到相邻区块。
+                    // 先确认那一片真正加载好了：空中的风史莱姆不值得让主线程停下来等地形生成。
+                    if (!ChunkSafety.readyAround(level, offset, 1)) continue;
                     if (!level.isEmptyBlock(offset) || !level.isEmptyBlock(offset.above())) continue;
                     targetY = offset.getY();
                 } else {
@@ -549,6 +658,9 @@ public final class ElementalSlimeSpawning {
                 }
                 slime.moveTo(offset.getX() + 0.5, targetY, offset.getZ() + 0.5,
                         level.random.nextFloat() * 360.0F, 0);
+                // 落点周围（按这只史莱姆的真实碰撞箱算）的区块必须都已加载好。
+                // noCollision / 四角支撑检查都会读方块，跨到没加载的区块就会同步加载 → 卡死服务器刻。
+                if (!ChunkSafety.readyBox(level, slime.getBoundingBox())) continue;
                 placed = level.noCollision(slime) && (fluidSurface || airborne || hasFullGroundSupport(level, slime));
                 // 落脚点落在驱逐火把的 5×5 区块里就不许刷，换下一个落点。
                 if (placed && SlimeRepellentTorchEvents.spawnBlocked(level, offset)) placed = false;

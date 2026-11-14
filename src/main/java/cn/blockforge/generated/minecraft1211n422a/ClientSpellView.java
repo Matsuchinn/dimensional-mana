@@ -12,7 +12,16 @@ final class ClientSpellView {
     private final boolean firstPerson;
     private final Entity viewer;
     private final double handSide;
+    /** 本地玩家就是这一条视觉的施法者：手边前摇、朝向、蓄力球都要换成第一人称近景。 */
     boolean ownEffect;
+    /**
+     * 本地玩家是施法者或这一条视觉的依附目标：近景装饰要给准星让开。
+     *
+     * <p>和 {@link #ownEffect} 必须分开。史莱姆、冒险者施法时习惯把「目标实体」塞进
+     * {@code anchor} 字段（瞄准谁），如果 {@code anchor == 本地玩家} 就算成自己在施法，
+     * 怪物一抬手，玩家镜头前就会凭空出现自己的前摇。开口只影响透明度，不会搬动光片。</p>
+     */
+    boolean ownScreen;
 
     ClientSpellView(Camera view) {
         camera = view.getPosition();
@@ -29,7 +38,11 @@ final class ClientSpellView {
     }
 
     void scope(int owner, int anchor) {
-        ownEffect = firstPerson && viewer != null && (viewer.getId() == owner || viewer.getId() == anchor);
+        boolean first = firstPerson && viewer != null;
+        int self = viewer == null ? -1 : viewer.getId();
+        // 手边前摇只认施法者本人；anchor 是「打谁 / 附着在谁身上」，不能当施法者用。
+        ownEffect = first && owner >= 0 && owner == self;
+        ownScreen = first && (ownEffect || (anchor >= 0 && anchor == self));
     }
 
     Vec3 hand(Vec3 fallback) {
@@ -44,7 +57,7 @@ final class ClientSpellView {
 
     /** 中央椭圆只裁自己6格内的装饰层，侧下方手部、远处命中、其他玩家不受影响。 */
     double visibility(double x, double y, double z) {
-        if (!ownEffect) return 1;
+        if (!ownScreen) return 1;
         double dx = x - camera.x, dy = y - camera.y, dz = z - camera.z;
         double depth = dx * forward.x + dy * forward.y + dz * forward.z;
         if (depth >= 6) return 1;

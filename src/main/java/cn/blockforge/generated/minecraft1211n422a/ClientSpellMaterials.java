@@ -543,7 +543,7 @@ final class ClientSpellMaterials {
             color = ((int)((color >> 16 & 255) * factor) << 16) | ((int)((color >> 8 & 255) * factor) << 8) | (int)((color & 255) * factor);
         }
         VertexConsumer out = source.getBuffer(mat.type);
-        if (sprites.view().ownEffect && a.distanceToSqr(camera) < 36
+        if (sprites.view().ownScreen && a.distanceToSqr(camera) < 36
                 && (a.distanceToSqr(b) > 0.25 || a.distanceToSqr(d) > 0.25)) {
             // 近景护甲面也需要局部开口：四个外角都在屏幕边缘时不能漏掉面中心。
             int n = 5;

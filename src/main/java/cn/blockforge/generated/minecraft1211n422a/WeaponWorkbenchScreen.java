@@ -227,7 +227,7 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
         }
         int gradeColor = gradeColor(view.gradeName());
         Component meta = Component.translatable("gui.dimensional_mana.weapon_workbench.meta",
-                view.gradeName(), view.mainLevel(), ArmamentForge.MAX_LEVEL);
+                view.gradeName(), view.mainLevel(), ArmamentForge.maxLevel(stack));
         if (EquipmentAffixSystem.isTemplateForged(stack)) {
             meta = meta.copy().append(Component.translatable("gui.dimensional_mana.weapon_workbench.template_tag"));
         }
@@ -345,9 +345,9 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
             if (stack.isEmpty() || !EquipmentAffixSystem.hasAffix(stack)) {
                 hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_stone_no_affix");
                 color = ArcaneGui.WARN;
-            } else if (EquipmentAffixSystem.mainLevel(stack) < ArmamentForge.MAX_LEVEL) {
+            } else if (EquipmentAffixSystem.mainLevel(stack) < ArmamentForge.maxLevel(stack)) {
                 hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_stone_need_max",
-                        ArmamentForge.MAX_LEVEL);
+                        ArmamentForge.maxLevel(stack));
                 color = ArcaneGui.WARN;
             } else if (!EquipmentAffixSystem.hasGrowableSub(stack)) {
                 hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_subs_max");
@@ -369,8 +369,9 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
             }
         } else if (!stack.isEmpty() && EquipmentAffixSystem.hasAffix(stack)) {
             int level = EquipmentAffixSystem.mainLevel(stack);
-            if (level >= ArmamentForge.MAX_LEVEL) {
-                hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_max");
+            if (level >= ArmamentForge.maxLevel(stack)) {
+                hint = Component.translatable("gui.dimensional_mana.weapon_workbench.hint_max",
+                        ArmamentForge.maxLevel(stack));
                 color = ArcaneGui.GOLD;
             } else {
                 int cost = ArmamentForge.upgradeCost(stack, level + 1);
@@ -950,6 +951,8 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
         tooltip.add(stack.getHoverName().copy().withStyle(ChatFormatting.LIGHT_PURPLE));
         tooltip.add(Component.translatable("tooltip.dimensional_mana.affix_grade", view.gradeName())
                 .withStyle(ChatFormatting.GOLD));
+        tooltip.add(Component.translatable("tooltip.dimensional_mana.grade_level_cap",
+                EquipmentAffixSystem.mainMaxLevel(stack)).withStyle(ChatFormatting.DARK_AQUA));
         tooltip.add(Component.translatable("tooltip.dimensional_mana.affix_school",
                 Component.translatable("tooltip.dimensional_mana.affix_school." + view.schoolId()))
                 .withStyle(ChatFormatting.DARK_AQUA));
@@ -1031,15 +1034,15 @@ public final class WeaponWorkbenchScreen extends AbstractContainerScreen<WeaponW
         // 锻造模板：只给还没有词条的白板装备赋武备。
         if (ArmamentForge.isSmithingTemplate(material)) return !EquipmentAffixSystem.hasAffix(stack);
         if (!EquipmentAffixSystem.hasAffix(stack)) return false;
-        // 武备强化石：武备满级 + 还有没满的副词条才能敲。
+        // 武备强化石：武备到本评级上限 + 还有没满的副词条才能敲。
         if (ArmamentForge.isEnhanceStone(material)) {
-            return EquipmentAffixSystem.mainLevel(stack) >= ArmamentForge.MAX_LEVEL
+            return EquipmentAffixSystem.mainLevel(stack) >= ArmamentForge.maxLevel(stack)
                     && EquipmentAffixSystem.hasGrowableSub(stack);
         }
         if (ArmamentForge.isRerollMaterial(material)) return true;
         if (ArmamentForge.isReforgeTalisman(material)) return EquipmentAffixSystem.hasAffix(stack);
         int level = EquipmentAffixSystem.mainLevel(stack);
-        return level < ArmamentForge.MAX_LEVEL
+        return level < ArmamentForge.maxLevel(stack)
                 && ArmamentForge.crystalValue(material) >= ArmamentForge.upgradeCost(stack, level + 1);
     }
 }

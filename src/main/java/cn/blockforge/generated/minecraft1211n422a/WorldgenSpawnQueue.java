@@ -85,8 +85,10 @@ public final class WorldgenSpawnQueue {
         for (Pending pending : PENDING) {
             if (budget <= 0) break;
             if (!pending.dimension().equals(level.dimension())) continue;
-            // 区块还没真正加载就先留着，等玩家靠近或出生点区块就绪后再补。
-            if (!level.hasChunkAt(pending.pos())) continue;
+            // 区块还没真正加载完就先留着，等玩家靠近或出生点区块就绪后再补。
+            // 这里必须问 getChunkNow：hasChunkAt 只反映「有没有票据」，区块可能还在生成中，
+            // 此时对里面读方块会让游戏在主线程上同步等它生成完 —— 那就是死锁。
+            if (!ChunkSafety.ready(level, pending.pos())) continue;
             // 世界里关了生物生成时，祭坛守卫和冒险者先留在队列里，等开关打开了再补，
             // 免得结构在关着的期间白刷一次、以后永远空着。魔晶洞穴照常登记（洞穴数据要留），
             // 只是里面的史莱姆由 ElementalSlimeSpawning 那边的闸门挡住。
@@ -142,6 +144,8 @@ public final class WorldgenSpawnQueue {
             try {
                 net.minecraft.world.entity.EntityType<? extends net.minecraft.world.entity.Mob> type =
                         pickGuardType(random);
+                // r105 权重：五种变异体全被调到 0 时这座矿簇这一轮不补守卫。
+                if (type == null) continue;
                 net.minecraft.world.entity.Mob mob = type.create(level);
                 if (mob == null) continue;
                 // 在中心周围 3～10 格找一块脚下是实心、整个碰撞箱都放得下的地。
@@ -178,15 +182,22 @@ public final class WorldgenSpawnQueue {
                 mob -> mob.isAlive() && CrystalClusterData.isManaMutant(mob)).size();
     }
 
-    /** 守卫的兵种：晶化行尸、聚魔爆裂体最常见，魔蚀骸骨次之，织网者和虚空蚀影偶尔客串。 */
+    /**
+     * 守卫的兵种：晶化行尸、聚魔爆裂体最常见，魔蚀骸骨次之，织网者和虚空蚀影偶尔客串。
+     *
+     * <p>r105：34 / 28 / 20 / 10 / 8 是基准份额，再乘以配置里各生物的权重；
+     * 权重 0 的兵种抽不到，五种全关时返回 {@code null}（调用方跳过这一只）。</p>
+     */
     private static net.minecraft.world.entity.EntityType<? extends net.minecraft.world.entity.Mob> pickGuardType(
             net.minecraft.util.RandomSource random) {
-        int roll = random.nextInt(100);
-        if (roll < 34) return GeneratedMod.CRYSTALLIZED_ZOMBIE.get();
-        if (roll < 62) return GeneratedMod.MANA_CREEPER.get();
-        if (roll < 82) return GeneratedMod.CORRUPTED_SKELETON.get();
-        if (roll < 92) return GeneratedMod.CORRUPTED_WEAVER.get();
-        return GeneratedMod.VOID_SHADE.get();
+        java.util.List<MobSpawnWeights.Candidate<net.minecraft.world.entity.EntityType<? extends net.minecraft.world.entity.Mob>>> pool =
+                java.util.List.of(
+                        MobSpawnWeights.candidate(GeneratedMod.CRYSTALLIZED_ZOMBIE.get(), "crystallized_zombie", 34),
+                        MobSpawnWeights.candidate(GeneratedMod.MANA_CREEPER.get(), "mana_creeper", 28),
+                        MobSpawnWeights.candidate(GeneratedMod.CORRUPTED_SKELETON.get(), "corrupted_skeleton", 20),
+                        MobSpawnWeights.candidate(GeneratedMod.CORRUPTED_WEAVER.get(), "corrupted_weaver", 10),
+                        MobSpawnWeights.candidate(GeneratedMod.VOID_SHADE.get(), "void_shade", 8));
+        return MobSpawnWeights.pick(random, pool);
     }
 
     /**
@@ -225,6 +236,8 @@ public final class WorldgenSpawnQueue {
 
     /** 祭坛守卫：和原来结构里的逻辑一致，只是改到区块加载后执行。 */
     private static void spawnWitch(ServerLevel level, BlockPos pos) {
+        // r105 权重：女巫调到 0 时祭坛保持空置，调到 50 时只有一半的祭坛有守卫。
+        if (!MobSpawnWeights.roll(level.getRandom(), 1.0F, "wandering_witch")) return;
         AABB area = new AABB(pos).inflate(1.5);
         if (!level.getEntities(net.minecraft.world.level.entity.EntityTypeTest.forClass(WanderingWitch.class), area,
                 entity -> true).isEmpty()) return;
@@ -238,6 +251,8 @@ public final class WorldgenSpawnQueue {
 
     /** 村庄剑士：地面检查通过就生成 1 名，并把这座村庄的刷新冷却记进存档。 */
     private static void spawnSwordmaster(ServerLevel level, BlockPos pos, long villageKey) {
+        // r105 权重：剑士权重压低时，更多村庄干脆不安排常驻剑士（记账已在排队时写入，不会补第二次）。
+        if (!MobSpawnWeights.roll(level.getRandom(), 1.0F, "wandering_swordmaster")) return;
         if (level.getBlockState(pos.below()).isAir() || !level.getBlockState(pos).isAir()) return;
         // r286 最后一道闸：排队到落地之间隔了几十刻，期间这座村可能已经补好了人
         // （比如玩家刚用符咒招过一名）。中心 96 格内已经有活剑士就不再塞第二份。
@@ -264,6 +279,8 @@ public final class WorldgenSpawnQueue {
 
     /** 祭坛之间的冒险者：落地检查与原来一样，只是晚一点、在服务器刻里生成。 */
     private static void spawnAdventurer(ServerLevel level, BlockPos pos) {
+        // r105 权重：冒险者同理，权重越低在祭坛之间越少碰到。
+        if (!MobSpawnWeights.roll(level.getRandom(), 1.0F, "adventurer")) return;
         if (!level.getFluidState(pos.below()).isEmpty() || !level.getBlockState(pos).isAir()) return;
         Adventurer adventurer = GeneratedMod.ADVENTURER.get().create(level);
         if (adventurer == null) return;

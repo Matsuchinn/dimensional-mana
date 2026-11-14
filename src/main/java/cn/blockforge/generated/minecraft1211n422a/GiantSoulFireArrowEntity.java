@@ -98,6 +98,17 @@ public final class GiantSoulFireArrowEntity extends SoulFireArrowEntity {
         return true;
     }
 
+    /**
+     * 被完美格挡弹回来：除了掉头，还要把「已飞里程」清零。
+     *
+     * <p>巨型箭飞满 {@link #SPLIT_DISTANCE} 格就会裂成四根小箭；那颗弹体飞到你面前时里程早就满了，
+     * 不清零的话它在掉头的下一帧就当场裂开，四根小箭继续扑向玩家 —— 那就不是「弹回去」了。</p>
+     */
+    @Override
+    protected void onReflected(Vec3 back) {
+        this.travelled = 0;
+    }
+
     @Override
     protected void onHitTarget(LivingEntity victim) {
         LivingEntity owner = shooter();
